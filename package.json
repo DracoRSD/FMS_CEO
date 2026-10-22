@@ -1,0 +1,24 @@
+{
+  "name": "fms-ceo",
+  "productName": "FMS CEO",
+  "version": "1.0.0",
+  "description": "Juego de gestión de batallas de freestyle hecho por fans. Gratuito y sin ánimo de lucro.",
+  "author": "Medster (@MedsterRM)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "31.7.7",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "com.medster.fmsceo",
+    "productName": "FMS CEO",
+    "files": ["main.js", "index.html", "build/icon.png"],
+    "win": { "target": [{ "target": "portable", "arch": ["x64"] }], "icon": "build/icon.ico" },
+    "portable": { "artifactName": "FMS_CEO.exe" },
+    "directories": { "output": "dist" }
+  }
+}
