@@ -1177,7 +1177,7 @@ function nextSeason(){
     else if(c.stars>=1 && !c.tut.s2){ c.tut.s2=true; state.ui.pendingTut='s2'; }
     else if(c.stars>=3 && !c.tut.intl){ c.tut.intl=true; state.ui.pendingTut='intl'; } }
   if(state.seasons.length===2){ const c=spState(); if(c.sponsorPool.length<3) sponsorOffers(state.company.stars||0, 3-c.sponsorPool.length); }
-  closeModal(); goto('dashboard');
+  closeModal(); goto(modoCarrera() ? 'carrera' : 'dashboard');
   if(state.ui.pendingTut){ const t=state.ui.pendingTut; state.ui.pendingTut=null; setTimeout(()=>showTutorial(t), 120); }
 }
 
@@ -1221,7 +1221,7 @@ function importGameFile(ev){
     try{ const d=JSON.parse(r.result); if(!d.company) throw 0;
       state.company=d.company; state.freestylers=d.freestylers; state.seasons=d.seasons; state._counter=d._counter||1;
       syncRealPool();   // migra la partida importada al formato actual (atributos, jueces, dbv)
-      toast('Partida cargada.'); goto('dashboard');
+      toast('Partida cargada.'); goto(modoCarrera() ? 'carrera' : 'dashboard');
     }catch(e){ toast('Ese archivo no es una partida de FMS CEO.'); }
   };
   r.readAsText(file); ev.target.value='';
@@ -1294,7 +1294,7 @@ function renderTopbar(){
   const tb=document.getElementById('topbar');
   if(!state.company){ tb.innerHTML=`<div class="topbar"><div class="brand">${gameMark()}<div class="name">FMS <span>CEO</span></div></div><div class="top-spacer"></div><button class="btn small gear-btn" onclick="openSettings()" title="Ajustes" aria-label="Ajustes">${GEAR_SVG}</button></div>`; return; }
   const s=cur();
-  const tabs=[['dashboard','Inicio'],['calendar','Calendario'],['leagues','Ligas']];
+  const tabs=[modoCarrera() ? ['carrera','Mi carrera'] : ['dashboard','Inicio'],['calendar','Calendario'],['leagues','Ligas']];
   if(s.intlEnabled || s.intl.played) tabs.push(['intl','Internacional']);
   tabs.push(['redbull','Red Bull'],['freestylers','Freestylers'],['history','Historial']);
   const dateTxt = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='done' ? `Temporada ${s.year} cerrada` : fmtDay(s.year,s.day)+' '+s.year);
@@ -1303,7 +1303,7 @@ function renderTopbar(){
     <div class="navtabs">${tabs.map(([k,l])=>`<button class="navtab ${state.view.name===k||(k==='leagues'&&state.view.name==='league')?'active':''}" onclick="goto('${k}')">${l}</button>`).join('')}</div>
     <div class="top-spacer"></div>
     <button class="btn small gear-btn" onclick="openSettings()" title="Ajustes" aria-label="Ajustes">${GEAR_SVG}</button>
-    <div class="date-pill">${dateTxt} &nbsp;<span class="m ${state.company.money<0?'neg':''}">${moneyK(state.company.money)}</span></div>
+    <div class="date-pill">${dateTxt}${modoCarrera() ? '' : ` &nbsp;<span class="m ${state.company.money<0?'neg':''}">${moneyK(state.company.money)}</span>`}</div>
     ${s.phase==='live'? `<div class="time-controls">
       <button class="btn small primary" onclick="animatedAdvance('event')">Próxima fecha</button>
     </div>`:''}
@@ -1318,6 +1318,7 @@ function renderView(){
     case 'intl': return renderIntl();
     case 'redbull': return renderRedBull();
     case 'freestylers': return renderFreestylers();
+    case 'carrera': return renderCarrera();
     case 'history': return renderHistory();
     default: return renderDashboard();
   }
@@ -1331,7 +1332,7 @@ function resumenPartida(modo){
     const s=(d.seasons||[]).slice(-1)[0]; const f=(modo==='carrera' && d.company.carrera) ? (d.freestylers||[]).find(x=>x.id===d.company.carrera.fid) : null;
     return { titulo: modo==='carrera' ? (f ? f.name : 'Carrera') : d.company.name, sub: s ? `Temporada ${s.year}${s.phase==='pre'?' · pretemporada':(s.phase==='done'?' · cerrada':'')}` : 'Sin temporadas' };
   }catch(e){ return null; } }
-function continuarPartida(modo){ state.company=null; state.seasons=[]; state.freestylers=[]; if(load(modo)) goto('dashboard'); else { toast('No se pudo cargar esa partida.'); render(); } }
+function continuarPartida(modo){ state.company=null; state.seasons=[]; state.freestylers=[]; if(load(modo)) goto(modoCarrera() ? 'carrera' : 'dashboard'); else { toast('No se pudo cargar esa partida.'); render(); } }
 function cambiarPartida(){ if(state.company) save(); state.company=null; state.seasons=[]; state.freestylers=[]; closeModal(); goto('welcome'); }
 function partidasGuardadasHtml(){
   const cards=['ceo','carrera'].map(m=>{ const r=resumenPartida(m); if(!r) return '';
@@ -1396,6 +1397,39 @@ function renderCrearCarrera(){
     </div>
   </div>`;
 }
+/* ---------- modo carrera: pantalla provisional (fase C2) ---------- */
+function renderCarrera(){
+  const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return '<div class="welcome"><p class="step-note">No se encuentra tu freestyler.</p></div>';
+  const lk=signedLeagueOf(s,f.id);
+  const estado = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='live' ? `Temporada ${s.year} en juego · ${fmtDay(s.year,s.day)}` : `Temporada ${s.year} cerrada`);
+  const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Jugar temporada ${s.year}</button>`
+    : (s.phase==='live' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Continuar la temporada</button>`
+    : `<button class="btn" onclick="showSummary()">Ver resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
+  return `<div class="welcome">
+    <div class="step"><div class="carrera-ficha">
+      <div class="profile-avatar" style="${avatarDivStyle(f)}">${avatarContent(f)}</div>
+      <div style="min-width:0; flex:1;"><h3 style="margin:0">${nameH(f)}</h3><div class="pc">${esc(f.country)} · ${lk?ldef(lk).name:'Libre'} · debut ${f.debut||'—'}</div>
+        <div class="stat-bars" style="margin-top:8px">
+          <div class="hype-row">Nivel <div class="hype"><i style="width:${f.nivel}%;background:var(--red-bright)"></i></div><b>${f.nivel}</b></div>
+          <div class="hype-row">Fama <div class="hype"><i style="width:${f.fama}%;background:var(--gold)"></i></div><b>${f.fama}</b></div>
+        </div>
+        ${attrBars(f)}
+        <div class="style-box">${styleTag(f)}<span>${esc(STYLES[styleOf(f)].txt)}</span></div></div>
+    </div></div>
+    <div class="step" style="margin-top:16px;">
+      <span class="field-label">${estado}</span>
+      <p class="step-note" style="margin:6px 0 12px">Pantalla provisional de la fase C2: las ligas y torneos corren solos. En las fases siguientes aquí elegirás liga, patrocinador, entrenamiento y torneos.</p>
+      ${boton}
+    </div>
+  </div>`;
+}
+// Un año completo del mundo sin CEO: pretemporada automática, plantillas por nivel, arranque y simulación hasta el cierre
+function jugarTemporadaCarrera(){
+  const s=cur();
+  if(s.phase==='pre'){ autoPretemporada(s); autoFicharLigas(s); const iss=preseasonIssues(s); if(iss.length){ toast(iss[0]); render(); return; } startSeason(); }
+  if(s.phase==='live') advance('year');
+  render();
+}
 // Crea la partida de carrera: empresa fantasma (5 estrellas, infinito, 7 ligas), pool real y el freestyler del jugador
 function nuevaCarrera(){
   const d=state.ui.cc; if(!d) return; const prob=ccProblemas(d); if(prob.length){ toast(prob[0]); return; }
@@ -1409,7 +1443,7 @@ function nuevaCarrera(){
   state.seasons=[]; state.seasons.push(newSeason(null));
   f.debut=cur().year; state.company.carrera={fid:f.id, inicio:cur().year, temporadas:[]};
   state.ui.cc=null; state.ui.importedPool=null;
-  goto('dashboard');
+  goto('carrera');
 }
 
 /* ---------- inicio ---------- */
@@ -3856,7 +3890,7 @@ function init(){
   state.ui.devStats=false;
   const ceo=hayPartida('ceo'), car=hayPartida('carrera');
   if(ceo && car) state.view={name:'welcome',params:{}};                                            // dos partidas: la portada elige
-  else if((ceo && load('ceo')) || (car && load('carrera'))) state.view={name:'dashboard',params:{}};  // una sola: entra directo, como siempre
+  else if((ceo && load('ceo')) || (car && load('carrera'))) state.view={name:modoCarrera()?'carrera':'dashboard',params:{}};  // una sola: entra directo, como siempre
   else state.view={name:'welcome',params:{}};
   render();
   window.addEventListener('pagehide', ()=>{ if(state.company) save(); });
