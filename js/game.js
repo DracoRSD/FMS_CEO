@@ -1478,8 +1478,8 @@ function renderIntl(){
     ${s.defendingChampion?`<p class="step-note">Campeón vigente: <b>${fnameH(s.defendingChampion)}</b></p>`:''}`;
   }
   const names=['Octavos','Cuartos','Semifinal','Final'];
-  h+=`<div class="banner">${s.intl.sede?'📍 '+s.intl.sede+'. ':''}${esc(s.intl.note||'')}</div><div class="bracket-scroll"><div class="bracket">${b.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]||'Ronda '+(ri+1)}</div>${r.map(m=>bm(m)).join('')}</div>`).join('')}
-  <div class="round"><div class="rlabel">3er puesto</div>${bm(b.third)}</div></div></div>
+  h+=`<div class="banner">${s.intl.sede?'📍 '+s.intl.sede+'. ':''}${esc(s.intl.note||'')}</div><div class="bracket-scroll"><div class="bracket">${b.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]||'Ronda '+(ri+1)}</div>${r.map((m,mi)=>bm(m,'intl',ri,mi)).join('')}</div>`).join('')}
+  <div class="round"><div class="rlabel">3er puesto</div>${bm(b.third,'intl','third',0)}</div></div></div>
   <div class="podium3">
     <div class="podium-card p1"><div class="medal">1º</div><div class="pname">${fnameH(s.intl.champion)}</div><div class="plabel">Campeón</div></div>
     <div class="podium-card p2"><div class="medal">2º</div><div class="pname">${fnameH(s.intl.runnerUp)}</div><div class="plabel">Subcampeón</div></div>
@@ -1487,9 +1487,10 @@ function renderIntl(){
   </div>`;
   return h;
 }
-function bm(m){
+function bm(m, key, ri, mi){
   const slot=(id)=>`<div class="bslot ${m.result&&m.result.winner===id?'winner':''}"><span style="display:flex;align-items:center;gap:7px;">${miniAvatar(id,20)}${fnameH(id)}</span>${m.result&&m.result.winner===id&&m.result.tiebreak?'<span class="rtag">réplica</span>':''}</div>`;
-  return `<div class="bmatch">${slot(m.a)}${slot(m.b)}</div>`;
+  const click=key!=null ? battleClick(m, key, ri, mi) : '';
+  return `<div class="bmatch${click?' clickable':''}"${click}>${slot(m.a)}${slot(m.b)}</div>`;
 }
 
 /* ---------- freestylers ---------- */
@@ -1584,10 +1585,21 @@ function judgeShort(id){ const j=JUDGE_BY_ID[id]; if(!j) return 'Juez'; const p=
 function judgeHeads(m){ const ids=(m && m.d && Array.isArray(m.d.j) && m.d.j.length===5) ? m.d.j : null;
   return [0,1,2,3,4].map(j=> ids && JUDGE_BY_ID[ids[j]] ? `<th class="jh"><span class="jname" tabindex="0" onmouseenter="showJudgeTip(this,'${ids[j]}')" onmouseleave="hideJudgeTip()" onfocus="showJudgeTip(this,'${ids[j]}')" onblur="hideJudgeTip()" onclick="toggleJudgeTip(this,'${ids[j]}')">${esc(judgeShort(ids[j]))}</span></th>` : `<th>Juez ${j+1}</th>`).join(''); }
 // Localiza la batalla: mi numérico = cruce de la jornada j; 'ex' = exhibición; 'fex' = exhibición obligada
-function battleAt(key, j, mi){ const s=cur(); const L=s && s.leagues && s.leagues[key]; if(!L) return null;
+// Cuadro de eliminatorias: j = ronda (número) o 'third'; mi = cruce
+function bracketMatch(b, j, mi){ if(!b) return null; if(j==='third') return b.third||null; const r=b.rounds && b.rounds[+j]; return (r && r[+mi]) || null; }
+// key: clave de liga · 'intl' (FMS Internacional) · 'rb:<evento>' (Red Bull nacional / Plazas) · 'rbinter' · 'under:<clave>:<día>' (j='b' = batalla suelta de Monster Fu)
+function battleAt(key, j, mi){ const s=cur(); if(!s) return null;
+  if(key==='intl') return bracketMatch(s.intl && s.intl.bracket, j, mi);
+  if(key==='rbinter') return bracketMatch(s.rb && s.rb.inter && s.rb.inter.bracket, j, mi);
+  if(key.startsWith('rb:')){ const ev=rbOn(s) ? s.rb.events.find(e=>e.key===key.slice(3)) : null; return bracketMatch(ev && ev.bracket, j, mi); }
+  if(key.startsWith('under:')){ const [,uk,day]=key.split(':'); const ev=(s.under||[]).find(e=>e.key===uk && String(e.day)===day); if(!ev) return null;
+    if(j==='b') return (ev.battles||[])[+mi] || null; return bracketMatch(ev.bracket, j, mi); }
+  const L=s.leagues && s.leagues[key]; if(!L) return null;
   if(mi==='ex') return L.exhib && L.exhib[j] && L.exhib[j].m || null;
   if(mi==='fex') return L.fexhib && L.fexhib[j] && L.fexhib[j].m || null;
   return (L.rounds[j]||[])[mi] || null; }
+// Atributo onclick para abrir el detalle de una batalla jugada (vacío si no se ha jugado)
+function battleClick(m, key, j, mi){ return (m && m.result) ? ` onclick="showBattle('${key}','${j}',${+mi})"` : ''; }
 function showBattle(key, j, mi){
   const m=battleAt(key, j, mi); if(!m || !m.result) return;
   const A=fby(m.a), B=fby(m.b); if(!A || !B) return;
@@ -2077,10 +2089,14 @@ function renderRedBull(){
   <p class="step-note" style="margin-top:12px;">Cada campeón va al Internacional, junto al podio del último Internacional (que no juega nacionales) y 3 subcampeones elegidos por votación. El Torneo de Plazas reúne a uno por país de los que se quedaron fuera.</p>`;
   return h;
 }
-function rbBracketHtml(ev){
+// Solo el cuadro (sin podio). key = localizador para showBattle
+function bracketHtml(b, key){
   const names=['Octavos','Cuartos','Semifinal','Final'];
-  return `<div class="bracket-scroll"><div class="bracket">${ev.bracket.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]}</div>${r.map(m=>bm(m)).join('')}</div>`).join('')}
-  <div class="round"><div class="rlabel">3er puesto</div>${bm(ev.bracket.third)}</div></div></div>
+  return `<div class="bracket-scroll"><div class="bracket">${b.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]||'Ronda '+(ri+1)}</div>${r.map((m,mi)=>bm(m,key,ri,mi)).join('')}</div>`).join('')}
+  <div class="round"><div class="rlabel">3er puesto</div>${bm(b.third,key,'third',0)}</div></div></div>`;
+}
+function rbBracketHtml(ev){
+  return bracketHtml(ev.bracket, ev.key ? 'rb:'+ev.key : 'rbinter')+`
   <div class="podium3">
     <div class="podium-card p1"><div class="medal">1º</div><div class="pname">${fnameH(ev.champion)}</div><div class="plabel">Campeón</div></div>
     <div class="podium-card p2"><div class="medal">2º</div><div class="pname">${fnameH(ev.runnerUp)}</div><div class="plabel">Subcampeón</div></div>
@@ -2899,7 +2915,7 @@ function openMFU(day){
   ev.presented=true; advance('day'); if(!ev.played) return;
   state.ui.kov=ev.battles.map(m=>m.views||0); state.ui.kovMoney=false;
   const rows=ev.battles.map((m,i)=>{ const wa=m.result.winner===m.a;
-    return `<div class="fm-srow"><div class="fm-sb"><span class="${wa?'w':'l'}">${fmFace(m.a)}${fnameH(m.a)}</span><span class="fm-sres">vs<small>gana ${fnameH(m.result.winner)}</small></span><span class="${wa?'l':'w'} r">${fnameH(m.b)}${fmFace(m.b)}</span></div>
+    return `<div class="fm-srow"><div class="fm-sb clickable"${battleClick(m,'under:'+MFU.key+':'+ev.day,'b',i)}><span class="${wa?'w':'l'}">${fmFace(m.a)}${fnameH(m.a)}</span><span class="fm-sres">vs<small>gana ${fnameH(m.result.winner)}</small></span><span class="${wa?'l':'w'} r">${fnameH(m.b)}${fmFace(m.b)}</span></div>
       <div class="fm-views"><span class="fm-vn" id="kov${i}">—</span><button class="btn small" id="kob${i}" onclick="kovReveal(${i})">Revelar visitas</button></div></div>`; }).join('');
   openModal(`<h3>${ulogo(MFU.key)?`<img class="un-logo" src="${ulogo(MFU.key)}" alt="">`:''}${MFU.name} #${ev.n} · ${fmtDay(s.year,day)}</h3><p class="step-note">5 batallas sueltas. Cada ganador se lleva +3 de hype.</p>
     <div class="kov">${rows}</div><div class="fm-sum-foot" id="kovFoot"></div>
@@ -2910,9 +2926,10 @@ function showUnder(key, day){
   const s=cur(); const ev=(s.under||[]).find(e=>e.key===key && e.day===day); if(!ev) return; const def=udef(key);
   let body='';
   if(!ev.played) body=`<p class="step-note">Se juega el ${fmtDay(s.year,ev.day)}. Es una competición externa: no puedes poner jornadas ese día.</p>`;
-  else if(ev.battles) body=`<div class="tb-list">${ev.battles.map(m=>{ const wa=m.result.winner===m.a; return `<div class="tb-row"><div class="tb-faces"><span class="tb-face ${wa?'w':''}" style="${avatarDivStyle(fby(m.a))}">${avatarContent(fby(m.a))}</span><span class="tb-face ${wa?'':'w'}" style="${avatarDivStyle(fby(m.b))}">${avatarContent(fby(m.b))}</span></div><div class="tb-info"><div class="tb-names"><span class="${wa?'w':''}">${fnameH(m.a)}</span> <i>vs</i> <span class="${wa?'':'w'}">${fnameH(m.b)}</span></div><div class="tb-meta">gana ${fnameH(m.result.winner)}</div></div><div class="tb-views">${fmtViews(m.views)}<small>visitas</small></div></div>`; }).join('')}</div>`;
+  else if(ev.battles) body=`<div class="tb-list">${ev.battles.map((m,i)=>{ const wa=m.result.winner===m.a; return `<div class="tb-row clickable"${battleClick(m,'under:'+key+':'+ev.day,'b',i)}><div class="tb-faces"><span class="tb-face ${wa?'w':''}" style="${avatarDivStyle(fby(m.a))}">${avatarContent(fby(m.a))}</span><span class="tb-face ${wa?'':'w'}" style="${avatarDivStyle(fby(m.b))}">${avatarContent(fby(m.b))}</span></div><div class="tb-info"><div class="tb-names"><span class="${wa?'w':''}">${fnameH(m.a)}</span> <i>vs</i> <span class="${wa?'':'w'}">${fnameH(m.b)}</span></div><div class="tb-meta">gana ${fnameH(m.result.winner)}</div></div><div class="tb-views">${fmtViews(m.views)}<small>visitas</small></div></div>`; }).join('')}</div>`;
   else { const fin=ev.bracket.rounds[ev.bracket.rounds.length-1][0];
     body=`<div class="sum-row"><span>🏆 Campeón</span><b>${fnameH(ev.champion)}</b></div><div class="sum-row"><span>Subcampeón</span><span>${fnameH(ev.runnerUp)}</span></div><div class="sum-row"><span>3º</span><span>${fnameH(ev.third)}</span></div>
+      <div class="sum-sec">Cuadro</div>${bracketHtml(ev.bracket, 'under:'+key+':'+ev.day)}
       <div class="sum-sec">Participantes</div><div class="un-people">${ev.participants.map(id=>`<span class="un-p">${miniAvatar(id,22)} ${fnameH(id)}</span>`).join('')}</div>`; }
   openModal(`<h3>${ulogo(key)?`<img class="un-logo" src="${ulogo(key)}" alt="">`:`<span class="un-dot" style="background:${def.color}"></span>`}${def.name}${ev.n?' #'+ev.n:''} ${s.year}</h3>${body}<div class="modal-actions"><button class="btn primary" onclick="closeModal()">Cerrar</button></div>`, true);
 }
