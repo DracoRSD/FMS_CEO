@@ -1931,6 +1931,41 @@ function devConfirmReset(){
   openModal(`<h3>Reiniciar juego desde 0</h3><p class="step-note">Se borra todo: empresa, temporadas, freestylers (con sus nombres y fotos) y logos. Vuelves a la pantalla de nueva partida.</p>
   <div class="modal-actions"><button class="btn" onclick="openDev()">Volver</button><button class="btn danger" onclick="doReset()">Reiniciar todo</button></div>`);
 }
+// Modo carrera: deja la pretemporada lista sin CEO. Activa las 7 ligas y la Internacional, pone un host por liga sin cobrar,
+// coloca 9 fechas por liga (viernes a domingo desde el día 20, una jornada por día en todo el mundo, sin días seguidos de la
+// misma liga, esquivando Red Bull, Under y la votación) y la sede y fecha de la Internacional. Devuelve preseasonIssues(s).
+const AUTO_FECHA_PASO = 24;   // una jornada cada ~24 días (GAP_OK es 21); la J1 va justo después de los días reservados (LU_RESERVED)
+function autoPretemporada(s){
+  if(s.phase!=='pre') return [];
+  LEAGUES.forEach(L=>{ if(!s.activeKeys.includes(L.key)){ s.activeKeys.push(L.key); ensureLeague(s, L.key); } });
+  s.activeKeys.sort((a,b)=> (isWS(a)?99:LEAGUES.findIndex(l=>l.key===a))-(isWS(b)?99:LEAGUES.findIndex(l=>l.key===b)));
+  s.intlEnabled = natKeys(s).length>=4;
+  // host: del país de la liga si lo hay, si no cualquiera libre; sin coste
+  natKeys(s).forEach(k=>{ const L=s.leagues[k]; const list=spkList(L); if(list.length) return; const def=ldef(k);
+    const cands=SPEAKERS.filter(sp=>!spkBusy(s,k,sp)); const sp=cands.find(x=>def.countries.includes(spkCountry(x))) || cands[0];
+    if(sp){ list.push(sp.name); if(!L.spkCosts) L.spkCosts={}; L.spkCosts[sp.name]=0; } });
+  // fechas
+  const diy=daysInYear(s.year);
+  const busy=new Set([...Object.keys(rbByDay(s)).map(Number), ...Object.keys(underByDay(s)).map(Number), ...seasonEvents(s).map(e=>e.day)]);
+  if(rbOn(s)) busy.add(s.rb.inter.voteDay);
+  const libre=d=> d>=LU_RESERVED && d<diy && isPrimeDay(s.year,d) && !busy.has(d);
+  natKeys(s).forEach((k,li)=>{ const L=s.leagues[k]; L.manual=false;   // cruces automáticos: nadie elige los enfrentamientos
+    if(L.dates.length>=nJ(k)) return; L.dates.forEach(d=>busy.delete(d)); L.dates=[];
+    for(let j=0;j<nJ(k);j++){
+      const objetivo=LU_RESERVED+1 + AUTO_FECHA_PASO*j + li*3;   // cada liga desplazada unos días para repartir los fines de semana
+      let d=null;
+      for(let off=0; off<40 && d==null; off++){ for(const c of [objetivo+off, objetivo-off]){ if(libre(c) && !L.dates.some(x=>Math.abs(x-c)<=1)){ d=c; break; } } }
+      if(d!=null){ L.dates.push(d); busy.add(d); }
+    }
+    L.dates.sort((a,b)=>a-b); });
+  // Internacional: sede no reciente y primer fin de semana libre al menos 7 días después de la última jornada nacional
+  if(s.intlEnabled){
+    const i=state.seasons.indexOf(s); const recientes=recentSedes(state.seasons.slice(0,Math.max(0,i)),'fms');
+    if(!s.intl.sede || recientes.includes(s.intl.sede)) s.intl.sede=pickSede(recientes);
+    if(s.intl.date==null){ let d=lastNationalDay(s)+7; while(d<diy && !libre(d)) d++; if(d<diy){ s.intl.date=d; busy.add(d); } }
+  }
+  return preseasonIssues(s);
+}
 // Modo carrera: plantillas de las ligas sin CEO ni dinero. Mismo orden que devAutoSign (país de la liga primero, luego nivel),
 // solo activos, respeta descendidos, hosts y ya fichados. Se rehacen por nivel cada año: la regla de ofertas de liga depende de ese orden.
 // Devuelve cuántos faltaron por fichar (0 si todas las ligas quedaron con 10).
