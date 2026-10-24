@@ -1038,6 +1038,7 @@ function importGameFile(ev){
   r.onload=()=>{
     try{ const d=JSON.parse(r.result); if(!d.company) throw 0;
       state.company=d.company; state.freestylers=d.freestylers; state.seasons=d.seasons; state._counter=d._counter||1;
+      syncRealPool();   // migra la partida importada al formato actual (atributos, jueces, dbv)
       toast('Partida cargada.'); goto('dashboard');
     }catch(e){ toast('Ese archivo no es una partida de FMS CEO.'); }
   };
