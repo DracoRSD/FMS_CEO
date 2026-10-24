@@ -1080,7 +1080,7 @@ function simulateDay(auto, soloFid){
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
   if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
   // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
-  if(carr && !auto && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } }
+  if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } }
   s.day++;
   if(s.day>=diy) endSeason(s);
   return ev||rev||null;
@@ -1453,6 +1453,7 @@ function renderCarrera(){
     </div></div>
     ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
     ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
+    ${redesPanel(f)}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
       <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Los patrocinadores llegan más adelante.'}</p>
@@ -1506,6 +1507,107 @@ function carreraEnDirecto(s, f){
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Próximo compromiso</span>${prox}</div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Rivales · récord total ${v}-${rec.length-v}</span>${filas}</div>`;
 }
+// ---- Redes de la carrera (fase T): fans, haters, medios del país y reaccionadores comentan al jugador según datos reales ----
+// company.carrera.redes = { fans:[handles], haters:[handles], racha, feed:[últimos REDES_FEED_MAX tuits], hitos:{} }. El feed va en el guardado, acotado.
+const REDES_FEED_MAX = 60, REDES_PANEL_MAX = 30, REDES_FANS_MAX = 15, REDES_HATERS_MAX = 8;   // el feed guarda 60 (unos 15 KB) y el panel enseña 30
+const REDES_SORPRESA = 5;    // ganar a alguien con este nivel de más (o perder con uno con 8 menos) es noticia
+const REDES_BATACAZO = 8;
+var MEDIOS_PAIS = {
+  es:[{handle:'freestylehoy_es', name:'Freestyle Hoy', country:'España'},{handle:'latarima_es', name:'La Tarima', country:'España'}],
+  ar:[{handle:'rimasdelsur', name:'Rimas del Sur', country:'Argentina'},{handle:'batallasar', name:'Batallas AR', country:'Argentina'}],
+  mx:[{handle:'barrasmx', name:'Barras MX', country:'México'},{handle:'tarimamexicana', name:'Tarima Mexicana', country:'México'}],
+  cl:[{handle:'flowaustral', name:'Flow Austral', country:'Chile'}],
+  pe:[{handle:'punchlineperu', name:'Punchline Perú', country:'Perú'}],
+  co:[{handle:'fscafetero', name:'Freestyle Cafetero', country:'Colombia'}],
+  car:[{handle:'cariberapnews', name:'Caribe Rap News', country:'República Dominicana'}],
+  neu:[{handle:'freestyleglobal', name:'Freestyle Global', country:null}],
+};
+var REACCIONADORES = [
+  {handle:'reaccionesdelbarrio', name:'Reacciones del Barrio', country:'España'},{handle:'elpanelreacciona', name:'El Panel Reacciona', country:'Argentina'},
+  {handle:'minutoaminutomx', name:'Minuto a Minuto MX', country:'México'},{handle:'sinfiltroreact', name:'Sin Filtro React', country:'Chile'},
+  {handle:'lareaccioncol', name:'La Reacción COL', country:'Colombia'},{handle:'reactperu', name:'React Perú', country:'Perú'},{handle:'caribereact', name:'Caribe React', country:'Venezuela'},
+];
+// Frases por grupo (es: vosotros · la: ustedes). {n} jugador · {o} rival · {ptb} marcador · {comp} competición · {r} racha · {liga} liga · {pos} puesto
+var TWK={
+  es:{
+    duda:['¿quién es {n}? no me suena de nada','{n} contra {o}, ni idea de quién es el chaval','¿de dónde ha salido {n}?','alguien que me explique quién es {n}','{n} se ha metido en {comp} y nadie sabe nada de él','primera vez que oigo hablar de {n}','a ver si {n} es algo más que un nombre','{n} dice que es freestyler, veremos'],
+    neuWin:['{n} le gana a {o} en {comp}','victoria de {n} ante {o}, correcta','{n} supera a {o} {ptb}','buena batalla de {n}, se lleva el {n} vs {o}','{n} sigue sumando, hoy contra {o}','{n} hizo su trabajo contra {o}','{n} se impone a {o} sin mucho ruido','{n} cumple ante {o}'],
+    neuLoss:['{n} cae ante {o} en {comp}','{o} le gana a {n}, nada que objetar','{n} pierde {ptb} con {o}, le faltó algo','{o} se lleva el {n} vs {o}','{n} no estuvo fino contra {o}','batalla floja de {n} hoy contra {o}','{n} se queda corto ante {o}','{o} fue mejor que {n}, sin más'],
+    fanWin:['{n} es una barbaridad, le ha pasado por encima a {o}','vamos {n}, otra más 🔥','{n} está en racha: {r} seguidas','qué temporada se está marcando {n}','lo de {n} contra {o} hay que verlo entero','{n} ganando a {o} y yo gritando en casa','dadle un escenario grande a {n} ya','{n} no para, hoy {o}'],
+    fanLoss:['{n} ha perdido con {o} pero para mí la ganó','mal día de {n}, se levantará','a {n} le han robado contra {o}, {ptb} es mentira','{n} tiene que seguir, esto no cambia nada','los de {n} seguimos aquí, aunque hoy fuera {o}','duele lo de {n} contra {o}, pero es un bache','{n} perdió, pero el minuto de la segunda fue suyo','con {n} hasta el final, hoy y siempre'],
+    haterWin:['{n} gana a {o} y ya lo venden como el nuevo campeón, por favor','a {n} le regalan las batallas, hoy contra {o}','{n} ganó pero sin hacer nada memorable','siempre que {n} gana es por los jueces','menuda inflada la de {n}','{n} vs {o} {ptb}, otro regalo','no entiendo el hype con {n}','{n} sigue ganando con lo mismo de siempre'],
+    haterLoss:['{n} ha perdido con {o}, lo que llevo diciendo desde el principio','{n} no está al nivel de {comp}','se le ha acabado el cuento a {n}','{o} le ha enseñado a {n} lo que es esto','{n} {ptb} contra {o}, normal','{n} es humo y hoy se ha visto','ya tardaba {n} en caer','{n} pierde con {o} y nadie debería sorprenderse'],
+    sorpresa:['{n} acaba de ganar a {o}, no me lo creo','SORPRESA: {n} tumba a {o} en {comp}','{n} le gana a {o}, ojo a este chaval','{n} contra {o} {ptb}, la batalla del año','nadie apostaba por {n} contra {o} y ha ganado','{n} se lleva el {n} vs {o} y la gente flipando','campanada de {n} ante {o}','apuntad el nombre: {n} acaba de ganar a {o}'],
+    batacazo:['{n} perdiendo con {o} es para hacérselo mirar','¿en serio {n} ha perdido con {o}?','batacazo de {n} ante {o}, {ptb}','{n} cae con {o} y se le caen las caretas','lo de {n} contra {o} es inexplicable','{o} le gana a {n}, nadie lo esperaba','mal, muy mal lo de {n} hoy contra {o}','{n} se deja la batalla contra {o}'],
+    mediaWin:['{n} vence a {o} en {comp} ({ptb}) y suma su victoria número {v} de la temporada','{comp}: {n} se impone a {o}','RESULTADO · {n} {ptb} {o} en {comp}','{n} encadena {r} victorias tras superar a {o}','{n} sigue adelante en {comp}: {ptb} ante {o}'],
+    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptb} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptb}'],
+    react:['reaccionando AHORA al {n} vs {o}, pasaos por el directo','la batalla de {n} contra {o} la vemos esta noche en el canal','{n} vs {o}, reacción en 10 minutos','hemos parado el directo tres veces en el {n} vs {o}','{n} contra {o} va a la reacción de la semana, obligatorio'],
+  },
+  la:{
+    duda:['¿quién es {n}? no me suena de nada','{n} contra {o}, ni idea de quién es el pibe','¿de dónde salió {n}?','alguien que me explique quién es {n}','{n} se metió en {comp} y nadie sabe nada de él','primera vez que escucho de {n}','a ver si {n} es algo más que un nombre','{n} dice que es freestyler, veremos'],
+    neuWin:['{n} le gana a {o} en {comp}','victoria de {n} ante {o}, correcta','{n} supera a {o} {ptb}','buena batalla de {n}, se lleva el {n} vs {o}','{n} sigue sumando, hoy contra {o}','{n} hizo su trabajo contra {o}','{n} se impone a {o} sin mucho ruido','{n} cumple ante {o}'],
+    neuLoss:['{n} cae ante {o} en {comp}','{o} le gana a {n}, nada que objetar','{n} pierde {ptb} con {o}, le faltó algo','{o} se lleva el {n} vs {o}','{n} no estuvo fino contra {o}','batalla floja de {n} hoy contra {o}','{n} se queda corto ante {o}','{o} fue mejor que {n}, sin más'],
+    fanWin:['{n} es una barbaridad, le pasó por encima a {o}','vamos {n}, otra más 🔥','{n} está en racha: {r} seguidas','qué temporada se está mandando {n}','lo de {n} contra {o} hay que verlo entero','{n} ganándole a {o} y yo gritando en casa','denle un escenario grande a {n} ya','{n} no para, hoy {o}'],
+    fanLoss:['{n} perdió con {o} pero para mí la ganó','mal día de {n}, se va a levantar','a {n} le robaron contra {o}, {ptb} es mentira','{n} tiene que seguir, esto no cambia nada','los de {n} seguimos acá, aunque hoy fuera {o}','duele lo de {n} contra {o}, pero es un bache','{n} perdió, pero el minuto de la segunda fue suyo','con {n} hasta el final, hoy y siempre'],
+    haterWin:['{n} le gana a {o} y ya lo venden como el nuevo campeón, por favor','a {n} le regalan las batallas, hoy contra {o}','{n} ganó pero sin hacer nada memorable','siempre que {n} gana es por los jueces','qué inflado está {n}','{n} vs {o} {ptb}, otro regalo','no entiendo el hype con {n}','{n} sigue ganando con lo mismo de siempre'],
+    haterLoss:['{n} perdió con {o}, lo que vengo diciendo desde el principio','{n} no está al nivel de {comp}','se le acabó el cuento a {n}','{o} le enseñó a {n} lo que es esto','{n} {ptb} contra {o}, normal','{n} es humo y hoy se vio','ya tardaba {n} en caer','{n} pierde con {o} y nadie debería sorprenderse'],
+    sorpresa:['{n} acaba de ganarle a {o}, no lo puedo creer','SORPRESA: {n} tumba a {o} en {comp}','{n} le gana a {o}, ojo con este pibe','{n} contra {o} {ptb}, la batalla del año','nadie apostaba por {n} contra {o} y ganó','{n} se lleva el {n} vs {o} y la gente no lo cree','campanada de {n} ante {o}','anoten el nombre: {n} acaba de ganarle a {o}'],
+    batacazo:['{n} perdiendo con {o} es para hacérselo mirar','¿en serio {n} perdió con {o}?','batacazo de {n} ante {o}, {ptb}','{n} cae con {o} y se le caen las caretas','lo de {n} contra {o} es inexplicable','{o} le gana a {n}, nadie lo esperaba','mal, muy mal lo de {n} hoy contra {o}','{n} se deja la batalla contra {o}'],
+    mediaWin:['{n} vence a {o} en {comp} ({ptb}) y suma su victoria número {v} de la temporada','{comp}: {n} se impone a {o}','RESULTADO · {n} {ptb} {o} en {comp}','{n} encadena {r} victorias tras superar a {o}','{n} sigue adelante en {comp}: {ptb} ante {o}'],
+    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptb} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptb}'],
+    react:['reaccionando AHORA al {n} vs {o}, pásense por el directo','la batalla de {n} contra {o} la vemos esta noche en el canal','{n} vs {o}, reacción en 10 minutos','paramos el directo tres veces en el {n} vs {o}','{n} contra {o} va a la reacción de la semana, obligatorio'],
+  },
+};
+function redesDe(){ const c=state.company && state.company.carrera; if(!c) return null; if(!c.redes) c.redes={fans:[], haters:[], racha:0, feed:[], hitos:{}}; const r=c.redes; if(!Array.isArray(r.feed)) r.feed=[]; if(!r.hitos) r.hitos={}; return r; }
+function redesSeguidores(f){ return Math.round(Math.pow(Math.max(5,f.fama),2)*30); }   // fama 20 → 12 k · fama 90 → 243 k
+function redesVolumen(fama, mult){ const base = fama<30 ? 1 : (fama<50 ? rint(2,3) : (fama<70 ? rint(3,5) : (fama<85 ? rint(5,8) : rint(8,12)))); return Math.max(1, Math.round(base*(mult||1))); }
+function redesCuenta(h){ const t=TWITTEROS.find(x=>x.handle===h); return t ? twAcc(t) : null; }
+// Compone una frase de TWK con la voz del autor y la rellena
+function redesFrase(s, cat, acc, datos){ const dia=twDia(acc&&acc.country); const grupo=dia==='es'?'es':'la'; const cores=TWK[grupo][cat]||TWK[grupo].neuWin;
+  const core=twElige(s, cores); const esMedio=/^media/.test(cat); const sinRemate = esMedio || /^hater|^batacazo|^duda/.test(cat); const pre = !esMedio && Math.random()<0.35 ? twElige(s, TWX_PRE[dia]||TWX_PRE.neu) : ''; let post = !sinRemate && Math.random()<0.45 ? twElige(s, TWX_POST[dia]||TWX_POST.neu) : '';
+  if(post && pre && pre.toLowerCase().replace(/[,:]/g,'')===post.toLowerCase()) post='';
+  let t = pre ? pre+' '+core : core.charAt(0).toUpperCase()+core.slice(1); if(post) t+=', '+post;
+  t=t.replace(/\{(\w+)\}/g,(m,x)=>datos[x]!=null?datos[x]:m); return twUnico(s, t, acc&&acc.country); }
+function redesPush(s, acc, text, sent, ref){ const r=redesDe(); if(!r) return null; const t={h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*2000)+rint(2,40), rts:rint(0,200), cm:rint(0,60), ref, y:s.year, d:s.day};
+  r.feed.unshift(t); if(r.feed.length>REDES_FEED_MAX) r.feed.length=REDES_FEED_MAX; return t; }
+// Reacciones a una batalla del jugador (b viene de batallasDelDia). Siempre al menos un tuit, aunque sea una duda de desconocido.
+function twCarreraBatalla(s, b, fid){
+  const r=redesDe(); const f=fby(fid); if(!r || !f) return [];
+  const m=b.m; const rivalId = m.a===fid ? m.b : m.a; const o=fby(rivalId); const gane = m.result.winner===fid;
+  r.racha = gane ? (r.racha||0)+1 : 0;
+  const yo = m.a===fid ? 'A' : 'B'; const votos = (m.d && m.d.v) ? Array.from(m.d.v) : null; const ptb = votos ? `${votos.filter(x=>x===yo).length}-${votos.filter(x=>x!==yo && x!=='R').length}${m.result.tiebreak?' tras réplica':''}` : (m.result.tiebreak ? 'en réplica' : 'por decisión');   // marcador en votos de los jueces
+  const comp = etiquetaBatalla(b).split(' · ')[0]; const dn=(o?o.nivel:f.nivel)-f.nivel;
+  const sorpresa = gane && dn>=REDES_SORPRESA, batacazo = !gane && dn<=-REDES_BATACAZO;
+  const victorias = batallasDe(s, fid).filter(x=>x.w===fid).length;
+  const datos={n:f.name, o:o?o.name:'su rival', ptb, comp, r:r.racha, v:victorias, liga: signedLeagueOf(s,fid) ? ldef(signedLeagueOf(s,fid)).name : ''};
+  // fans y haters que nacen de esta batalla
+  const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country), todos=TWITTEROS.filter(t=>!t.special);
+  const suma=(lista, cuantos, max)=>{ for(let i=0;i<cuantos && lista.length<max;i++){ const pool=(Math.random()<0.7?mios:todos).filter(t=>!r.fans.includes(t.handle) && !r.haters.includes(t.handle)); if(!pool.length) break; lista.push(pick(pool).handle); } };
+  if(sorpresa) suma(r.fans, rint(1,2), REDES_FANS_MAX); if(gane && r.racha>=3 && Math.random()<0.6) suma(r.fans, 1, REDES_FANS_MAX); if(gane && f.fama>=60 && Math.random()<0.2) suma(r.haters, 1, REDES_HATERS_MAX);
+  if(batacazo && f.fama>=35) suma(r.haters, 1, REDES_HATERS_MAX); if(!gane && r.haters.length===0 && f.fama>=50 && Math.random()<0.3) suma(r.haters, 1, REDES_HATERS_MAX);
+  // volumen y reparto
+  const n=redesVolumen(f.fama, (sorpresa||batacazo) ? 1.6 : 1); const out=[]; const ref=b.key+'|'+b.j+'|'+b.mi; const usados=new Set();
+  const libre=pool=>{ const c=pool.filter(a=>!usados.has(a.handle)); const a=c.length?pick(c):null; if(a) usados.add(a.handle); return a; };
+  const dia=twDia(f.country);
+  const say=(acc, cat, sent)=>{ if(!acc) return; out.push(redesPush(s, acc, redesFrase(s, cat, acc, datos), sent, ref)); };
+  if(f.fama<30 && !r.fans.length && !sorpresa){ for(let i=0;i<n;i++) say(libre(mios.length?mios.map(twAcc):todos.map(twAcc)), 'duda', 0); return out; }
+  if(sorpresa) for(let i=0;i<Math.ceil(n*0.3);i++) say(libre(todos.map(twAcc)), 'sorpresa', 1);
+  if(batacazo) for(let i=0;i<Math.ceil(n*0.3);i++) say(libre(todos.map(twAcc)), 'batacazo', -1);
+  const fans=r.fans.map(redesCuenta).filter(Boolean), haters=r.haters.map(redesCuenta).filter(Boolean);
+  const nf=Math.min(fans.length, Math.round(n*0.4)), nh=Math.min(haters.length, Math.round(n*0.25));
+  for(let i=0;i<nf;i++) say(libre(fans), gane?'fanWin':'fanLoss', gane?1:0);
+  for(let i=0;i<nh;i++) say(libre(haters), gane?'haterWin':'haterLoss', -1);
+  while(out.length<n){ const a=libre((Math.random()<0.6?mios:todos).map(twAcc)); if(!a) break; say(a, gane?'neuWin':'neuLoss', gane?1:0); }
+  if(f.fama>=50 || sorpresa || batacazo){ const med=MEDIOS_PAIS[dia]||MEDIOS_PAIS.neu; say(Object.assign({verified:true}, pick(med)), gane?'mediaWin':'mediaLoss', 0); }
+  if(f.fama>=60 || sorpresa){ const rc=REACCIONADORES.filter(x=>twDia(x.country)===dia); say(Object.assign({verified:true}, pick(rc.length?rc:REACCIONADORES)), 'react', 1); }
+  return out;
+}
+// Tuits del feed que hablan de una batalla concreta (por su clave de showBattle)
+function redesDeBatalla(key, j, mi){ const r=redesDe(); if(!r) return []; const ref=key+'|'+j+'|'+mi; return r.feed.filter(t=>t.ref===ref); }
+function redesFeedHtml(list, vacio){ return `<div class="lu-x redes-x"><div class="lu-feed">${list.length ? list.map(t=>luTweetHtml(t)).join('') : `<p class="step-note" style="padding:12px">${vacio||'Nadie ha dicho nada todavía.'}</p>`}</div></div>`; }
+// Panel «Redes» de Mi carrera: seguidores, fans, haters y los últimos tuits sobre el jugador
+function redesPanel(f){ const r=redesDe(); if(!r) return ''; const seg=redesSeguidores(f); const segTxt = seg>=1000 ? (Math.round(seg/100)/10).toLocaleString('es-ES')+' k' : String(seg);
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Redes</span><p class="step-note" style="margin:0 0 10px">${segTxt} seguidores · ${r.fans.length} fans · ${r.haters.length} haters · racha ${r.racha||0}</p>${redesFeedHtml(r.feed.slice(0, REDES_PANEL_MAX), 'Todavía nadie habla de ti. Compite y verás.')}</div>`; }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
@@ -2095,6 +2197,11 @@ function battleAt(key, j, mi){ const s=cur(); if(!s) return null;
 // Atributo onclick para abrir el detalle de una batalla jugada (vacío si no se ha jugado)
 function battleClick(m, key, j, mi){ return (m && m.result) ? ` onclick="showBattle('${key}','${j}',${+mi})"` : ''; }
 function showBattle(key, j, mi){
+  showBattleBase(key, j, mi);
+  if(modoCarrera() && state.company.carrera){ const m=battleAt(key, j, mi); const fid=state.company.carrera.fid; if(m && (m.a===fid||m.b===fid)){ const tws=redesDeBatalla(key, j, mi); const mr=document.getElementById('modalRoot'); const act=mr && mr.querySelector('.modal-actions');
+    if(act) act.insertAdjacentHTML('beforebegin', `<div class="sum-sec">Las redes</div>${redesFeedHtml(tws, 'Nadie comentó esta batalla.')}`); } }
+}
+function showBattleBase(key, j, mi){
   const m=battleAt(key, j, mi); if(!m || !m.result) return;
   const A=fby(m.a), B=fby(m.b); if(!A || !B) return;
   const wa=m.result.winner===m.a;
