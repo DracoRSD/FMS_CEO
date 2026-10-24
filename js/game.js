@@ -1460,6 +1460,22 @@ function renderCarrera(){
     </div>
   </div>`;
 }
+// ¿Juega (o jugó) el jugador el día d? Pasado: batallas con resultado; futuro: jornada de su liga por fecha, cuadros donde está e inscripciones.
+function jugadorEnDia(s, d, fid){
+  if(s.phase==='done' || d<s.day) return batallasDelDia(s, d, fid).length>0;
+  const ev=eventsByDay(s)[d];
+  if(ev && ev.key!==INTL.key){ const L=s.leagues[ev.key]; const j=L.dates.indexOf(d); if(j>=0 && (L.rounds[j]||[]).some(m=>m.a===fid||m.b===fid)) return true; }
+  return jugadorJuegaHoy(s, d, fid);
+}
+// Panel del calendario en carrera: liga, torneos del año con su estado (inscrito, sin inscribir o por qué no entras) y sus fechas
+function calendarioCarrera(s, f){
+  const p=planDe(f); const lk=signedLeagueOf(s, f.id) || (s.phase==='pre' ? p.liga : null);
+  const fechas=key=>{ let ds=[]; if(isRB(key) && rbOn(s)) ds=rbEventsList(s).filter(e=>e.key===key).map(e=>e.day); else if(isUnder(key)) ds=(s.under||[]).filter(u=>u.key===key).map(u=>u.day); return ds.length ? ds.map(d=>fmtDay(s.year,d)).join(', ') : 'sin fecha este año'; };
+  const filas=torneosDelJugador(s, f).map(t=>{ const ins=p.inscrito.includes(t.key) && t.apto; const estado = ins ? '<b class="pos-v">Inscrito · plaza garantizada</b>' : (t.apto ? (s.phase==='pre' ? 'Puedes inscribirte' : 'Sin inscribir este año') : `<span class="neg-v">No entras: ${esc(t.motivo||'no apto')}</span>`);
+    return `<div class="evol-row"><span class="evol-who">${esc(t.name)}</span><span class="evol-sub">${fechas(t.key)}</span><span>${estado}</span></div>`; }).join('');
+  const liga = lk ? `${leagueDot(lk)} ${esc(ldef(lk).name)} · ${nJ(lk)} jornadas` : 'Libre: sin liga este año';
+  return `<div class="step" style="margin-bottom:16px;"><span class="field-label">Tus torneos ${s.year}</span><p class="step-note" style="margin:0 0 8px">${liga}${s.phase==='pre' ? ' · Las inscripciones se eligen en «Mi carrera»; las jornadas de liga se fijan al empezar la temporada.' : ''}</p>${filas}</div>`;
+}
 // Próximo compromiso del jugador a partir de los datos de la temporada: jornada de su liga (con rival), cuadros de Red Bull e Internacional donde está,
 // Under y Monster Fu en los que está inscrito. Devuelve {day, nombre, key, rival} o null.
 function proximoCompromiso(s, fid){
@@ -1783,7 +1799,10 @@ function renderCalendar(){
   const tool=state.ui.calTool && (s.activeKeys.includes(state.ui.calTool) || state.ui.calTool===INTL.key) ? state.ui.calTool : s.activeKeys[0];
   const back=state.view.params&&state.view.params.from==='dashboard';
   let h=`${back?`<div class="back-link" onclick="goto('dashboard')">‹ Inicio</div>`:''}<div class="detail-head"><h1>Calendario ${y}</h1>${back?`<button class="btn small" style="margin-left:auto" onclick="goto('dashboard')">Volver al inicio</button>`:''}</div>`;
+  const jug = modoCarrera() && state.company.carrera ? fby(state.company.carrera.fid) : null;
+  if(jug) h+=calendarioCarrera(s, jug);
   if(s.phase==='pre'){
+    if(jug) return h+`<p class="step-note">El calendario del año se dibuja al empezar la temporada: 9 jornadas por liga, Red Bull, Under e Internacional.</p>`;
     if(!rostersComplete(s)){
       const pend=s.activeKeys.filter(k=>s.leagues[k].competitors.length<10);
       return h+`<div class="empty-state"><span class="big">Primero el line up</span>El calendario se elige cuando todas las ligas tienen sus 10 freestylers.${pend.length?` Falta: ${pend.map(k=>`${ldef(k).name} (${s.leagues[k].competitors.length}/10)`).join(', ')}.`:''}<div style="margin-top:14px;"><button class="btn primary" onclick="goto('dashboard')">Ir a fichajes</button></div></div>`;
@@ -1827,6 +1846,7 @@ function renderCalendar(){
       inner+=`<div class="cal-ev rb ${rev.key===RB_INT.key?'int':''} ${played?'played':''}">RB ${rbdef(rev.key).short}<small>${re.champion?'🏆 '+fnameH(re.champion):(rev.key===RB_INT.key?'📍 '+s.rb.inter.sede:rbdef(rev.key).name)}</small></div>`; }
     const uev=underByDay(s)[d]; if(uev){ const ud=udef(uev.key); const pl=uev.played; inner+=`<div class="cal-ev under ${pl?'played':''}" style="background:${ud.color}">${ulogo(uev.key)?`<img class="cal-logo" src="${ulogo(uev.key)}" alt="">`:''}${ud.short}${uev.n?' '+uev.n:''}<small>${uev.champion?'🏆 '+fnameH(uev.champion):ud.name}</small></div>`; }
     if(rbOn(s) && d===s.rb.inter.voteDay) inner+=`<div class="cal-vote">🗳️ Votación RB</div>`;
+    if(jug && (ev||rev||uev) && jugadorEnDia(s, d, jug.id)){ cls.push('mio'); inner+=`<span class="cal-tu" title="Juegas tú">Tú</span>`; }
     h+=`<button class="${cls.join(' ')}" onclick="calClick(${d})" aria-label="${dd} de ${MESES[m]}${ev?', '+ldef(ev.key).name+(ev.j?' jornada '+ev.j:''):''}${rev?', '+rbdef(rev.key).name:''}">${inner}</button>`;
   }
   h+=`</div>`;

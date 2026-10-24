@@ -565,6 +565,8 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .carrera-opts .ltoggle{width:100%; text-align:left;}
 .step-note.aviso{color:var(--gold); margin:0 0 10px;}
 .carrera-botones{display:flex; gap:8px; flex-wrap:wrap;}
+.cal-cell.mio{box-shadow:inset 0 0 0 2px var(--gold);}
+.cal-tu{position:absolute; top:4px; right:6px; font-family:var(--font-cond); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--gold);}
 
 @media(max-width:640px){
   .cal-cell{min-height:58px; padding:3px; border-radius:6px;}
