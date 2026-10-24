@@ -24,6 +24,7 @@ const REF_KO = { favorito: 71.6, sembrado: 40.6 }, REF_UNDER = { favorito: 71.1,
 const CUADROS = parseInt(arg('cuadros', '4000'), 10);
 const PROGRESION = parseInt(arg('progresion', '20'), 10);   // temporadas de evolución del pool (informe de progresión y relevo)
 const CARRERA = parseInt(arg('carrera', '20'), 10);         // temporadas que el mundo corre solo en modo carrera (0 = no se prueba)
+const GUARDADO_CARRERA_MAX = 2 * 1048576, GUARDADO_AMBOS_MAX = 4 * 1048576;   // aviso si el guardado de una carrera a 20 años pasa de 2 MB, o CEO + carrera de 4 MB
 // Criterios de aceptación del relevo generacional tras PROGRESION temporadas (evolución + retiros + nuevos talentos)
 const TOP30_TOL = 3, TOP100_TOL = 4;   // el nivel medio del top 30 y del top 100 queda a ±esto del inicio
 const POOL_TOL = 10;                   // el pool de activos no varía más de ±esto (%)
@@ -51,7 +52,7 @@ const dom = new JSDOM(html, {
     win.Math.random = mulberry32(SEMILLA);            // solo dentro de la ventana simulada
     const mem = new Map();
     Object.defineProperty(win, 'localStorage', { value: { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) } });
-    win.scrollTo = () => {};
+    win.scrollTo = () => {}; win._mem = mem;   // para medir el tamaño del guardado
   },
 });
 const w = dom.window;
@@ -169,9 +170,10 @@ w.addEventListener('load', () => setTimeout(() => {
   // Cada año: autoPretemporada, autoFicharLigas, startSeason, advance('year'), nextSeason. Se restaura el estado al terminar.
   const carrera = { anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [] };
   if (CARRERA > 0) {
-    const S = g('state'); const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter };
-    S.company = { modo: 'carrera', name: 'Mundo', stars: 5, infinite: true, money: 0, reputation: 0, dbv: 7, tut: { inf: true, s2: true, intl: true } };
-    S.freestylers = g('generatePool()'); S.seasons = [g('newSeason')(null)];
+    const S = g('state'); const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
+    S.company = null; S.freestylers = []; S.seasons = [];
+    g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } });
+    g('nuevaCarrera')();   // como en el juego: empresa fantasma, pool real y el freestyler del jugador
     const errAntes = errores.length;
     try {
       for (let t = 1; t <= CARRERA; t++) {
@@ -191,7 +193,40 @@ w.addEventListener('load', () => setTimeout(() => {
       }
     } catch (e) { carrera.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 3).join(' · ')); }
     carrera.erroresJsdom = errores.splice(errAntes).length;   // los errores del bloque no cuentan como errores de carga
-    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter;
+    try { g('save')(); carrera.bytes = (w._mem.get(g('CARRERA_KEY')) || '').length; } catch (e) { carrera.bytes = -1; }
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view;
+  }
+
+  // ---- modos y guardado (fase C2) ----
+  // Una partida de CEO en dbv 7 carga y queda en 8 con modo 'ceo' sin tocar niveles ni atributos; una carrera creada con nuevaCarrera
+  // convive con la de CEO en otra clave y las dos abren; exportar e importar la deja idéntica; el nivel del jugador es la media de sus
+  // atributos al crear y tras un año jugado con el botón. Va al final para no mover la semilla del informe de CEO.
+  const modos = {};
+  {
+    const S = g('state'); const mem = w._mem; const nf = g('nivelFromAttrs');
+    const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY'));
+    try {
+      const poolCeo = g('generatePool()');
+      S.company = { name: 'CEO de prueba', stars: 1, reputation: 0, money: 1000, dbv: 7 }; S.freestylers = poolCeo; S.seasons = [g('newSeason')(null)];
+      const antes = JSON.stringify(poolCeo.map(f => [f.nivel, f.attrs]));
+      g('save')(); S.company = null; S.freestylers = []; S.seasons = [];
+      modos.migra = g('load')('ceo') && S.company.dbv === 8 && S.company.modo === 'ceo' && JSON.stringify(S.freestylers.map(f => [f.nivel, f.attrs])) === antes;
+      S.company = null; S.freestylers = []; S.seasons = [];
+      g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } });
+      g('nuevaCarrera')(); const jug = g('fby')(S.company.carrera.fid);
+      modos.crea = S.company.modo === 'carrera' && !!jug && jug.jugador === true && jug.nivel === 60 && nf(jug.attrs) === jug.nivel && jug.fama === g('CARRERA_FAMA') && jug.carrera.exp === 0 && jug.carrera.pot === g('POT_CARRERA');
+      g('jugarTemporadaCarrera')(); g('closeModal')();
+      modos.ano = g('cur')().phase === 'done' && nf(jug.attrs) === jug.nivel && !jug.retirado;
+      const dump = JSON.stringify({ company: S.company, freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter });
+      const d = JSON.parse(dump); S.company = d.company; S.freestylers = d.freestylers; S.seasons = d.seasons; S._counter = d._counter; g('syncRealPool')();
+      modos.exporta = JSON.stringify({ company: S.company, freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter }) === dump;
+      g('save')(); modos.dosClaves = mem.has(g('STORAGE_KEY')) && mem.has(g('CARRERA_KEY'));
+      S.company = null; modos.abreCarrera = g('load')('carrera') && S.company.modo === 'carrera';
+      S.company = null; modos.abreCeo = g('load')('ceo') && S.company.modo === 'ceo';
+    } catch (e) { modos.excepcion = String(e && e.stack || e).split('\n').slice(0, 2).join(' · '); }
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY'));
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view; S.ui.cc = null;
   }
 
   const totalTitulos = TEMPORADAS * plantillas.length, totalPlazas = plantillas.length * 10;
@@ -250,10 +285,15 @@ w.addEventListener('load', () => setTimeout(() => {
     console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${carrera.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${carrera.pausas.length ? ' · ' + carrera.pausas.join('; ') : ''}${carrera.excepciones.length ? ' · excepción: ' + carrera.excepciones.join('; ') : ''}${carrera.erroresJsdom ? ' · errores de página: ' + carrera.erroresJsdom : ''}`);
     console.log(`${carrera.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${carrera.arranquesMal.length ? ' · ' + carrera.arranquesMal.join('; ') : ''}`);
     console.log(`${carrera.intlMal.length === 0 ? 'OK  ' : 'FAIL'} la Internacional tiene cada año 16 clasificados distintos con 7 ligas${carrera.intlMal.length ? ' · ' + carrera.intlMal.join('; ') : ''}`);
+    const mb = x => (x / 1048576).toFixed(2).replace('.', ',');
+    const pasa = carrera.bytes > GUARDADO_CARRERA_MAX || carrera.bytes * 2 > GUARDADO_AMBOS_MAX;
+    console.log(`${pasa ? 'AVISO' : 'INFO '} guardado de una carrera tras ${carrera.anos} temporadas: ${mb(carrera.bytes)} MB (aviso si pasa de ${mb(GUARDADO_CARRERA_MAX)} MB); con una partida de CEO del mismo tamaño serían ${mb(carrera.bytes * 2)} MB juntas (aviso si pasan de ${mb(GUARDADO_AMBOS_MAX)} MB)`);
   }
+  const okModos = !modos.excepcion && modos.migra && modos.crea && modos.ano && modos.exporta && modos.dosClaves && modos.abreCarrera && modos.abreCeo;
+  console.log(`\n${okModos ? 'OK  ' : 'FAIL'} modos y guardado: CEO dbv 7 → 8 sin cambios (${!!modos.migra}), carrera creada con nivel = media, fama 20, experiencia 0 y potencial 92 (${!!modos.crea}), un año con el botón y nivel = media (${!!modos.ano}), exportar e importar idéntico (${!!modos.exporta}), dos claves a la vez (${!!modos.dosClaves}) y las dos abren (${!!(modos.abreCarrera && modos.abreCeo)})${modos.excepcion ? ' · excepción: ' + modos.excepcion : ''}`);
 
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos ? 0 : 1);
 }, 800));

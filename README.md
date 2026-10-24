@@ -44,7 +44,7 @@ npm install
 npm start           # abre el juego en una ventana
 npm run build:win   # genera dist/FMS_CEO.exe
 npm run build:single # genera dist/index.html con todo incrustado, para publicar
-npm run simular      # simula 1.000 temporadas y 4.000 cuadros con el motor del juego, 20 temporadas de relevo generacional y 20 años del mundo en modo carrera sin CEO (--semilla N, --formato long, --cuadros N, --progresion N, --carrera N)
+npm run simular      # simula 1.000 temporadas y 4.000 cuadros con el motor del juego, 20 temporadas de relevo generacional y 20 años del mundo en modo carrera sin CEO con medida de su guardado, y comprueba los dos modos de partida y sus guardados (--semilla N, --formato long, --cuadros N, --progresion N, --carrera N)
 ```
 > Compílalo desde Windows. En Linux/Mac, `electron-builder` necesita Wine para poner el icono al ejecutable.
 
