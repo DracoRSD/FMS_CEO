@@ -1043,12 +1043,10 @@ function endSeason(s){
   const before=state.company.stars;
   state.company.stars = Math.min(5, before+1);   // una estrella por temporada completada
   if(state.company.stars>before){ const offers=sponsorOffers(state.company.stars, 3+state.company.stars); s.newSponsorOffers=offers.length; }
-  // evolución de freestylers
+  // evolución de freestylers: progresión por atributo según experiencia, potencial y actividad
   const signed=new Set(s.activeKeys.flatMap(k=>s.leagues[k].competitors));
-  state.freestylers.forEach(f=>{
-    setNivel(f, clamp(f.nivel + rnd(-3,4), 35, 97));
-    if(!signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99));
-  });
+  const evol=evolveFreestylers(s);
+  state.freestylers.forEach(f=>{ if(!signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99)); });
   s.activeKeys.forEach(k=>{
     const st=s.leagues[k].finalStandings;
     st.forEach((id,i)=>{ const f=fby(id); const delta = i===0?8:(i<3?4:(i>=st.length-2 && !isWS(k)?-3:1)); f.fama=Math.round(clamp(f.fama+delta,5,99)); });
@@ -1058,7 +1056,8 @@ function endSeason(s){
     bonus, avgHype:Math.round(avgH), starsBefore:before, starsAfter:state.company.stars,
     repDelta: state.company.reputation - s.repStart,
     income:s.fin.income, views:s.fin.views||0, sponsors:s.fin.sponsors||0, salaries:s.fin.salaries, production:s.fin.production,
-    emptyMonths: 12 - monthsWithEvents(s).size
+    emptyMonths: 12 - monthsWithEvents(s).size,
+    evol: { up: evol.filter(x=>x.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,EVOL_TOP), down: evol.filter(x=>x.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,EVOL_TOP) }
   };
   addLog(s, daysInYear(s.year)-1, `Fin de la temporada ${s.year}. ${state.company.stars>before?'Subes a '+state.company.stars+'★.':(state.company.stars<before?'Bajas a '+state.company.stars+'★.':'Te mantienes en '+state.company.stars+'★.')}`, 'gold');
 }
