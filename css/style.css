@@ -554,6 +554,13 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .partida b{font-size:18px;}
 .partida small{font-family:var(--font-cond); color:var(--gray);}
 .partida .btn{margin-top:6px; pointer-events:none;}
+.cc-attrs{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px 16px; margin-top:8px;}
+.cc-attr{display:grid; grid-template-columns:1fr 64px; gap:4px 10px; align-items:center; font-family:var(--font-cond); font-size:14px;}
+.cc-attr input{width:64px; text-align:right;}
+.cc-attr .hype{grid-column:1 / -1;}
+.cc-attr.mal input{border-color:#ff6b6b;}
+.carrera-ficha{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;}
+.carrera-ficha .profile-avatar{flex:none;}
 
 @media(max-width:640px){
   .cal-cell{min-height:58px; padding:3px; border-radius:6px;}

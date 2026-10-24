@@ -343,6 +343,10 @@ const NOVATO_FAMA = [15, 40];
 const NOVATO_PROMESA = 0.12;        // fracción con potencial alto
 const POT_PROMESA = [88, 97];       // potencial de las promesas
 const POT_NOVATO = [6, 14];         // margen de potencial sobre el nivel del resto de novatos (como los jóvenes de hoy; las promesas usan POT_PROMESA)
+// Modo carrera: creación del freestyler del jugador
+const CARRERA_PUNTOS = 300, CARRERA_ATTR_MIN = 45, CARRERA_ATTR_MAX = 75;   // puntos a repartir entre los cinco atributos (media 60) y tope por atributo
+const CARRERA_FAMA = 20;            // fama inicial: apto para todo el Under
+const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
 // Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
@@ -1306,7 +1310,7 @@ function renderTopbar(){
   </div>`;
 }
 function renderView(){
-  if(!state.company) return renderWelcome();
+  if(!state.company) return state.view.name==='crearCarrera' ? renderCrearCarrera() : renderWelcome();
   switch(state.view.name){
     case 'calendar': return renderCalendar();
     case 'leagues': return renderLeagues();
@@ -1354,7 +1358,58 @@ function renderWelcome(){
       </div>
       <p class="step-note" style="margin-top:14px;">¿Tienes una partida guardada en archivo? <button class="btn small ghost" onclick="document.getElementById('gameFileInput').click()">Cargar partida</button></p>
     </div>
+    <div class="step" style="margin-top:16px;">
+      <span class="field-label">Modo carrera</span>
+      <p class="step-note" style="margin-bottom:10px;">Sé un freestyler y no la empresa: crea tu personaje, empieza en el Under y abre camino hasta la FMS. Las ligas y torneos corren solos.</p>
+      <button class="btn primary" onclick="abrirCrearCarrera()">Nueva carrera</button>
+    </div>
   </div>`;
+}
+/* ---------- modo carrera: creación del freestyler ---------- */
+function abrirCrearCarrera(){ state.ui.cc={name:'', country:'España', style:'Punchline', attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, CARRERA_PUNTOS/ATTR_KEYS.length]))}; goto('crearCarrera'); }
+function ccAttr(k, v){ const n=parseInt(v,10); state.ui.cc.attrs[k]=isNaN(n)?0:n; render(); }
+function ccProblemas(d){
+  const p=[]; const name=(d.name||'').trim();
+  if(!name) p.push('Ponle un nombre.');
+  else if(customFS().some(c=>c.name.toLowerCase()===name.toLowerCase()) || Object.values(REAL_PRESET).some(list=>list.some(([n])=>n.toLowerCase()===name.toLowerCase()))) p.push('Ya existe un freestyler con ese nombre.');
+  const sum=ATTR_KEYS.reduce((a,k)=>a+(d.attrs[k]||0),0);
+  if(ATTR_KEYS.some(k=>d.attrs[k]<CARRERA_ATTR_MIN || d.attrs[k]>CARRERA_ATTR_MAX)) p.push(`Cada atributo va de ${CARRERA_ATTR_MIN} a ${CARRERA_ATTR_MAX}.`);
+  if(sum!==CARRERA_PUNTOS) p.push(sum<CARRERA_PUNTOS ? `Te quedan ${CARRERA_PUNTOS-sum} puntos por repartir.` : `Te sobran ${sum-CARRERA_PUNTOS} puntos.`);
+  return p;
+}
+function renderCrearCarrera(){
+  const d=state.ui.cc || (state.ui.cc={name:'', country:'España', style:'Punchline', attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k,60]))});
+  const sum=ATTR_KEYS.reduce((a,k)=>a+(d.attrs[k]||0),0); const resto=CARRERA_PUNTOS-sum; const prob=ccProblemas(d);
+  return `<div class="welcome">
+    <div class="hero" style="display:block;"><h1>Tu carrera</h1><p>Crea tu freestyler. Empiezas con 0 temporadas de experiencia, fama ${CARRERA_FAMA} y ${CARRERA_PUNTOS} puntos a repartir entre los cinco atributos (de ${CARRERA_ATTR_MIN} a ${CARRERA_ATTR_MAX} cada uno). Tu nivel es la media.</p></div>
+    <div class="step" style="margin-top:16px;">
+      <div class="formrow"><label class="field-label" style="flex:1">Nombre (aka)<input id="cc_name" value="${esc(d.name)}" maxlength="30" oninput="state.ui.cc.name=this.value; render()" placeholder="Tu nombre de batalla"></label></div>
+      <div class="formrow">
+        <label class="field-label" style="flex:1">País<select onchange="state.ui.cc.country=this.value; render()">${CUSTOM_COUNTRIES.map(c=>`<option ${c===d.country?'selected':''}>${c}</option>`).join('')}</select></label>
+        <label class="field-label" style="flex:1">Estilo<select onchange="state.ui.cc.style=this.value; render()">${STYLE_NAMES.map(st=>`<option ${st===d.style?'selected':''}>${st}</option>`).join('')}</select></label>
+      </div>
+      <p class="step-note" style="margin:0 0 12px">${esc(STYLES[d.style].txt)}</p>
+      <span class="field-label">Atributos · ${resto===0 ? 'repartidos' : (resto>0 ? `quedan ${resto}` : `sobran ${-resto}`)} · nivel ${Math.round(sum/ATTR_KEYS.length)}</span>
+      <div class="cc-attrs">${ATTR_KEYS.map(k=>{ const v=d.attrs[k]||0; const mal=v<CARRERA_ATTR_MIN||v>CARRERA_ATTR_MAX; return `<label class="cc-attr ${mal?'mal':''}"><span>${esc(ATTR_LABELS[k])}</span><input id="cc_${k}" type="number" min="${CARRERA_ATTR_MIN}" max="${CARRERA_ATTR_MAX}" value="${v}" oninput="ccAttr('${k}', this.value)"><div class="hype"><i style="width:${clamp(v,0,100)}%"></i></div></label>`; }).join('')}</div>
+      ${prob.length ? `<p class="step-note" style="margin-top:10px">${esc(prob[0])}</p>` : ''}
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;"><button class="btn" onclick="state.ui.cc=null; goto('welcome')">Volver</button><div class="top-spacer"></div><button class="btn primary" ${prob.length?'disabled':''} onclick="nuevaCarrera()">Empezar carrera</button></div>
+    </div>
+  </div>`;
+}
+// Crea la partida de carrera: empresa fantasma (5 estrellas, infinito, 7 ligas), pool real y el freestyler del jugador
+function nuevaCarrera(){
+  const d=state.ui.cc; if(!d) return; const prob=ccProblemas(d); if(prob.length){ toast(prob[0]); return; }
+  const name=d.name.trim();
+  state.company={modo:'carrera', name:'Mundo', stars:5, infinite:true, money:0, reputation:0, dbv:8, tut:{inf:true, s2:true, intl:true}, spStart:true, spReal:true, carrera:null};
+  state.freestylers=generatePool();
+  customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
+  const f={id:uid('f'), name, country:d.country, style:d.style, nivel:0, fama:CARRERA_FAMA, hype:randHype(CARRERA_FAMA), legend:false, jugador:true, attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, d.attrs[k]])), carrera:{exp:0, pot:POT_CARRERA}};
+  f.nivel=nivelFromAttrs(f.attrs);
+  state.freestylers.push(f);
+  state.seasons=[]; state.seasons.push(newSeason(null));
+  f.debut=cur().year; state.company.carrera={fid:f.id, inicio:cur().year, temporadas:[]};
+  state.ui.cc=null; state.ui.importedPool=null;
+  goto('dashboard');
 }
 
 /* ---------- inicio ---------- */
