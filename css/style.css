@@ -1055,6 +1055,12 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .sum-total{border-top:1px solid var(--line); margin-top:4px; padding-top:8px; font-size:16px;}
 .sum-tabs{display:flex; gap:6px; margin-bottom:10px; position:sticky; top:0; background:var(--bg-alt); padding-bottom:6px; z-index:1;}
 .sum-pane{display:none;} .sum-pane.on{display:block;}
+.evol-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.evol-row{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); font-family:var(--font-cond); font-size:13.5px;}
+.evol-who{display:flex; align-items:center; gap:6px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.evol-lv{color:var(--gray); min-width:22px; text-align:right;}
+.evol-row b{min-width:30px; text-align:right;}
+@media (max-width:600px){ .evol-grid{grid-template-columns:1fr;} }
 .sum-right .section-title{display:none;}
 @media(max-width:820px){ .sum-grid{grid-template-columns:1fr;} .sum-left, .sum-right{max-height:none; overflow:visible;} }
 

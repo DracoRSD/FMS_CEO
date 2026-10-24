@@ -1362,9 +1362,14 @@ function confirmSimYear(){
   openModal(`<h3>Simular hasta fin de año</h3><p class="step-note">Se jugarán todas las fechas que quedan y se cerrará la temporada ${cur().year}.</p>
   <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="closeModal(); animatedAdvance('year')">Simular</button></div>`);
 }
+// Los que más suben y más bajan de nivel al cerrar la temporada (summary.evol)
+function evolHtml(s){ const e=s.summary && s.summary.evol; if(!e || (!e.up.length && !e.down.length)) return '';
+  const row=x=>{ const f=fby(x.id); if(!f) return ''; return `<div class="evol-row"><span class="evol-who">${miniAvatar(x.id,22)} ${nameH(f)}</span><span class="evol-lv">${f.nivel}</span><b class="${x.delta>0?'pos-v':'neg-v'}">${x.delta>0?'▲':'▼'}${Math.abs(x.delta)}</b></div>`; };
+  return `<div class="evol-grid"><div><div class="sum-sec">Los que más suben</div>${e.up.map(row).join('')||'<p class="step-note">Nadie sube.</p>'}</div><div><div class="sum-sec">Los que más bajan</div>${e.down.map(row).join('')||'<p class="step-note">Nadie baja.</p>'}</div></div>`; }
 function sumRight(s){
-  return `<div class="sum-tabs"><button class="seg on" onclick="sumTab(this,0)">Top 10 batallas</button><button class="seg" onclick="sumTab(this,1)">Top 10 freestylers</button></div>
-    <div class="sum-pane on">${topBattlesHtml(s)||'<p class="step-note">Sin batallas.</p>'}</div><div class="sum-pane">${topFreestylersHtml(s)||'<p class="step-note">Sin datos.</p>'}</div>`;
+  const ev=evolHtml(s);
+  return `<div class="sum-tabs"><button class="seg on" onclick="sumTab(this,0)">Top 10 batallas</button><button class="seg" onclick="sumTab(this,1)">Top 10 freestylers</button>${ev?'<button class="seg" onclick="sumTab(this,2)">Evolución</button>':''}</div>
+    <div class="sum-pane on">${topBattlesHtml(s)||'<p class="step-note">Sin batallas.</p>'}</div><div class="sum-pane">${topFreestylersHtml(s)||'<p class="step-note">Sin datos.</p>'}</div>${ev?`<div class="sum-pane">${ev}</div>`:''}`;
 }
 function sumTab(btn,i){ const w=btn.closest('.sum-right'); w.querySelectorAll('.sum-tabs .seg').forEach((b,k)=>b.classList.toggle('on',k===i)); w.querySelectorAll('.sum-pane').forEach((p,k)=>p.classList.toggle('on',k===i)); }
 function champRows(s){
