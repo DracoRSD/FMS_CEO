@@ -12,7 +12,14 @@ const arg = (name, def) => { const i = args.indexOf('--' + name); return i >= 0 
 const TEMPORADAS = parseInt(arg('temporadas', '1000'), 10);
 const SEMILLA = parseInt(arg('semilla', '1'), 10);
 const FORMATO = arg('formato', 'short') === 'long' ? 'long' : 'short';
-const LIMITE_FAVORITO = 70;   // % máximo de victorias del favorito (criterio de aceptación)
+const LIMITE_FAVORITO = 70;   // % máximo de victorias del favorito en liga (criterio de aceptación)
+// Eliminatorias y Under: referencia medida con el motor anterior (simulateBattle, solo nivel), semilla 5, 1.000 cuadros.
+// El motor nuevo debe quedar a ±TOLERANCIA_KO puntos en el % del favorito por cruce.
+const REF_KO = { favorito: 72.6, sembrado: 39.4 }, REF_UNDER = { favorito: 71.2, sembrado: 35.4 }, TOLERANCIA_KO = 3;
+const CUADROS = parseInt(arg('cuadros', '1000'), 10);
+// Batallas por temporada fuera de las ligas, para estimar el crecimiento del guardado: 9 Red Bull nacionales + Plazas + Red Bull
+// Internacional + FMS Internacional (16 cada uno) + 4 Under de 16 + 5 de Monster Fu
+const KO_POR_TEMPORADA = 9 * 16 + 16 + 16 + 16 + 4 * 16 + 5;
 const RANGOS = [['menos de 75', 0, 74], ['75 a 79', 75, 79], ['80 a 84', 80, 84], ['85 a 89', 85, 89], ['90 o más', 90, 999]];
 const GAPS = [['0 a 2', 0, 2], ['3 a 5', 3, 5], ['6 a 9', 6, 9], ['10 a 14', 10, 14], ['15 o más', 15, 999]];
 
@@ -100,6 +107,23 @@ w.addEventListener('load', () => setTimeout(() => {
   }
   const seg = ((Date.now() - t0) / 1000).toFixed(1);
 
+  // ---- eliminatorias y Under con el mismo motor (runKnockout) ----
+  const runKO = g('runKnockout'), shuffle = g('shuffle'), RB_NATS = g('RB_NATS'), UNDER_DEFS = g('UNDER_DEFS');
+  function medirCuadros(pools) {
+    let f = 0, fN = 0, semb = 0, cuadros = 0, rep = 0, bat = 0, bytesCon = 0, bytesSin = 0;
+    for (let i = 0; i < CUADROS; i++) {
+      const p = pools[i % pools.length]; const ids = shuffle(p.slice()).slice(0, 16).map(x => x.id);
+      const r = runKO(ids, null, 1); const all = r.bracket.rounds.flat().concat([r.bracket.third]);
+      for (const m of all) { bat++; if (m.result.tiebreak) rep++; const A = fby(m.a), B = fby(m.b); if (A.nivel !== B.nivel) { fN++; if (m.result.winner === (A.nivel > B.nivel ? A.id : B.id)) f++; } }
+      const best = Math.max(...ids.map(id => fby(id).nivel)); cuadros++; if (fby(r.champion).nivel === best) semb++;
+      bytesCon += JSON.stringify(all).length; bytesSin += JSON.stringify(all.map(m => ({ a: m.a, b: m.b, result: m.result, views: m.views }))).length;
+    }
+    return { favorito: 100 * f / fN, sembrado: 100 * semb / cuadros, replicas: 100 * rep / bat, porBatalla: (bytesCon - bytesSin) / bat, cuadros };
+  }
+  const poolsKO = RB_NATS.map(d => pool.filter(x => d.countries.includes(x.country)).sort((a, b) => b.nivel - a.nivel).slice(0, 32)).filter(p => p.length >= 16);
+  const poolsUnder = UNDER_DEFS.map(d => pool.filter(x => x.fama <= d.famaMax && (!d.countries || d.countries.includes(x.country)))).filter(p => p.length >= 16);
+  const ko = medirCuadros(poolsKO), under = medirCuadros(poolsUnder);
+
   const totalTitulos = TEMPORADAS * plantillas.length, totalPlazas = plantillas.length * 10;
   console.log(`FMS CEO · simulación de ${TEMPORADAS} temporadas · ${plantillas.length} ligas · formato ${FORMATO === 'long' ? 'largo' : 'corto'} · semilla ${SEMILLA} · ${batallas} batallas en ${seg} s\n`);
   console.log('Títulos por rango de nivel del campeón');
@@ -115,6 +139,21 @@ w.addEventListener('load', () => setTimeout(() => {
   console.log(`Réplicas: ${pct(replicas, batallas)} de las batallas`);
   const ok = total <= LIMITE_FAVORITO;
   console.log(`\n${ok ? 'CUMPLE' : 'NO CUMPLE'}: el favorito gana ${total.toFixed(1).replace('.', ',')} % (límite ${LIMITE_FAVORITO} %)`);
+
+  const f1 = x => x.toFixed(1).replace('.', ',');
+  const linea = (nombre, r, ref) => { const d = r.favorito - ref.favorito; const okd = Math.abs(d) <= TOLERANCIA_KO;
+    console.log(`${nombre.padEnd(14)} favorito por cruce ${f1(r.favorito)} % (antes ${f1(ref.favorito)} %, ${d >= 0 ? '+' : ''}${f1(d)}) · mejor sembrado campeón ${f1(r.sembrado)} % (antes ${f1(ref.sembrado)} %) · réplicas ${f1(r.replicas)} % · ${r.cuadros} cuadros`);
+    return okd; };
+  console.log(`\nEliminatorias y Under con el motor de las ligas (formato corto, semilla ${SEMILLA}; 'antes' = motor anterior solo con nivel)`);
+  const okKO = linea('Eliminatorias', ko, REF_KO), okUnder = linea('Under', under, REF_UNDER);
+  console.log(`${okKO && okUnder ? 'CUMPLE' : 'NO CUMPLE'}: diferencia con el motor anterior dentro de ±${TOLERANCIA_KO} puntos`);
+
+  // ---- crecimiento del guardado: cada batalla de cuadro o Under lleva ahora las notas (d) y la etiqueta (lb) ----
+  const kb = x => (x / 1024).toFixed(1).replace('.', ',') + ' KB';
+  const extra10 = ko.porBatalla * KO_POR_TEMPORADA * 10;
+  console.log(`\nGuardado: cada batalla de cuadro o Under ocupa ${Math.round(ko.porBatalla)} bytes más que antes; con ${KO_POR_TEMPORADA} por temporada son ${kb(ko.porBatalla * KO_POR_TEMPORADA)} por temporada y ${kb(extra10)} tras 10 temporadas (las batallas de liga ya llevaban notas).`);
+  const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
+  console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok ? 0 : 1);
+  process.exit(ok && okKO && okUnder ? 0 : 1);
 }, 800));
