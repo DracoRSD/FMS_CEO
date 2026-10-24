@@ -1012,58 +1012,63 @@ function monthEnd(s, m){
   }
 }
 
-function simulateDay(auto){
+// auto: sin pausas. soloFid (modo carrera): las pausas de presentación (line up, cruces, shows) solo se devuelven si conciernen a ese jugador.
+// En carrera las decisiones de CEO (imprevistos, sustitutos, streams, exhibiciones, votos, host de la Internacional) se resuelven siempre solas.
+function simulateDay(auto, soloFid){
   const s=cur(); if(s.phase!=='live') return null;
   const d=s.day, y=s.year, diy=daysInYear(y);
+  const carr=modoCarrera(); const sola=auto||carr;   // decisiones de CEO
+  const ver=c=>!auto && (!soloFid || c);              // presentación: ¿se pausa para enseñarla?
   if(!s.uqInit){ s.uqInit=true; uqSeasonStart(s); }
   // eventos únicos pendientes
   const uq=(s.uq||[]).find(x=>!x.done && x.day<=d);
-  if(uq){ if(!uq.applied){ uq.applied=true; uqApply(s, uq); } if(auto) uqAuto(s, uq); else if(!uq.done || uq.show) return {pause:'uq', uq}; }
-  for(const k of s.activeKeys){ const L=s.leagues[k]; if(L && L.pendingRep && L.pendingRep.length){ if(auto) uqAutoReplace(s,k); else return {pause:'replace', key:k}; } }
+  if(uq){ if(!uq.applied){ uq.applied=true; uqApply(s, uq); } if(sola) uqAuto(s, uq); else if(!uq.done || uq.show) return {pause:'uq', uq}; }
+  for(const k of s.activeKeys){ const L=s.leagues[k]; if(L && L.pendingRep && L.pendingRep.length){ if(sola) uqAutoReplace(s,k); else return {pause:'replace', key:k}; } }
   const st=(s.streams||[]).find(x=>!x.done && x.day===d);
-  if(st){ applyStream(s, st); if(!auto) return {pause:'stream', st}; }
+  if(st){ applyStream(s, st); if(!sola) return {pause:'stream', st}; }
   // exhibiciones: 7 días después, la comunidad opina
   const xe=(s.exEvents||[]).find(x=>!x.done && x.day<=d);
-  if(xe){ applyExhibEvent(s, xe); if(!auto) return {pause:'exhib', xe}; }
+  if(xe){ applyExhibEvent(s, xe); if(!sola) return {pause:'exhib', xe}; }
   if(rbNeedsVote(s,d)){ if(modoCarrera()) rbResolveVote(s, []); else return {pause:'vote'}; }   // en carrera nadie vota: entran los 3 de más fama
   // revelación del line up: 15 días antes de la J1 de cada liga
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || L.played>0 || (L.lu && L.lu.shown)) continue;
     const nd=L.dates.slice().sort((a,b)=>a-b)[0]; if(nd==null || d<nd-LU_DAYS) continue;
     if(!L.lu) luGenerate(s, k);
-    if(auto) L.lu.shown=true; else return {pause:'lineup', key:k}; }
+    if(ver(L.competitors.includes(soloFid))) return {pause:'lineup', key:k}; L.lu.shown=true; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && !(s.intl.lu && s.intl.lu.shown) && natKeys(s).every(k=>s.leagues[k].finished)){
     if(!s.intl.lu) luGenerate(s, INTL.key);
-    if(auto) s.intl.lu.shown=true; else return {pause:'lineup', key:INTL.key}; }
+    if(ver((s.intl.lu.order||[]).includes(soloFid))) return {pause:'lineup', key:INTL.key}; s.intl.lu.shown=true; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && s.intl.lu && s.intl.lu.shown && !s.intl.spkDone && natKeys(s).every(k=>s.leagues[k].finished)){
-    if(auto || !intlSpkCands(s).length) intlSpkAuto(s); else return {pause:'ispk'}; }
+    if(sola || !intlSpkCands(s).length) intlSpkAuto(s); else return {pause:'ispk'}; }
   // los cruces de cada jornada tienen que estar elegidos 10 días antes
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || !L.manual || L.confirmed[L.played]) continue;
     const nd=L.dates.slice().sort((a,b)=>a-b)[L.played]; if(nd!=null && d>=nd-PAIR_DEADLINE) return {pause:true, key:k, j:L.played+1, day:nd}; }
   // al día siguiente del límite de cruces: los enfrentamientos se hacen oficiales en redes
-  for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || !L.confirmed[L.played]) continue; const j=L.played;
+  for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || !(L.confirmed[L.played] || (carr && !L.manual))) continue; const j=L.played;   // en carrera los cruces automáticos también se anuncian
     const nd=L.dates.slice().sort((a,b)=>a-b)[j]; if(nd==null || d<nd-PAIR_DEADLINE+1 || d>=nd || (L.pv && L.pv[j] && L.pv[j].shown)) continue;
     if(!L.pv || !L.pv[j]) pvGenerate(s, k, j);
-    if(auto) L.pv[j].shown=true; else return {pause:'pairs', key:k, j}; }
+    if(ver((L.rounds[j]||[]).some(m=>m.a===soloFid||m.b===soloFid))) return {pause:'pairs', key:k, j}; L.pv[j].shown=true; }
   // 3 días antes de cada jornada: un 3% de que alguien enferme
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || isWS(k) || L.played>=JORNADAS-1) continue; if(!L.illChk) L.illChk={};
     const nd=L.dates.slice().sort((a,b)=>a-b)[L.played]; if(nd==null || d<nd-3 || L.illChk[L.played]) continue; L.illChk[L.played]=true;
     const round=L.rounds[L.played]; if(!round || round.some(x=>x.postponed) || Math.random()>=0.03) continue;
     const opts=[]; round.forEach((m,mi)=>{ if(m.ep) return; opts.push([mi,m.a],[mi,m.b]); }); if(!opts.length) continue;
     const [mi,fid]=opts[Math.floor(Math.random()*opts.length)];
-    const u=uqPush(s, {day:d, type:'unavail', key:k, j:L.played, mi, fid, jday:nd, why:'se ha puesto enfermo'}); u.applied=true; uqApply(s,u); if(auto) uqAuto(s,u); else return {pause:'uq', uq:u}; }
+    const u=uqPush(s, {day:d, type:'unavail', key:k, j:L.played, mi, fid, jday:nd, why:'se ha puesto enfermo'}); u.applied=true; uqApply(s,u); if(sola) uqAuto(s,u); else return {pause:'uq', uq:u}; }
   // 5 días antes de cada jornada: ¿falla alguien?
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || isWS(k) || L.played>=JORNADAS-1) continue; if(!L.uaChk) L.uaChk={};
     const nd=L.dates.slice().sort((a,b)=>a-b)[L.played]; if(nd==null || d<nd-5 || L.uaChk[L.played]) continue;
     L.uaChk[L.played]=true; uqCheckUnavailable(s, L, nd);
-    const u=(s.uq||[]).find(x=>!x.done && x.day<=d); if(u){ u.applied=true; uqApply(s,u); if(auto) uqAuto(s,u); else return {pause:'uq', uq:u}; } }
+    const u=(s.uq||[]).find(x=>!x.done && x.day<=d); if(u){ u.applied=true; uqApply(s,u); if(sola) uqAuto(s,u); else return {pause:'uq', uq:u}; } }
   const u0=underByDay(s)[d];
-  if(u0 && !u0.presented){ if(auto) u0.presented=true; else return {pause:'under', key:u0.key, day:d}; }
+  const mio = soloFid ? jugadorJuegaHoy(s, d, soloFid) : true;
+  if(u0 && !u0.presented){ if(ver(mio)) return {pause:'under', key:u0.key, day:d}; u0.presented=true; }
   const rb0=rbByDay(s)[d];
-  if(rb0 && !rbEvent(s,rb0.key).presented){ if(auto) rbEvent(s,rb0.key).presented=true; else return {pause:'rb', key:rb0.key}; }
+  if(rb0 && !rbEvent(s,rb0.key).presented){ if(ver(mio)) return {pause:'rb', key:rb0.key}; rbEvent(s,rb0.key).presented=true; }
   const ev0=eventsByDay(s)[d];
   if(ev0 && ev0.key!==INTL.key){ const L0=s.leagues[ev0.key]; if(L0.manual && !L0.confirmed[L0.played]) return {pause:true, ...ev0};
-    if(!L0.shown) L0.shown={}; if(!L0.shown[L0.played]){ if(auto) L0.shown[L0.played]=true; else return {pause:'fms', key:ev0.key}; } }
-  if(ev0 && ev0.key===INTL.key && !s.intl.presented){ if(auto) s.intl.presented=true; else return {pause:'rb', key:INTL.key}; }
+    if(!L0.shown) L0.shown={}; if(!L0.shown[L0.played]){ if(ver(mio)) return {pause:'fms', key:ev0.key}; L0.shown[L0.played]=true; } }
+  if(ev0 && ev0.key===INTL.key && !s.intl.presented){ if(ver(mio)) return {pause:'rb', key:INTL.key}; s.intl.presented=true; }
   s.activeKeys.forEach(k=>{
     const L=s.leagues[k]; if(L.finished) return;
     L.hype = clamp(L.hype - decayRate(d - L.lastEventDay - spkVal(k,'gap')), 3, 100);
@@ -1074,6 +1079,8 @@ function simulateDay(auto){
   if(rev){ if(rev.key===RB_INT.key) runRBInter(s,d); else runRBEvent(s, rbEvent(s,rev.key), d); }
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
   if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
+  // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
+  if(carr && !auto && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } }
   s.day++;
   if(s.day>=diy) endSeason(s);
   return ev||rev||null;
@@ -1429,8 +1436,8 @@ function renderCarrera(){
   const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return '<div class="welcome"><p class="step-note">No se encuentra tu freestyler.</p></div>';
   const lk=signedLeagueOf(s,f.id);
   const estado = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='live' ? `Temporada ${s.year} en juego · ${fmtDay(s.year,s.day)}` : `Temporada ${s.year} cerrada`);
-  const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Jugar temporada ${s.year}</button>`
-    : (s.phase==='live' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Continuar la temporada</button>`
+  const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Empezar la temporada ${s.year}</button>`
+    : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
     : `<button class="btn" onclick="showSummary()">Ver resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
   return `<div class="welcome">
     <div class="step"><div class="carrera-ficha">
@@ -1470,12 +1477,81 @@ function carreraPlanResumen(s, f){
   const p=planDe(f); const lk=signedLeagueOf(s,f.id); const nombres=p.inscrito.map(k=>{ const d=udef(k)||rbdef(k); return d ? esc(d.name) : k; });
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Tu temporada ${s.year}</span><p class="step-note" style="margin:0">Liga: <b>${lk ? esc(ldef(lk).name) : 'libre'}</b> · Entrenas: <b>${p.entreno ? esc(ATTR_LABELS[p.entreno]) : 'nada'}</b> · Torneos: <b>${nombres.length ? nombres.join(', ') : 'ninguno'}</b></p></div>`;
 }
+// ---- Modo carrera: la temporada fecha a fecha (fase C4) ----
+// ¿Batalla hoy el jugador? Mira la jornada de su liga, los cuadros de Red Bull e Internacional donde está y los Under en los que está inscrito.
+function jugadorJuegaHoy(s, d, fid){
+  const ev=eventsByDay(s)[d];
+  if(ev){ if(ev.key===INTL.key){ const q=s.intl.order ? s.intl.qualifiers : intlQualifiers(s).ids; if((q||[]).includes(fid)) return true; }
+    else { const L=s.leagues[ev.key]; const r=L && L.rounds[L.played]; if(r && r.some(m=>m.a===fid||m.b===fid)) return true; } }
+  const rb=rbByDay(s)[d];
+  if(rb){ const e=rbEvent(s, rb.key); const ids = rb.key===RB_INT.key ? (e.voted ? e.qualifiers : [...(s.rb.interPodium||[]), ...rbCandidatosSeguros(s)]) : (e.participants||[]); if((ids||[]).includes(fid)) return true; }
+  const u=underByDay(s)[d];
+  if(u){ if((u.participants||[]).includes(fid)) return true; const ins=inscritosEn(s, u.key); if(u.key===MFU.key) return ins.some((f,i)=>f.id===fid && 1+(i%3)===u.n); return ins.some(f=>f.id===fid); }
+  return false;
+}
+// Campeones nacionales ya clasificados a la Red Bull Internacional (antes de la votación)
+function rbCandidatosSeguros(s){ return RB_NATS.map(n=>rbEvent(s,n.key)).filter(e=>e&&e.played).map(e=>e.champion); }
+// Batallas ya jugadas del jugador en el día d, con la clave que entiende showBattle
+function batallasDelDia(s, d, fid){
+  const out=[]; const add=(m,key,j,mi)=>{ if(m && m.result && (m.a===fid||m.b===fid)) out.push({key, j, mi, m}); };
+  const ko=(b,key)=>{ if(!b||!b.rounds) return; b.rounds.forEach((r,ri)=>r.forEach((m,mi)=>add(m,key,ri,mi))); add(b.third,key,'third',0); };
+  natKeys(s).forEach(k=>{ const L=s.leagues[k]; const j=L.dates.indexOf(d); if(j>=0) (L.rounds[j]||[]).forEach((m,mi)=>add(m,k,j,mi)); });
+  if(s.intl && s.intl.date===d) ko(s.intl.bracket, 'intl');
+  const rb=rbByDay(s)[d]; if(rb){ const e=rbEvent(s, rb.key); ko(e.bracket, rb.key===RB_INT.key ? 'rbinter' : 'rb:'+rb.key); }
+  const u=underByDay(s)[d]; if(u){ if(u.key===MFU.key) (u.battles||[]).forEach((m,i)=>add(m,'under:'+u.key+':'+u.day,'b',i)); else ko(u.bracket, 'under:'+u.key+':'+u.day); }
+  return out;
+}
+// Avanza la carrera hasta la siguiente parada y la devuelve sin pintar nada (también la usa el simulador).
+// modo 'fecha': hasta el siguiente evento, con todas las presentaciones · 'mia': hasta mi próxima batalla, solo con lo que me concierne · 'resto': hasta el cierre, sin pausas.
+// Devuelve {pause:...} de presentación (line up, cruces, fms, under, rb), {pause:'tuya'} si quedó pendiente «Tu batalla», {pause:'jugado'} tras un evento en modo 'fecha', o null al cerrar el año.
+function pasoCarrera(modo){
+  const s=cur(); if(s.phase!=='live') return null; const fid=state.company.carrera.fid; let guard=0;
+  while(s.phase==='live' && guard++<400){
+    const ev = modo==='resto' ? simulateDay(true) : simulateDay(false, modo==='mia' ? fid : null);
+    if(ev && ev.pause) return ev;
+    if(state.ui.tuBatalla) return {pause:'tuya', day:state.ui.tuBatalla.day};
+    if(modo==='fecha' && ev) return {pause:'jugado', key:ev.key, day:s.day-1};
+  }
+  return null;
+}
+// Botones de «Mi carrera»: abre la presentación que toque (los shows juegan el día ellos mismos, como en el modo CEO) o la pausa «Tu batalla»
+function carreraAvanzar(modo){
+  const s=cur(); if(s.phase!=='live') return;
+  const ev=pasoCarrera(modo);
+  if(state.view.name==='calendar' && s.phase==='live') state.ui.calMonth=monthOf(s.year,s.day);
+  render();
+  if(s.phase==='done'){ showSummary(); return; }
+  if(!ev) return;
+  switch(ev.pause){
+    case 'lineup': openLineup(ev.key); break;
+    case 'pairs': openPairs(ev.key, ev.j); break;
+    case 'fms': openFMSShow(ev.key); break;
+    case 'under': if(ev.key===MFU.key) openMFU(ev.day); else openRBShow(ev.key); break;
+    case 'rb': openRBShow(ev.key); break;
+    case 'tuya': abrirTuBatalla(); break;
+    case 'jugado': toast(ev.key===INTL.key ? `Se jugó el ${INTL.name}.` : (isRB(ev.key) ? `Se jugó la ${rbdef(ev.key).name}.` : `Se jugó la jornada de ${ldef(ev.key).name}.`)); break;
+    default: toast('La temporada sigue.'); break;
+  }
+}
+// Tras cerrar un show en carrera: si hoy batallé, se abre «Tu batalla»
+function carreraTrasShow(){ if(modoCarrera() && state.ui.tuBatalla) setTimeout(abrirTuBatalla, 60); }
+// «Tu batalla»: showBattle tal cual (rival, jueces y notas por ronda). Con varias batallas el mismo día (un cuadro), una lista para abrir cada una.
+function abrirTuBatalla(){
+  const p=state.ui.tuBatalla; state.ui.tuBatalla=null; if(!p || !state.company.carrera) return;
+  const s=cur(); const fid=state.company.carrera.fid; const bat=batallasDelDia(s, p.day, fid); if(!bat.length) return;
+  if(bat.length===1){ showBattle(bat[0].key, bat[0].j, bat[0].mi); return; }
+  const rows=bat.map(b=>{ const m=b.m; const rival=m.a===fid?m.b:m.a; const gane=m.result.winner===fid; return `<div class="tb-row clickable" onclick="showBattle('${b.key}','${b.j}',${JSON.stringify(b.mi)})"><div class="tb-faces"><span class="tb-face ${gane?'w':''}" style="${avatarDivStyle(fby(fid))}">${avatarContent(fby(fid))}</span><span class="tb-face ${gane?'':'w'}" style="${avatarDivStyle(fby(rival))}">${avatarContent(fby(rival))}</span></div><div class="tb-info"><div class="tb-names"><span class="${gane?'w':''}">${fnameH(fid)}</span> <i>vs</i> <span class="${gane?'':'w'}">${fnameH(rival)}</span></div><div class="tb-meta">${esc(etiquetaBatalla(b))} · ${gane?'ganas':'pierdes'}${m.result.tiebreak?' · réplica':''}</div></div></div>`; }).join('');
+  openModal(`<h3>Tu torneo · ${fmtDay(s.year, p.day)}</h3><p class="step-note">Hoy jugaste ${bat.length} batallas. Toca una para ver rival, jueces y notas.</p><div class="tb-list">${rows}</div><div class="modal-actions"><button class="btn primary" onclick="closeModal()">Continuar</button></div>`, true);
+}
+const RONDA_KO = ['Octavos','Cuartos','Semifinal','Final'];
+function etiquetaBatalla(b){ const k=b.key; const ronda = b.j==='third' ? '3er puesto' : (RONDA_KO[+b.j]||('Ronda '+(+b.j+1)));
+  if(k==='intl') return `${INTL.name} · ${ronda}`; if(k==='rbinter') return `${RB_INT.name} · ${ronda}`; if(k.startsWith('rb:')) return `${rbdef(k.slice(3)).name} · ${ronda}`;
+  if(k.startsWith('under:')){ const uk=k.split(':')[1]; return b.j==='b' ? udef(uk).name : `${udef(uk).name} · ${ronda}`; } return `${ldef(k).name} · J${+b.j+1}`; }
 // Un año completo del mundo sin CEO: pretemporada automática, plantillas por nivel, arranque y simulación hasta el cierre
 function jugarTemporadaCarrera(){
   const s=cur();
-  if(s.phase==='pre'){ asegurarOfertas(s); autoPretemporada(s); autoFicharLigas(s); const iss=preseasonIssues(s); if(iss.length){ toast(iss[0]); render(); return; } startSeason(); }
-  if(s.phase==='live') advance('year');
-  render();
+  if(s.phase==='pre'){ asegurarOfertas(s); autoPretemporada(s); autoFicharLigas(s); const iss=preseasonIssues(s); if(iss.length){ toast(iss[0]); render(); return; } startSeason(); render(); return; }
+  if(s.phase==='live') carreraAvanzar('resto'); else render();
 }
 // Crea la partida de carrera: empresa fantasma (5 estrellas, infinito, 7 ligas), pool real y el freestyler del jugador
 function nuevaCarrera(){
@@ -2732,7 +2808,7 @@ function shDone(){
 function closeRBShow(){
   if(SHOW) SHOW.tok++; SHOW=null; window.removeEventListener('resize', shFit);
   const root=document.getElementById('rbShow'); if(root) root.innerHTML='';
-  render();
+  render(); carreraTrasShow();
 }
 async function shMove(id, from, to, cls){
   const c=shChip(id, from, 'moving '+(cls||'')); c.dataset.slot=to;
@@ -3427,7 +3503,7 @@ function openMFU(day){
       <div class="fm-views"><span class="fm-vn" id="kov${i}">—</span><button class="btn small" id="kob${i}" onclick="kovReveal(${i})">Revelar visitas</button></div></div>`; }).join('');
   openModal(`<h3>${ulogo(MFU.key)?`<img class="un-logo" src="${ulogo(MFU.key)}" alt="">`:''}${MFU.name} #${ev.n} · ${fmtDay(s.year,day)}</h3><p class="step-note">5 batallas sueltas. Cada ganador se lleva +3 de hype.</p>
     <div class="kov">${rows}</div><div class="fm-sum-foot" id="kovFoot"></div>
-    <div class="modal-actions"><button class="btn" onclick="kovAll()">Revelar todas</button><button class="btn primary" onclick="closeModal(); render()">Seguir</button></div>`, true);
+    <div class="modal-actions"><button class="btn" onclick="kovAll()">Revelar todas</button><button class="btn primary" onclick="closeModal(); render(); carreraTrasShow()">Seguir</button></div>`, true);
   themeEl(document.getElementById('modalRoot'), MFU.key);
 }
 function showUnder(key, day){
