@@ -411,7 +411,7 @@ w.addEventListener('load', () => setTimeout(() => {
   // ---- temporada fecha a fecha (fase C4): el mismo recorrido que hacen los botones de «Mi carrera», sin pintar ----
   const fechas = { mia: null, resto: null };
   const correrFechas = modo => {
-    const r = { modo, anos: 0, paradas: 0, tuya: 0, batallas: 0, batallasPausadas: 0, pausasRegistradas: 0, ajenas: [], tuyaVacia: 0, porTipo: {}, registroEmpresa: [], excepciones: [] };
+    const r = { modo, anos: 0, paradas: 0, tuya: 0, batallas: 0, batallasPausadas: 0, pausasRegistradas: 0, ajenas: [], tuyaVacia: 0, porTipo: {}, registroEmpresa: [], calendarioEmpresa: [], excepciones: [] };
     w.Math.random = mulberry32(SEMILLA);
     const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal3 = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
@@ -442,6 +442,7 @@ w.addEventListener('load', () => setTimeout(() => {
         if (s.phase !== 'done') { r.excepciones.push(`T${t}: no cierra (${guard} pasos, última parada ${JSON.stringify(ev)})`); break; }
         r.anos++; r.batallas += g('batallasDe')(s, fid).length; r.pausasRegistradas += (s.pausasJugador || []).reduce((a, p) => a + p.n, 0);
         (s.log || []).forEach(n => { if (REGISTRO_EMPRESA.test(n.text)) r.registroEmpresa.push(n.text.replace(/<[^>]+>/g, '').slice(0, 70)); });
+        if (modo === 'mia') for (let mes = 0; mes < 12; mes++) { S.ui.calMonth = mes; const cal = g('renderCalendar')().replace(/<[^>]+>/g, ' '); if (REGISTRO_EMPRESA.test(cal)) r.calendarioEmpresa.push(`T${t} ${mes + 1}: ` + cal.match(REGISTRO_EMPRESA)[0]); }   // el calendario de carrera tampoco habla de empresa
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
     } catch (e) { r.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
@@ -454,12 +455,12 @@ w.addEventListener('load', () => setTimeout(() => {
     const m = fechas.mia, x = fechas.resto;
     const okMia = m.anos === FECHA_ANOS && m.excepciones.length === 0 && m.ajenas.length === 0 && m.tuyaVacia === 0 && m.batallas > 0 && m.batallasPausadas === m.batallas && m.pausasRegistradas === m.batallas;
     const okResto = x.anos === FECHA_ANOS && x.excepciones.length === 0 && x.paradas === 0 && x.pausasRegistradas === 0;
-    const okReg = m.registroEmpresa.length === 0 && x.registroEmpresa.length === 0;
+    const okReg = m.registroEmpresa.length === 0 && x.registroEmpresa.length === 0 && m.calendarioEmpresa.length === 0;
     okFechas = okMia && okResto && okReg;
     console.log(`\nTemporada fecha a fecha en carrera (semilla ${SEMILLA}, ${FECHA_ANOS} temporadas por recorrido)`);
     console.log(`${okMia ? 'OK  ' : 'FAIL'} «Hasta mi próxima batalla»: ${m.anos} temporadas, ${m.paradas} paradas (${Object.entries(m.porTipo).map(([k, v]) => k + ' ' + v).join(', ')}), ${m.batallas} batallas del jugador y ${m.batallasPausadas} con su pausa «Tu batalla» (${m.tuya} pausas, ${m.tuyaVacia} vacías), ${m.ajenas.length} paradas ajenas${m.ajenas.length ? ': ' + m.ajenas.slice(0, 3).join('; ') : ''}${m.excepciones.length ? ' · ' + m.excepciones.join('; ') : ''}`);
     console.log(`${okResto ? 'OK  ' : 'FAIL'} «Saltar el resto del año»: ${x.anos} temporadas, ${x.paradas} paradas y ${x.pausasRegistradas} pausas registradas (${x.batallas} batallas del jugador)${x.excepciones.length ? ' · ' + x.excepciones.join('; ') : ''}`);
-    console.log(`${okReg ? 'OK  ' : 'FAIL'} registro de carrera sin textos de empresa: ${m.registroEmpresa.length + x.registroEmpresa.length} entradas con taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla${m.registroEmpresa.length ? ' · ' + [...new Set(m.registroEmpresa)].slice(0, 3).join(' | ') : ''}`);
+    console.log(`${okReg ? 'OK  ' : 'FAIL'} registro y calendario de carrera sin textos de empresa: ${m.registroEmpresa.length + x.registroEmpresa.length} entradas del registro y ${m.calendarioEmpresa.length} meses del calendario con taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla${m.registroEmpresa.length ? ' · ' + [...new Set(m.registroEmpresa)].slice(0, 3).join(' | ') : ''}${m.calendarioEmpresa.length ? ' · ' + m.calendarioEmpresa.slice(0, 3).join(' | ') : ''}`);
   }
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);

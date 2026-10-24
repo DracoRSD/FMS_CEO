@@ -1340,7 +1340,7 @@ function renderTopbar(){
     <button class="btn small gear-btn" onclick="openSettings()" title="Ajustes" aria-label="Ajustes">${GEAR_SVG}</button>
     <div class="date-pill">${dateTxt}${modoCarrera() ? '' : ` &nbsp;<span class="m ${state.company.money<0?'neg':''}">${moneyK(state.company.money)}</span>`}</div>
     ${s.phase==='live'? `<div class="time-controls">
-      <button class="btn small primary" onclick="animatedAdvance('event')">Próxima fecha</button>
+      <button class="btn small primary" onclick="${modoCarrera() ? "carreraAvanzar('fecha')" : "animatedAdvance('event')"}">Próxima fecha</button>
     </div>`:''}
   </div>`;
 }
@@ -1455,7 +1455,7 @@ function renderCarrera(){
     ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
-      <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Pantalla provisional: el patrocinador y el resumen personal llegan en las fases siguientes.'}</p>
+      <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Los patrocinadores llegan más adelante.'}</p>
       ${boton}
     </div>
   </div>`;
@@ -1855,9 +1855,9 @@ function renderCalendar(){
   const curM = s.phase==='live'? monthOf(y,s.day) : -1;
   h+=`<div class="section-title"><h2>Año completo</h2></div><div class="month-strip">${MESES_C.map((mm,i)=>{ const n=seasonEvents(s).filter(e=>monthOf(y,e.day)===i).length;
     return `<button class="ms-cell ${n?'':'empty'} ${i===m?'cur':''}" onclick="state.ui.calMonth=${i}; render()" title="${MESES[i]}">${mm}<span class="n">${n}</span></button>`; }).join('')}</div>
-  <p class="step-note" style="margin-top:6px;">${12-months.size} mes(es) sin eventos → −${(12-months.size)*(8+2*state.company.stars)} de reputación.</p>`;
-  // análisis
-  if(s.activeKeys.some(k=>s.leagues[k].dates.length)){
+  ${jug ? '' : `<p class="step-note" style="margin-top:6px;">${12-months.size} mes(es) sin eventos → −${(12-months.size)*(8+2*state.company.stars)} de reputación.</p>`}`;
+  // análisis (cosas de empresa: no en carrera)
+  if(!jug && s.activeKeys.some(k=>s.leagues[k].dates.length)){
     h+=`<div class="section-title"><h2>Distancia entre jornadas</h2></div><div class="analysis">${s.activeKeys.map(k=>{
       const gaps=gapsFor(s,k); const loss=Math.round(projectedHypeLoss(s,k));
       return `<div class="analysis-row"><div class="ar-head">${leagueDot(k)} ${ldef(k).name}<span class="top-spacer"></span><span class="step-note">Hype en riesgo: <b style="color:${loss>40?'#ff6b6b':(loss>15?'#e0b23c':'#4bd18f')}">−${loss}</b></span></div>
