@@ -183,7 +183,7 @@ const STYLE_ATTR_BIAS = {
 const ATTR_NOISE = 3;          // desviación típica (puntos) del ruido al convertir; determinista por nombre
 const STYLE_ROUND_MOD = 0.5;   // los modificadores por ronda de STYLES (m) pesan la mitad: los atributos ya explican parte
 // Mentalidad y varianza: factor = MENTAL_VAR_BASE − mentalidad·MENTAL_VAR_SLOPE (50 → 1,00 · 90 → 0,80 · 20 → 1,15)
-const MENTAL_VAR_BASE = 1.25, MENTAL_VAR_SLOPE = 0.005;
+const MENTAL_VAR_BASE = 1.45, MENTAL_VAR_SLOPE = 0.005;
 const MENTAL_REPLICA = 0.15;   // puntos de nivel equivalentes en la mano alzada por cada punto de mentalidad sobre el rival
 // Jueces
 const JUDGE_TASTE_PER_10 = 0.25;                       // puntos (escala 1-10) por cada 10 puntos de atributo sobre 50 y gusto 1,0
