@@ -349,7 +349,7 @@ const CARRERA_FAMA = 20;            // fama inicial: apto para todo el Under
 const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
 const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
-const FAMA_SUBE = 0.5;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar)
+const FAMA_SUBE = 0.3;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar); el mínimo que mantiene la fama del top 100 a ±3 con los torneos
 // Fama por torneos (fase C3a), en todos los modos y en el momento de jugarse: sustituye las cifras que Red Bull daba antes (5/2/1 y 10/4/2).
 const FAMA_UNDER = [3, 1];          // Under: campeón y finalista
 const FAMA_MFU_VICTORIA = 1;        // Monster Fu: por batalla ganada

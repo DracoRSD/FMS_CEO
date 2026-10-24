@@ -28,7 +28,8 @@ const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
 // fijos del preset que se retiran y ningún novato hereda la prima, así que con ella el top 60 baja un 15 % haga lo que haga la fama.
-const FAMA_TOL = 5, SALARIO_TOL = 15;
+const FAMA_TOL = 3, SALARIO_TOL = 15;
+const POCO_CONOCIDO = 20;   // nivel − fama ≥ 20: las gangas; se cuentan los que siguen sin fichar en T5 y T10 (informativo)
 // Criterios de aceptación del relevo generacional tras PROGRESION temporadas (evolución + retiros + nuevos talentos)
 const TOP30_TOL = 3, TOP100_TOL = 4;   // el nivel medio del top 30 y del top 100 queda a ±esto del inicio
 const POOL_TOL = 10;                   // el pool de activos no varía más de ±esto (%)
@@ -176,7 +177,7 @@ w.addEventListener('load', () => setTimeout(() => {
   // advance('year'), nextSeason. La poda se desactiva durante la simulación para medir el guardado antes y después, comprobar que
   // historial, títulos, clasificaciones y fatiga de carteles no cambian al podar, y probar la migración dbv 8 → 9. Se restaura el estado.
   function correrMundo(modo) {
-    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
+    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
     const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
     S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
@@ -195,6 +196,7 @@ w.addEventListener('load', () => setTimeout(() => {
         const ok10 = nat.length === 7 && nat.every(k => s.leagues[k].competitors.length === 10), ok9 = nat.length === 7 && nat.every(k => s.leagues[k].dates.length === 9);
         if (!ok10 || !ok9 || issues.length) { r.arranquesMal.push(`T${t} ${s.year}: ${issues[0] || (nat.length + ' ligas')}`); break; }
         g('startSeason')();
+        if (t === 5 || t === 10) { const signed = new Set(s.activeKeys.flatMap(k => s.leagues[k].competitors)); const pc = g('activos')().filter(f => f.nivel - f.fama >= POCO_CONOCIDO); r.poco[t] = { total: pc.length, sinFichar: pc.filter(f => !signed.has(f.id)).length }; }
         for (let v = 0; v < 3 && s.phase === 'live'; v++) { g('advance')('year'); if (modo === 'ceo' && s.phase === 'live' && g('rbNeedsVote')(s, s.day)) g('rbResolveVote')(s, []); }
         if (s.phase !== 'done') { const ev = g('simulateDay')(true); r.pausas.push(`T${t} ${s.year} día ${s.day}: pausa ${JSON.stringify(ev && ev.pause)}`); break; }
         const q = s.intl.qualifiers || []; const distintos = new Set(q).size;
@@ -333,7 +335,8 @@ w.addEventListener('load', () => setTimeout(() => {
       console.log(`${c.migra === true ? 'OK  ' : 'FAIL'} la misma partida sin podar en dbv 8 carga, queda en dbv 9 con ${c.aligeradas} temporadas ligeras (${kb(c.bytesMigrado)}) y los mismos títulos e historial`);
       if (c.fama1) { const sg = x => (x >= 0 ? '+' : '') + f1b(x); const eur = x => Math.round(x).toLocaleString('es-ES');
         console.log(`${okFama ? 'OK  ' : 'FAIL'} fama media del top 100 tras ${c.anos} temporadas: ${f1b(c.fama0.fama)} → ${f1b(c.fama1.fama)} (${sg(dFama)}; límite ±${FAMA_TOL}) · con fama 90 o más: ${c.fama0.n90} → ${c.fama1.n90}`);
-        console.log(`${okSal ? 'OK  ' : 'FAIL'} salario medio del top 60 sin prima de leyenda: ${eur(c.fama0.salarioSinPrima)} → ${eur(c.fama1.salarioSinPrima)} (${sg(dSal)} %; límite ±${SALARIO_TOL} %) · con la prima ${eur(c.fama0.salario)} → ${eur(c.fama1.salario)} (${sg(dSalPrima)} %: las leyendas se retiran y ningún novato lo es)`); }
+        console.log(`${okSal ? 'OK  ' : 'FAIL'} salario medio del top 60 sin prima de leyenda: ${eur(c.fama0.salarioSinPrima)} → ${eur(c.fama1.salarioSinPrima)} (${sg(dSal)} %; límite ±${SALARIO_TOL} %) · con la prima ${eur(c.fama0.salario)} → ${eur(c.fama1.salario)} (${sg(dSalPrima)} %: las leyendas se retiran y ningún novato lo es)`);
+        console.log(`INFO poco conocidos (nivel − fama ≥ ${POCO_CONOCIDO}) sin fichar al arrancar la temporada: T5 ${(c.poco[5] || {}).sinFichar} de ${(c.poco[5] || {}).total} · T10 ${(c.poco[10] || {}).sinFichar} de ${(c.poco[10] || {}).total}`); }
     });
   }
   const okModos = !modos.excepcion && modos.migra && modos.crea && modos.ano && modos.exporta && modos.dosClaves && modos.abreCarrera && modos.abreCeo;
