@@ -131,7 +131,7 @@ function randHype(fama){ return fama==null ? Math.round(clamp(50+gauss()*20,1,99
 const PRESET_LEGENDS = ["Chuty", "Gazir", "Arkano", "Bnet", "Skone", "Invert", "Khan", "Piezas", "Walls", "Pyro", "Jaloner", "Wos", "Papo", "Dtoke", "Trueno", "TiagoPZK", "Lit Killah", "Duki", "Frescolate", "Aczino", "Hadrian", "Kaiser", "Ricto", "ChysteMC", "Jaze", "Lokillo", "MCKlopedia", "Akapellah"];
 function generatePool(){
   const out=[];
-  Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=> out.push({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), photo:presetPhoto(name), legend: PRESET_LEGENDS.includes(name), style:defaultStyle(name)})));
+  Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=> out.push(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), photo:presetPhoto(name), legend: PRESET_LEGENDS.includes(name), style:defaultStyle(name)}))));
   return out;
 }
 const LEGEND_MULT = 1.5;  // las leyendas cobran un 50% más solo por serlo
@@ -339,7 +339,8 @@ function newLeagueSeason(key, prev){
     blocked: prev && prev.leagues[key] ? (prev.leagues[key].relegated||[]).slice() : [],
     prevRoster: prev && prev.leagues[key] ? (prev.leagues[key].competitors||[]).slice() : [],
     prevHype: prev && prev.leagues[key] ? prev.leagues[key].hype : null,
-    income:0, manual: true, confirmed:{}
+    income:0, manual: true, confirmed:{},
+    judges: pickJudges(key)
   };
 }
 function newSeason(prev){
@@ -990,7 +991,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:3}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:4}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1729,14 +1730,18 @@ function syncRealPool(){
     const fixes={'Azeta':[45,35],'Godlemon':[45,35],'Ortiz':[45,35]};
     state.freestylers.forEach(f=>{ if(STYLE_PRESET[f.name]) f.style=STYLE_PRESET[f.name]; if(fixes[f.name]){ f.nivel=fixes[f.name][0]; f.fama=fixes[f.name][1]; } if(f.name==='Yartzi') f.country='Puerto Rico'; });
     state.company.dbv=3; }
+  if(state.company && (state.company.dbv||0)<4){   // v4: atributos por freestyler y jueces por liga. Aditivo: no borra nada
+    state.freestylers.forEach(ensureAttrs);
+    state.seasons.forEach(sn=>Object.values(sn.leagues||{}).forEach(judgesOf));
+    state.company.dbv=4; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }
   state.freestylers=state.freestylers.filter(f=>!f.plaza || ref.has(f.id));
-  state.freestylers.forEach(f=>{ if(!f.photo && presetPhoto(f.name)) f.photo=presetPhoto(f.name); if(f.hype==null) f.hype=randHype(f.fama); if(!STYLES[f.style]) f.style=defaultStyle(f.name); const fx=COUNTRY_FIX[f.name]; if(fx && (f.country==='México'||f.country==='Caribe')) f.country=fx; });
+  state.freestylers.forEach(f=>{ if(!f.photo && presetPhoto(f.name)) f.photo=presetPhoto(f.name); if(f.hype==null) f.hype=randHype(f.fama); if(!STYLES[f.style]) f.style=defaultStyle(f.name); ensureAttrs(f); const fx=COUNTRY_FIX[f.name]; if(fx && (f.country==='México'||f.country==='Caribe')) f.country=fx; });
   const have=new Set(state.freestylers.map(f=>f.name.toLowerCase()));
   Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=>{
-    if(!have.has(name.toLowerCase())) state.freestylers.push({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), legend:PRESET_LEGENDS.includes(name), style:defaultStyle(name)});
+    if(!have.has(name.toLowerCase())) state.freestylers.push(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), legend:PRESET_LEGENDS.includes(name), style:defaultStyle(name)}));
   }));
 }
 function isPrimeDay(y,d){ const w=dayToDate(y,d).getUTCDay(); return w===5||w===6||w===0; }   // viernes, sábado o domingo
@@ -4808,7 +4813,7 @@ function gameMark(){ const l=(typeof EXTRA_IMG!=='undefined' && EXTRA_IMG.gamelo
 var CUSTOM_KEY='fms_ceo_custom_fs';
 function customFS(){ try{ return JSON.parse(localStorage.getItem(CUSTOM_KEY)||'[]'); }catch(e){ return []; } }
 function saveCustomFS(list){ try{ localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); }catch(e){ toast('No se pudo guardar el competidor (almacenamiento lleno).'); } }
-function customToF(c){ return {id:uid('f'), name:c.name, country:c.country, nivel:50, fama:50, hype:randHype(50), style:c.style, photo:c.photo||null, custom:true}; }
+function customToF(c){ return ensureAttrs({id:uid('f'), name:c.name, country:c.country, nivel:50, fama:50, hype:randHype(50), style:c.style, photo:c.photo||null, custom:true}); }
 var CUSTOM_COUNTRIES=['España','Argentina','México','Chile','Perú','Colombia','Uruguay','Venezuela','Cuba','Puerto Rico','República Dominicana','Panamá','Costa Rica','Guatemala','Honduras','El Salvador','Nicaragua','Ecuador','Bolivia','Paraguay','EEUU'];
 function openSettings(){
   openModal(`<h3>⚙️ Ajustes</h3>
