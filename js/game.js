@@ -936,7 +936,8 @@ function intlQualifiers(s){
     return {ids:out, note:`Top 3 de cada liga + comodín: ${fname(wc)} (mejor cuarto).`, wildcards:[wc]};
   }
   // 6 ligas: top 2 (12) + cupo de campeón + 3 comodines entre terceros
-  const D=fbyActivo(s.defendingChampion) ? s.defendingChampion : null;   // un campeón vigente retirado no se clasifica const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
+  const D=fbyActivo(s.defendingChampion) ? s.defendingChampion : null;   // un campeón vigente retirado no se clasifica
+  const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
   let dKey=null, dPos=null;
   if(D) keys.forEach(k=>{ const i=st(k).indexOf(D); if(i>=0 && dKey==null){ dKey=k; dPos=i; } });
   let extra=null, exclude=null, note='';
