@@ -316,13 +316,13 @@ const GROW_MIN = 1, GROW_MAX = 3;   // joven: subida mínima y máxima por atrib
 const GROW_WEIGHT = {punchline:1.0, metrica:1.25, flow:1.25, impro:0.9, mentalidad:0.8};   // flow y métrica crecen antes
 const MID_NOISE = 1;                // madurez: ruido uniforme de −1 a +1
 const DECLINE_START = 0.3;          // veterano: bajada el primer año tras EXP_MID_MAX
-const DECLINE_STEP = 0.15;          // y crece esto cada año más
+const DECLINE_STEP = 0.1;           // y crece esto cada año más
 const DECLINE_MAX = 1.5;            // sin pasar de aquí
 const DECLINE_WEIGHT = {punchline:0.8, metrica:1.0, flow:1.0, impro:0.5, mentalidad:0.5};   // la experiencia sostiene impro y mentalidad
 const EXP_SUPPORT = 0.3;            // impro y mentalidad suben esto cada año (todas las etapas) hasta EXP_SUPPORT_CAP
 const EXP_SUPPORT_CAP = 95;
 const INACTIVE_PENALTY = 0.3;       // no compitió en nada esa temporada
-const BOOST_CHAMPION = 1.5, BOOST_RUNNERUP = 1.0, BOOST_INTL = 1.5;   // empujones de fin de temporada
+const BOOST_CHAMPION = 0.8, BOOST_RUNNERUP = 0.5, BOOST_INTL = 0.8;   // empujones de fin de temporada (menores que el declive máximo: no lo anulan)
 const BOOST_OVER_POT = 2;           // los empujones pueden superar el potencial como mucho en esto
 const EVOL_TOP = 5;                 // cuántos salen en el resumen (los que más suben y más bajan)
 
