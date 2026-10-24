@@ -18,7 +18,9 @@ Juego de fans · gratuito · sin ánimo de lucro · funciona sin internet</p>
 > Pulsa **"Más información" → "Ejecutar de todas formas"**.
 
 ### Navegador (Windows, Mac, Linux, móvil)
-Descarga **`index.html`** y ábrelo con Chrome, Edge, Firefox o Safari. Funciona sin internet.
+Descarga el **`index.html`** de la sección Releases (lleva todo dentro) y ábrelo con Chrome, Edge, Firefox o Safari. Funciona sin internet.
+
+Si en vez de eso descargas el código del repositorio, abre su `index.html`: carga las imágenes, las fuentes y el código desde las carpetas `assets/`, `css/` y `js/`, así que mantenlas juntas.
 
 ## 💾 Partidas
 - La partida se guarda sola.
@@ -41,13 +43,19 @@ Necesitas [Node.js](https://nodejs.org/) instalado.
 npm install
 npm start           # abre el juego en una ventana
 npm run build:win   # genera dist/FMS_CEO.exe
+npm run build:single # genera dist/index.html con todo incrustado, para publicar
 ```
 > Compílalo desde Windows. En Linux/Mac, `electron-builder` necesita Wine para poner el icono al ejecutable.
 
 ## 📁 Archivos
 | Archivo | Qué es |
 |---|---|
-| `index.html` | El juego completo (todo incluido en un solo archivo) |
+| `index.html` | Página del juego; carga `css/`, `js/` y `assets/` |
+| `js/game.js` | Todo el código del juego |
+| `js/images.js` | Rutas de fotos, logos y emojis |
+| `css/style.css` | Estilos y fuentes |
+| `assets/` | Imágenes y fuentes (woff2) |
+| `tools/build-single.js` | Genera el `index.html` único con todo incrustado |
 | `main.js` | Ventana de escritorio (Electron) |
 | `package.json` | Configuración para compilar el `.exe` |
 | `build/` | Icono del juego |
