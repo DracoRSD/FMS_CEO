@@ -315,6 +315,9 @@ const GROW_RATE = 0.28;             // joven: sube esta fracción del margen has
 const GROW_MIN = 1, GROW_MAX = 3;   // joven: subida mínima y máxima por atributo cuando hay margen
 const GROW_WEIGHT = {punchline:1.0, metrica:1.25, flow:1.25, impro:0.9, mentalidad:0.8};   // flow y métrica crecen antes
 const MID_NOISE = 1;                // madurez: ruido uniforme de −1 a +1
+const GROW_MID_RATE = 0.25;         // madurez: si queda más de GROW_MID_SLACK hasta el potencial, sube esta fracción del exceso (las promesas siguen creciendo)
+const GROW_MID_SLACK = 4;           // madurez: holgura que no se recupera (quien está a 4 o menos de su potencial se comporta como antes: solo ruido)
+const GROW_MID_MAX = 3;             // madurez: subida máxima por atributo y año
 const DECLINE_START = 0.3;          // veterano: bajada el primer año tras EXP_MID_MAX
 const DECLINE_STEP = 0.1;           // y crece esto cada año más
 const DECLINE_MAX = 1.5;            // sin pasar de aquí
@@ -326,19 +329,20 @@ const BOOST_CHAMPION = 0.8, BOOST_RUNNERUP = 0.5, BOOST_INTL = 0.8;   // empujon
 const BOOST_OVER_POT = 2;           // los empujones pueden superar el potencial como mucho en esto
 const EVOL_TOP = 5;                 // cuántos salen en el resumen (los que más suben y más bajan)
 // Retiros de fin de temporada (fase 6). Probabilidad anual = RET_BASE + RET_PER_YEAR·(exp − RET_EXP_MIN) − RET_NIVEL_SLOPE·(nivel − RET_NIVEL_REF)
-const RET_EXP_MIN = 9;              // nadie se retira con menos años de carrera
-const RET_BASE = 0.05;              // probabilidad al cumplir RET_EXP_MIN
-const RET_PER_YEAR = 0.05;          // y sube esto por cada año más
-const RET_NIVEL_REF = 75, RET_NIVEL_SLOPE = 0.006;   // −0,6 % por cada punto de nivel sobre 75 (+0,6 % por cada punto por debajo)
+const RET_EXP_MIN = 10;             // nadie se retira con menos años de carrera
+const RET_BASE = 0.04;              // probabilidad al cumplir RET_EXP_MIN
+const RET_PER_YEAR = 0.03;          // y sube esto por cada año más
+const RET_NIVEL_REF = 75, RET_NIVEL_SLOPE = 0.005;   // −0,5 % por cada punto de nivel sobre 75 (+0,5 % por cada punto por debajo)
 const RET_MAX = 0.6;                // tope de la probabilidad anual
 const RET_LEGEND_MULT = 0.5;        // las leyendas aguantan el doble
 // Nuevos talentos: tantos como retirados, dentro de este rango. Cada retirado deja su hueco en su país.
-const NOVATO_MIN = 4, NOVATO_MAX = 20;
+const NOVATO_MIN = 4, NOVATO_MAX = 50;   // el pool inicial tiene edades parecidas y se retira en oleada: el tope debe absorberla
 const NOVATO_EXP = [0, 2];          // años de carrera al debutar
-const NOVATO_NIVEL = [55, 75], NOVATO_NIVEL_MEDIA = 63, NOVATO_NIVEL_SD = 5;
+const NOVATO_NIVEL = [55, 75], NOVATO_NIVEL_MEDIA = 68, NOVATO_NIVEL_SD = 4;
 const NOVATO_FAMA = [15, 40];
-const NOVATO_PROMESA = 0.15;        // fracción con potencial alto
-const POT_PROMESA = [88, 97];       // potencial de las promesas (el resto usa POT_YOUNG sobre el nivel)
+const NOVATO_PROMESA = 0.12;        // fracción con potencial alto
+const POT_PROMESA = [88, 97];       // potencial de las promesas
+const POT_NOVATO = [6, 14];         // margen de potencial sobre el nivel del resto de novatos (como los jóvenes de hoy; las promesas usan POT_PROMESA)
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
 // Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
@@ -381,7 +385,7 @@ function evolveFreestylers(s){
     ATTR_KEYS.forEach(k=>{
       let v=0;
       if(etapa==='joven'){ const marg=Math.max(0, pot-f.attrs[k]); if(marg>0) v=clamp(marg*GROW_RATE*GROW_WEIGHT[k], GROW_MIN, GROW_MAX)*(0.7+Math.random()*0.6); }
-      else if(etapa==='madurez'){ v=rnd(-MID_NOISE, MID_NOISE); }
+      else if(etapa==='madurez'){ v=rnd(-MID_NOISE, MID_NOISE); const marg=Math.max(0, pot-GROW_MID_SLACK-f.attrs[k]); if(marg>0) v+=Math.min(GROW_MID_MAX, marg*GROW_MID_RATE*GROW_WEIGHT[k])*(0.7+Math.random()*0.6); }
       else { const years=exp-EXP_MID_MAX; v=-Math.min(DECLINE_MAX, DECLINE_START+DECLINE_STEP*(years-1))*DECLINE_WEIGHT[k]*(0.7+Math.random()*0.6); }
       if((k==='impro'||k==='mentalidad') && f.attrs[k]<EXP_SUPPORT_CAP) v+=EXP_SUPPORT;
       if(!competed.has(f.id)) v-=INACTIVE_PENALTY;
@@ -439,7 +443,7 @@ function apodoLibre(){
 function nuevoNovato(country, year){
   const nivel=Math.round(clamp(NOVATO_NIVEL_MEDIA+gauss()*NOVATO_NIVEL_SD, NOVATO_NIVEL[0], NOVATO_NIVEL[1]));
   const exp=rint(NOVATO_EXP[0], NOVATO_EXP[1]);
-  const pot = Math.random()<NOVATO_PROMESA ? rint(POT_PROMESA[0], POT_PROMESA[1]) : Math.min(POT_MAX, nivel+rint(POT_YOUNG[0], POT_YOUNG[1]));
+  const pot = Math.random()<NOVATO_PROMESA ? rint(POT_PROMESA[0], POT_PROMESA[1]) : Math.min(POT_MAX, nivel+rint(POT_NOVATO[0], POT_NOVATO[1]));
   const fama=rint(NOVATO_FAMA[0], NOVATO_FAMA[1]); const keys=Object.keys(STYLES); const style=keys[Math.floor(Math.random()*keys.length)];
   const name=apodoLibre();
   const f={id:uid('f'), name, country, nivel, fama, hype:randHype(fama), style, legend:false, generado:true, debut:year, carrera:{exp, pot}};
