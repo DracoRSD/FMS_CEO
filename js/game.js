@@ -281,13 +281,16 @@ function mentalFactor(f){ return clamp(MENTAL_VAR_BASE - attrOf(f,'mentalidad')*
 /* ---- jueces ---- */
 function judgesByGroup(g){ return JUDGES.filter(j=>j.country===g); }
 // Sortea los jueces de una liga para una temporada: 4 del país + 1 internacional (ligas sin país: 5 internacionales)
+// key: clave de liga (fms_espana…) o nombre de país (España, Argentina…). Sin grupo de jueces → 5 internacionales
 function pickJudges(key){
-  const grp=JUDGE_GROUP[key]; const pool=grp ? judgesByGroup(grp) : [];
+  const grp=JUDGE_GROUP[key] || (Object.values(JUDGE_GROUP).includes(key) ? key : null); const pool=grp ? judgesByGroup(grp) : [];
   const intl=judgesByGroup('Internacional').slice().sort(()=>Math.random()-0.5);
   const loc=pool.slice().sort(()=>Math.random()-0.5);
   const nIntl = pool.length ? JUDGES_INTL_PER_LEAGUE : JUDGES_PER_LEAGUE;
   return [...loc.slice(0, JUDGES_PER_LEAGUE-nIntl), ...intl.slice(0, nIntl)].sort(()=>Math.random()-0.5).map(j=>j.id);
 }
+// Jueces de un torneo (Red Bull nacional, Under…): 4 del país del evento + 1 internacional; sin país con jueces, 5 internacionales
+function tourneyJudges(countries){ const c=(countries||[]).find(x=>Object.values(JUDGE_GROUP).includes(x)); return pickJudges(c||null); }
 function judgesOf(L){ if(!L) return pickJudges(null); if(!Array.isArray(L.judges) || L.judges.length!==JUDGES_PER_LEAGUE || L.judges.some(id=>!JUDGE_BY_ID[id])) L.judges=pickJudges(L.key); return L.judges; }
 // Cuánto suma o resta un juez a la nota de un freestyler por sus gustos (escala 1-10)
 function judgeTaste(j, f){ if(!j||!j.gustos) return 0; return Object.entries(j.gustos).reduce((s,[k,g])=>s+g*((attrOf(f,k)-50)/10)*JUDGE_TASTE_PER_10, 0); }
