@@ -835,7 +835,7 @@ function startSeason(){
       if(rep4.length){ L.competitors.forEach(id=>{ const f=fby(id); f.hype=Math.round(clamp((f.hype||50)*0.9,1,99)*10)/10; });
         addLog(s, 0, `${WS.name}: la comunidad se queja de que el cartel tiene demasiados de ${rep4.join(' y ')}. La plantilla pierde un 10% de hype.`, 'bad'); } }
     const sk=state.freestylers.find(f=>f.name==='Skone'); L.skoneMx=false;
-    if(k==='fms_mexico' && sk && L.competitors.includes(sk.id)){ sk.hype=99; L.skoneMx=true; addLog(s, 0, '🇲🇽 Skone llega a FMS México y revienta las redes: hype al máximo, +10% de taquilla en la liga y sus batallas tendrán un 10% más de visitas.', 'gold'); }
+    if(k==='fms_mexico' && sk && L.competitors.includes(sk.id)){ sk.hype=99; L.skoneMx=true; addLog(s, 0, '🇲🇽 Skone llega a FMS México y revienta las redes: hype al máximo'+(modoCarrera()?'.':', +10% de taquilla en la liga y sus batallas tendrán un 10% más de visitas.'), 'gold'); }
     if(sv.rep.length){ L.competitors.forEach(id=>{ const f=fby(id); f.hype=Math.round(clamp((f.hype||50)*0.8,1,99)*10)/10; });
       addLog(s, 0, `${ldef(k).name}: demasiados ${sv.rep.join(' y ')} en el cartel. El público lo ve repetitivo: la liga arranca con mucho menos hype y la plantilla pierde un 20%.`, 'bad'); }
     else if(sv.bonus>0) addLog(s, 0, `${ldef(k).name}: cartel variado (${sv.n} estilos distintos), +${sv.bonus} de hype de salida.`, 'good');
@@ -936,7 +936,7 @@ function runLeagueJornada(s, L, d){
   L.hype = clamp(L.hype + hypeGain, 0, 100);
   scheduleStream(s, L.key, L.played, d);
   L.played++; L.lastEventDay=d;
-  addLog(s, d, `<b>${def.name} · J${jn}</b>: ${highlight||'5 batallas sin sorpresas'}. MVP ${mvp?fname(mvp.id):'—'}. Taquilla ${moneyK(income)}${prime?'':' (entre semana)'}, ${fmtViews(views)} visitas (${moneyK(viewsIncome)})${spon?`, patrocinios ${moneyK(spon)}`:''}, +${rep} rep.`, 'good');
+  addLog(s, d, `<b>${def.name} · J${jn}</b>: ${highlight||'5 batallas sin sorpresas'}. MVP ${mvp?fname(mvp.id):'—'}.${modoCarrera()?'':` Taquilla ${moneyK(income)}${prime?'':' (entre semana)'}, ${fmtViews(views)} visitas (${moneyK(viewsIncome)})${spon?`, patrocinios ${moneyK(spon)}`:''}, +${rep} rep.`}`, 'good');   // en carrera no hay empresa: sin taquilla ni reputación
   if(L.played>=nJ(L.key)){
     L.finished=true;
     L.finalStandings=computeStandings(L).map(r=>r.id);
@@ -996,7 +996,7 @@ function runIntl(s, d){
   const cost=40000 + 12000*stars;
   state.company.money += income+viewsIncome-cost; s.fin.income+=income+viewsIncome; s.fin.views=(s.fin.views||0)+viewsIncome; s.fin.production+=cost; s.intl.income=income+viewsIncome;
   const rep=25 + Math.round(avgH/10); state.company.reputation+=rep;
-  addLog(s, d, `🌎 <b>${fname(s.intl.champion)}</b> gana el ${INTL.name}${s.intl.sede?' en '+s.intl.sede:''} ante ${fname(s.intl.runnerUp)}. Taquilla ${moneyK(income)}, ${fmtViews(views)} visitas (${moneyK(viewsIncome)}), +${rep} rep.${hypeNote}`, 'gold');
+  addLog(s, d, `🌎 <b>${fname(s.intl.champion)}</b> gana el ${INTL.name}${s.intl.sede?' en '+s.intl.sede:''} ante ${fname(s.intl.runnerUp)}.${modoCarrera()?'':` Taquilla ${moneyK(income)}, ${fmtViews(views)} visitas (${moneyK(viewsIncome)}), +${rep} rep.`}${hypeNote}`, 'gold');
 }
 
 function monthEnd(s, m){
@@ -1008,7 +1008,7 @@ function monthEnd(s, m){
     const pen = 8 + 2*state.company.stars;
     state.company.reputation = Math.max(0, state.company.reputation - pen);
     s.activeKeys.forEach(k=>{ const L=s.leagues[k]; if(!L.finished) L.hype=clamp(L.hype-4,0,100); });
-    addLog(s, dateToDay(s.year,m+1,0), `Mes vacío en ${MESES[m].toLowerCase()}: la competencia se queda con tu público (−${pen} rep).`, 'bad');
+    if(!modoCarrera()) addLog(s, dateToDay(s.year,m+1,0), `Mes vacío en ${MESES[m].toLowerCase()}: la competencia se queda con tu público (−${pen} rep).`, 'bad');
   }
 }
 
@@ -1140,7 +1140,7 @@ function advance(mode){
     if(mode==='event' && ev) break;
   }
   if(state.view.name==='calendar' && s.phase==='live') state.ui.calMonth=monthOf(s.year,s.day);
-  if(s.phase==='done'){ render(); showSummary(); return; }
+  if(s.phase==='done'){ render(); if(modoCarrera()) showResumenCarrera(); else showSummary(); return; }
   if(played.length===1){ const e=played[0]; toast(e.key===INTL.key? `Se jugó el ${INTL.name}.` : (isRB(e.key)? `Se jugó la ${rbdef(e.key).name}: gana ${fname(rbEvent(s,e.key).champion)}.` : `Se jugó la J${e.j} de ${ldef(e.key).name}.`)); }
   else if(played.length>1) toast(`Se jugaron ${played.length} fechas.`);
   render();
@@ -1178,9 +1178,10 @@ function endSeason(s){
     relevo: { retirados, novatos }
   };
   { const d=daysInYear(s.year)-1; const mios=retirados.filter(id=>signed.has(id));
-    if(retirados.length) addLog(s, d, `🎤 Se retiran: ${retirados.map(fnameH).join(', ')}.${mios.length?' De tu plantilla: <b>'+mios.map(fnameH).join(', ')+'</b>.':''}`, mios.length?'bad':'');
+    const miosTxt = mios.length && !modoCarrera();
+    if(retirados.length) addLog(s, d, `🎤 Se retiran: ${retirados.map(fnameH).join(', ')}.${miosTxt?' De tu plantilla: <b>'+mios.map(fnameH).join(', ')+'</b>.':''}`, miosTxt?'bad':'');
     if(novatos.length) addLog(s, d, `🌱 Debutan en la escena: ${novatos.map(id=>{ const f=fby(id); return nameH(f)+' ('+esc(f.country)+')'; }).join(', ')}.`, 'gold'); }
-  addLog(s, daysInYear(s.year)-1, `Fin de la temporada ${s.year}. ${state.company.stars>before?'Subes a '+state.company.stars+'★.':(state.company.stars<before?'Bajas a '+state.company.stars+'★.':'Te mantienes en '+state.company.stars+'★.')}`, 'gold');
+  addLog(s, daysInYear(s.year)-1, modoCarrera() ? `Fin de la temporada ${s.year}.` : `Fin de la temporada ${s.year}. ${state.company.stars>before?'Subes a '+state.company.stars+'★.':(state.company.stars<before?'Bajas a '+state.company.stars+'★.':'Te mantienes en '+state.company.stars+'★.')}`, 'gold');
 }
 function showTutorial(t){
   const c=state.company;
@@ -1438,7 +1439,7 @@ function renderCarrera(){
   const estado = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='live' ? `Temporada ${s.year} en juego · ${fmtDay(s.year,s.day)}` : `Temporada ${s.year} cerrada`);
   const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Empezar la temporada ${s.year}</button>`
     : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
-    : `<button class="btn" onclick="showSummary()">Ver resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
+    : `<button class="btn" onclick="showResumenCarrera()">Ver mi resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
   return `<div class="welcome">
     <div class="step"><div class="carrera-ficha">
       <div class="profile-avatar" style="${avatarDivStyle(f)}">${avatarContent(f)}</div>
@@ -1520,7 +1521,7 @@ function carreraAvanzar(modo){
   const ev=pasoCarrera(modo);
   if(state.view.name==='calendar' && s.phase==='live') state.ui.calMonth=monthOf(s.year,s.day);
   render();
-  if(s.phase==='done'){ showSummary(); return; }
+  if(s.phase==='done'){ showResumenCarrera(); return; }
   if(!ev) return;
   switch(ev.pause){
     case 'lineup': openLineup(ev.key); break;
@@ -1692,6 +1693,34 @@ function champRows(s){
   return `${s.activeKeys.map(k=>`<div class="sum-row"><span>${leagueDot(k)} ${ldef(k).name}</span><span>🏆 ${fnameH(s.leagues[k].finalStandings[0])}</span></div>`).join('')}
     ${s.intl.champion?`<div class="sum-row"><span>${leagueDot(INTL.key)} ${INTL.name}</span><span>🌎 ${fnameH(s.intl.champion)}</span></div>`:''}
     ${rbOn(s)&&s.rb.inter.champion?`<div class="sum-row"><span>${rbDot(RB_INT.key)} ${RB_INT.name} (${s.rb.inter.sede})</span><span>🔴 ${fnameH(s.rb.inter.champion)}</span></div>`:''}`;
+}
+// Resumen personal de la temporada (modo carrera): récord, liga y puesto, títulos, nivel y atributos, fama y torneos. El resumen del mundo queda en una pestaña.
+function showResumenCarrera(){
+  const s=cur(); if(!modoCarrera() || s.phase!=='done') { showSummary(); return; } const c=state.company.carrera; const fid=c.fid; const f=fby(fid); if(!f) return;
+  const bat=batallasDe(s, fid); const v=bat.filter(b=>b.w===fid).length, d=bat.length-v;
+  const lk=signedLeagueOf(s, fid); const st=lk ? s.leagues[lk].finalStandings : []; const puesto=lk ? st.indexOf(fid)+1 : 0;
+  const titulos=titlesOf(fid).filter(t=>t.endsWith(' '+s.year));
+  const prev=(c.temporadas||[]).filter(t=>t.year<s.year).slice(-1)[0]; const famaPrev = prev ? prev.fama : CARRERA_FAMA; const nivelPrev = prev ? prev.nivel : null; const dn = nivelPrev!=null ? f.nivel-nivelPrev : null;
+  const porComp={}; bat.forEach(b=>{ const nm=b.comp.split(' · ')[0]; const o=porComp[nm]=porComp[nm]||{v:0,d:0}; if(b.w===fid) o.v++; else o.d++; });
+  const camp=new Set(titulos.map(t=>t.slice(0, -5)));
+  const torneos=Object.entries(porComp).map(([nm,o])=>`<div class="sum-row"><span>${esc(nm)}${camp.has(nm)?' 🏆':''}</span><b>${o.v}-${o.d}</b></div>`).join('') || '<p class="step-note">No jugaste ninguna batalla este año.</p>';
+  const entreno=(f.plan&&f.plan.entreno) ? ATTR_LABELS[f.plan.entreno] : null;
+  const izq=`<div class="sum-sec">Tu año</div>
+    <div class="sum-row"><span>Récord</span><b>${v}-${d}</b></div>
+    <div class="sum-row"><span>Liga</span><b>${lk ? esc(ldef(lk).name)+' · '+puesto+'º' : 'Libre'}</b></div>
+    <div class="sum-row"><span>Títulos</span><b>${titulos.length ? titulos.map(t=>esc(t.slice(0,-5))).join(', ') : '—'}</b></div>
+    <div class="sum-row"><span>Nivel</span><b>${f.nivel}${dn!=null ? ` <span class="${dn>=0?'pos-v':'neg-v'}">${dn>=0?'▲':'▼'}${Math.abs(dn)}</span>` : ''}</b></div>
+    <div class="sum-row"><span>Fama</span><b>${f.fama} <span class="${f.fama-famaPrev>=0?'pos-v':'neg-v'}">${f.fama-famaPrev>=0?'+':''}${f.fama-famaPrev}</span></b></div>
+    ${entreno ? `<div class="sum-row"><span>Entrenaste</span><b>${esc(entreno)}</b></div>` : ''}
+    ${attrBars(f)}
+    <div class="sum-sec">Torneos y ligas</div>${torneos}`;
+  const tabs=[['Tu año', izq], ['El mundo', `<div class="sum-sec">Campeones</div>${champRows(s)}${sumRight(s)}`]];
+  state.ui.rcTab = state.ui.rcTab||0;
+  const paint=()=>{ const t=state.ui.rcTab; return `<h3>Temporada ${s.year} · ${nameH(f)}</h3>
+    <div class="sum-tabs">${tabs.map((x,i)=>`<button class="seg ${i===t?'on':''}" onclick="state.ui.rcTab=${i}; showResumenCarrera()">${x[0]}</button>`).join('')}</div>
+    <div class="sum-grid"><div class="sum-left" style="grid-column:1 / -1">${tabs[t][1]}</div></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button>${s===cur()?`<button class="btn primary" onclick="nextSeason()">Preparar temporada ${s.year+1}</button>`:''}</div>`; };
+  openModal(paint(), 'summary');
 }
 function showSummary(){
   const s=cur(); const m=s.summary; if(!m) return;
@@ -3765,7 +3794,7 @@ function uqSetUnavail(evId, guestId, day, silent){
 function uqPapo(evId, accept, silent){
   const s=cur(); const ev=s.uq.find(x=>x.id===evId); if(!ev||ev.done) return; const L=s.leagues[ev.key];
   if(accept){ const extra=ev.newSal-(L.contracts[ev.fid]||0); state.company.money-=extra; s.fin.salaries+=extra; L.contracts[ev.fid]=ev.newSal;
-    addLog(s, ev.day, `Papo cobrará ${money(ev.newSal)} esta temporada.`, 'gold'); }
+    addLog(s, ev.day, modoCarrera() ? 'Papo renueva una temporada más.' : `Papo cobrará ${money(ev.newSal)} esta temporada.`, 'gold'); }
   else { uqRemove(s, L, ev.fid); addLog(s, ev.day, `Papo se va de ${ldef(ev.key).name}: "FMS no paga lo que Papo gana".`, 'bad'); }
   ev.done=true; if(!silent){ closeModal(); render(); if(!accept) showReplace(ev.key); }
 }
@@ -3974,7 +4003,7 @@ function applyStream(s, st){
     state.company.money+=st.extra; s.fin.income+=st.extra; s.fin.views=(s.fin.views||0)+st.extra; L.income+=st.extra;
     // y +10% de hype a toda la plantilla (mínimo +2 para que se note en los que tienen poco)
     st.hrows=hIds.map(id=>{ const f=fby(id); const before=f.hype||0; f.hype=Math.round(clamp(before+Math.max(before*0.1,2),1,99)*10)/10; return [id,before,f.hype]; });
-    addLog(s, st.day, `📺 <b>${STREAMERS[st.who].name}</b> habló bien de la J${st.j+1} de ${ldef(st.key).name} en su stream: +10% visitas (+${moneyK(st.extra)}) y +10% de hype a la plantilla.`, 'good');
+    addLog(s, st.day, `📺 <b>${STREAMERS[st.who].name}</b> habló bien de la J${st.j+1} de ${ldef(st.key).name} en su stream: +10% visitas${modoCarrera()?'':` (+${moneyK(st.extra)})`} y +10% de hype a la plantilla.`, 'good');
   } else {
     st.rows=hIds.map(id=>{ const f=fby(id); const before=f.hype||0; f.hype=Math.round(before*(st.shield?0.95:0.9)*10)/10; return [id,before,f.hype]; });
     addLog(s, st.day, `📺 <b>${STREAMERS[st.who].name}</b> habló mal de la J${st.j+1} de ${ldef(st.key).name} en su stream: −10% de hype a toda la plantilla.`, 'bad');
