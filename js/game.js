@@ -131,7 +131,7 @@ function randHype(fama){ return fama==null ? Math.round(clamp(50+gauss()*20,1,99
 const PRESET_LEGENDS = ["Chuty", "Gazir", "Arkano", "Bnet", "Skone", "Invert", "Khan", "Piezas", "Walls", "Pyro", "Jaloner", "Wos", "Papo", "Dtoke", "Trueno", "TiagoPZK", "Lit Killah", "Duki", "Frescolate", "Aczino", "Hadrian", "Kaiser", "Ricto", "ChysteMC", "Jaze", "Lokillo", "MCKlopedia", "Akapellah"];
 function generatePool(){
   const out=[];
-  Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=> out.push(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), photo:presetPhoto(name), legend: PRESET_LEGENDS.includes(name), style:defaultStyle(name)}))));
+  Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=> out.push(ensureCarrera(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), photo:presetPhoto(name), legend: PRESET_LEGENDS.includes(name), style:defaultStyle(name)})))));
   return out;
 }
 const LEGEND_MULT = 1.5;  // las leyendas cobran un 50% más solo por serlo
@@ -296,6 +296,97 @@ function judgesOf(L){ if(!L) return pickJudges(null); if(!Array.isArray(L.judges
 function judgeTaste(j, f){ if(!j||!j.gustos) return 0; return Object.entries(j.gustos).reduce((s,[k,g])=>s+g*((attrOf(f,k)-50)/10)*JUDGE_TASTE_PER_10, 0); }
 function judgeNoise(j){ const c=j ? clamp(j.consistencia,0,1) : 0.5; return JUDGE_NOISE_MAX-(JUDGE_NOISE_MAX-JUDGE_NOISE_MIN)*c; }
 function judgeName(id){ const j=JUDGE_BY_ID[id]; return j ? j.name : `Juez ${id||''}`.trim(); }
+
+/* ---- carrera y progresión (fase 5) ---- */
+// Experiencia (años de carrera) y potencial (techo del nivel), estimados una vez de forma determinista por nombre
+const EXP_LEGEND = [10, 14];        // leyendas
+const EXP_VETERAN = [9, 12];        // fama muy por encima del nivel: famoso que ya no rinde
+const EXP_YOUNG = [1, 3];           // nivel muy por encima de la fama: bueno y poco conocido
+const EXP_MID = [5, 8];             // resto (madurez desde el primer año)
+const EXP_CUSTOM = [2, 4];          // competidores propios
+const EXP_FAMA_GAP = 10;            // fama − nivel ≥ +10 → veterano · nivel − fama ≥ 20 → joven
+const EXP_NIVEL_GAP = 20;
+const POT_YOUNG = [6, 14], POT_MID = [1, 4], POT_VET = [0, 0];   // margen de potencial sobre el nivel según etapa
+const POT_MAX = 97, NIVEL_MIN = 35, NIVEL_MAX = 97;
+// Etapas por experiencia
+const EXP_YOUNG_MAX = 4, EXP_MID_MAX = 9;   // 0-4 joven · 5-9 madurez · 10+ veterano
+// Progresión anual por atributo (puntos)
+const GROW_RATE = 0.28;             // joven: sube esta fracción del margen hasta el potencial (por atributo, ponderado)
+const GROW_MIN = 1, GROW_MAX = 3;   // joven: subida mínima y máxima por atributo cuando hay margen
+const GROW_WEIGHT = {punchline:1.0, metrica:1.25, flow:1.25, impro:0.9, mentalidad:0.8};   // flow y métrica crecen antes
+const MID_NOISE = 1;                // madurez: ruido uniforme de −1 a +1
+const DECLINE_START = 0.3;          // veterano: bajada el primer año tras EXP_MID_MAX
+const DECLINE_STEP = 0.15;          // y crece esto cada año más
+const DECLINE_MAX = 1.5;            // sin pasar de aquí
+const DECLINE_WEIGHT = {punchline:0.8, metrica:1.0, flow:1.0, impro:0.5, mentalidad:0.5};   // la experiencia sostiene impro y mentalidad
+const EXP_SUPPORT = 0.3;            // impro y mentalidad suben esto cada año (todas las etapas) hasta EXP_SUPPORT_CAP
+const EXP_SUPPORT_CAP = 95;
+const INACTIVE_PENALTY = 0.3;       // no compitió en nada esa temporada
+const BOOST_CHAMPION = 1.5, BOOST_RUNNERUP = 1.0, BOOST_INTL = 1.5;   // empujones de fin de temporada
+const BOOST_OVER_POT = 2;           // los empujones pueden superar el potencial como mucho en esto
+const EVOL_TOP = 5;                 // cuántos salen en el resumen (los que más suben y más bajan)
+
+function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
+// Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
+function carreraFromStats(f){
+  const rnd=seededRandom(seedOf(f.name||'') ^ 0x9E3779B9);
+  let exp;
+  if(f.custom) exp=rangeSeeded(rnd, EXP_CUSTOM);
+  else if(f.legend) exp=rangeSeeded(rnd, EXP_LEGEND);
+  else if((f.fama||50)-f.nivel>=EXP_FAMA_GAP) exp=rangeSeeded(rnd, EXP_VETERAN);
+  else if(f.nivel-(f.fama||50)>=EXP_NIVEL_GAP) exp=rangeSeeded(rnd, EXP_YOUNG);
+  else exp=rangeSeeded(rnd, EXP_MID);
+  const marg = exp<=EXP_YOUNG_MAX ? POT_YOUNG : (exp<=EXP_MID_MAX ? POT_MID : POT_VET);
+  const pot=Math.min(POT_MAX, f.nivel+rangeSeeded(rnd, marg));
+  return {exp, pot};
+}
+function ensureCarrera(f){ if(!f) return f; if(!f.carrera || typeof f.carrera.exp!=='number' || typeof f.carrera.pot!=='number') f.carrera=carreraFromStats(f); return f; }
+function etapaOf(f){ const e=f.carrera ? f.carrera.exp : 5; return e<=EXP_YOUNG_MAX ? 'joven' : (e<=EXP_MID_MAX ? 'madurez' : 'veterano'); }
+// Ids que compitieron en la temporada: ligas, Red Bull, Under e Internacional
+function competedIds(s){
+  const ids=new Set(); const add=x=>{ if(x) ids.add(x); };
+  (s.activeKeys||[]).forEach(k=>{ const L=s.leagues[k]; if(L) (L.competitors||[]).forEach(add); });
+  if(rbOn(s)){ (s.rb.events||[]).forEach(e=>(e.participants||[]).forEach(add)); if(s.rb.inter) (s.rb.inter.qualifiers||[]).forEach(add); }
+  if(s.intl){ (s.intl.qualifiers||[]).forEach(add); if(s.intl.bracket) s.intl.bracket.rounds.flat().forEach(m=>{ add(m.a); add(m.b); }); }
+  (s.under||[]).forEach(e=>{ (e.participants||[]).forEach(add); (e.battles||[]).forEach(m=>{ add(m.a); add(m.b); }); });
+  return ids;
+}
+// Evolución de fin de temporada de todos los freestylers. Devuelve [{id, delta}] con el cambio de nivel.
+function evolveFreestylers(s){
+  const competed=competedIds(s);
+  const boost={}; const bump=(id,v)=>{ if(id) boost[id]=(boost[id]||0)+v; };
+  (s.activeKeys||[]).forEach(k=>{ const st=(s.leagues[k]&&s.leagues[k].finalStandings)||[]; bump(st[0], BOOST_CHAMPION); bump(st[1], BOOST_RUNNERUP); });
+  if(s.intl && s.intl.champion) bump(s.intl.champion, BOOST_INTL);
+  const out=[];
+  state.freestylers.forEach(f=>{
+    ensureAttrs(f); ensureCarrera(f);
+    const before=f.nivel; f.attrsPrev={...f.attrs};
+    const etapa=etapaOf(f); const exp=f.carrera.exp; const pot=f.carrera.pot;
+    const d={};
+    ATTR_KEYS.forEach(k=>{
+      let v=0;
+      if(etapa==='joven'){ const marg=Math.max(0, pot-f.attrs[k]); if(marg>0) v=clamp(marg*GROW_RATE*GROW_WEIGHT[k], GROW_MIN, GROW_MAX)*(0.7+Math.random()*0.6); }
+      else if(etapa==='madurez'){ v=rnd(-MID_NOISE, MID_NOISE); }
+      else { const years=exp-EXP_MID_MAX; v=-Math.min(DECLINE_MAX, DECLINE_START+DECLINE_STEP*(years-1))*DECLINE_WEIGHT[k]*(0.7+Math.random()*0.6); }
+      if((k==='impro'||k==='mentalidad') && f.attrs[k]<EXP_SUPPORT_CAP) v+=EXP_SUPPORT;
+      if(!competed.has(f.id)) v-=INACTIVE_PENALTY;
+      d[k]=v;
+    });
+    const b=boost[f.id]||0;
+    ATTR_KEYS.forEach(k=>{
+      let nv=f.attrs[k]+d[k];
+      if(etapa!=='veterano' && nv>pot && d[k]>0) nv=Math.max(f.attrs[k], pot);   // el crecimiento normal no pasa del potencial
+      nv+=b; if(b>0 && nv>pot+BOOST_OVER_POT) nv=Math.max(f.attrs[k], pot+BOOST_OVER_POT);
+      f.attrs[k]=clamp(Math.round(nv*10)/10, 1, ATTR_MAX);
+    });
+    ATTR_KEYS.forEach(k=>f.attrs[k]=Math.round(f.attrs[k]));
+    const n=nivelFromAttrs(f.attrs);
+    if(n<NIVEL_MIN || n>NIVEL_MAX) setNivel(f, clamp(n, NIVEL_MIN, NIVEL_MAX)); else f.nivel=n;
+    f.carrera.exp+=1;
+    out.push({id:f.id, delta:f.nivel-before});
+  });
+  return out;
+}
 
 function styleTag(f){ const st=styleOf(f); return `<span class="style-tag st-${st.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}" title="${esc(STYLES[st].txt)}">${st}</span>`; }
 const FOREIGN_MULT = 1.25; // un extranjero cuesta un 25% más por viajes
@@ -1007,7 +1098,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:5}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:6}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1703,7 +1794,7 @@ function devSaveStats(id){
   const n=parseInt(document.getElementById('dev_nivel').value,10), fa=parseInt(document.getElementById('dev_fama').value,10);
   if(isNaN(n)||isNaN(fa)){ toast('Pon números entre 1 y 99.'); return; }
   const hy=parseInt(document.getElementById('dev_hype').value,10); if(!isNaN(hy)) f.hype=clamp(hy,1,99);
-  setNivel(f, clamp(n,1,99)); f.fama=clamp(fa,1,99); f.legend=document.getElementById('dev_legend').checked; const se=document.getElementById('dev_style'); if(se) f.style=se.value;
+  setNivel(f, clamp(n,1,99)); f.fama=clamp(fa,1,99); f.legend=document.getElementById('dev_legend').checked; ensureCarrera(f); if(f.carrera.pot<f.nivel) f.carrera.pot=f.nivel; const se=document.getElementById('dev_style'); if(se) f.style=se.value;
   toast(`${f.name}: nivel ${f.nivel}, fama ${f.fama}, hype ${Math.round(f.hype)}. Su salario pasa a ${money(salaryOf(f))} (los contratos ya firmados no cambian).`);
   render(); showFreestyler(id);
 }
@@ -1831,14 +1922,17 @@ function syncRealPool(){
   if(state.company && (state.company.dbv||0)<5){   // v5: atributos regenerados con tope interno 110 (misma media = nivel)
     state.freestylers.forEach(f=>{ f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); f.nivel=nivelFromAttrs(f.attrs); });
     state.company.dbv=5; }
+  if(state.company && (state.company.dbv||0)<6){   // v6: experiencia y potencial por freestyler (no toca atributos ni niveles)
+    state.freestylers.forEach(ensureCarrera);
+    state.company.dbv=6; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }
   state.freestylers=state.freestylers.filter(f=>!f.plaza || ref.has(f.id));
-  state.freestylers.forEach(f=>{ if(!f.photo && presetPhoto(f.name)) f.photo=presetPhoto(f.name); if(f.hype==null) f.hype=randHype(f.fama); if(!STYLES[f.style]) f.style=defaultStyle(f.name); ensureAttrs(f); const fx=COUNTRY_FIX[f.name]; if(fx && (f.country==='México'||f.country==='Caribe')) f.country=fx; });
+  state.freestylers.forEach(f=>{ if(!f.photo && presetPhoto(f.name)) f.photo=presetPhoto(f.name); if(f.hype==null) f.hype=randHype(f.fama); if(!STYLES[f.style]) f.style=defaultStyle(f.name); ensureAttrs(f); ensureCarrera(f); const fx=COUNTRY_FIX[f.name]; if(fx && (f.country==='México'||f.country==='Caribe')) f.country=fx; });
   const have=new Set(state.freestylers.map(f=>f.name.toLowerCase()));
   Object.entries(REAL_PRESET).forEach(([country,list])=> list.forEach(([name,nivel,fama])=>{
-    if(!have.has(name.toLowerCase())) state.freestylers.push(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), legend:PRESET_LEGENDS.includes(name), style:defaultStyle(name)}));
+    if(!have.has(name.toLowerCase())) state.freestylers.push(ensureCarrera(ensureAttrs({id:uid('f'), name, country, nivel, fama, hype:randHype(fama), legend:PRESET_LEGENDS.includes(name), style:defaultStyle(name)})));
   }));
 }
 function isPrimeDay(y,d){ const w=dayToDate(y,d).getUTCDay(); return w===5||w===6||w===0; }   // viernes, sábado o domingo
@@ -4926,7 +5020,7 @@ function gameMark(){ const l=(typeof EXTRA_IMG!=='undefined' && EXTRA_IMG.gamelo
 var CUSTOM_KEY='fms_ceo_custom_fs';
 function customFS(){ try{ return JSON.parse(localStorage.getItem(CUSTOM_KEY)||'[]'); }catch(e){ return []; } }
 function saveCustomFS(list){ try{ localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); }catch(e){ toast('No se pudo guardar el competidor (almacenamiento lleno).'); } }
-function customToF(c){ return ensureAttrs({id:uid('f'), name:c.name, country:c.country, nivel:50, fama:50, hype:randHype(50), style:c.style, photo:c.photo||null, custom:true}); }
+function customToF(c){ return ensureCarrera(ensureAttrs({id:uid('f'), name:c.name, country:c.country, nivel:50, fama:50, hype:randHype(50), style:c.style, photo:c.photo||null, custom:true})); }
 var CUSTOM_COUNTRIES=['España','Argentina','México','Chile','Perú','Colombia','Uruguay','Venezuela','Cuba','Puerto Rico','República Dominicana','Panamá','Costa Rica','Guatemala','Honduras','El Salvador','Nicaragua','Ecuador','Bolivia','Paraguay','EEUU'];
 function openSettings(){
   openModal(`<h3>⚙️ Ajustes</h3>
