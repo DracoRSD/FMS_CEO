@@ -1532,6 +1532,7 @@ function showFreestyler(id){
     <div class="hype-row">Fama <div class="hype"><i style="width:${f.fama}%;background:var(--gold)"></i></div><b>${f.fama}</b></div>
     <div class="hype-row">Hype <div class="hype"><i style="width:${f.hype||0}%;background:#b26bff"></i></div><b>${f.hype!=null?Math.round(f.hype):'—'}</b></div>
   </div>
+  ${attrBars(f)}
   <div class="style-box">${styleTag(f)}<span>${esc(STYLES[styleOf(f)].txt)}</span></div>
   ${state.ui.devStats?`<div class="dev-box"><span class="field-label" style="color:#e0b23c">DEV · editar parámetros</span>
     <div class="formrow"><label class="dev-field">Nivel<input id="dev_nivel" type="number" min="1" max="99" value="${f.nivel}"></label><label class="dev-field">Fama<input id="dev_fama" type="number" min="1" max="99" value="${f.fama}"></label><label class="dev-field">Hype<input id="dev_hype" type="number" min="1" max="99" value="${f.hype!=null?Math.round(f.hype):50}"></label><label class="dev-field">Estilo<select id="dev_style">${STYLE_NAMES.map(n=>`<option ${styleOf(f)===n?'selected':''}>${n}</option>`).join('')}</select></label><label class="dev-check" style="width:auto;margin:0 0 8px;"><input id="dev_legend" type="checkbox" ${f.legend?'checked':''}> Leyenda (oculto)</label><button class="btn" onclick="devSaveStats('${id}')">Guardar</button></div></div>`:''}
@@ -1546,6 +1547,8 @@ function renameFreestyler(id){
   fby(id).name=v; toast('Nombre guardado.'); render(); showFreestyler(id);
 }
 function removePhoto(id){ fby(id).photo=null; render(); showFreestyler(id); }
+// Barras de los cinco atributos (valor mostrado con tope 99). Solo lectura.
+function attrBars(f){ return `<div class="attr-bars"><span class="attr-title">Atributos</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${v}</b></div>`; }).join('')}</div>`; }
 
 /* ---------- imágenes (fotos y logos) ---------- */
 function pickImage(target){ state.ui.imgTarget=target; document.getElementById('imgFileInput').click(); }
