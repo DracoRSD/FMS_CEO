@@ -1930,6 +1930,20 @@ function devConfirmReset(){
   openModal(`<h3>Reiniciar juego desde 0</h3><p class="step-note">Se borra todo: empresa, temporadas, freestylers (con sus nombres y fotos) y logos. Vuelves a la pantalla de nueva partida.</p>
   <div class="modal-actions"><button class="btn" onclick="openDev()">Volver</button><button class="btn danger" onclick="doReset()">Reiniciar todo</button></div>`);
 }
+// Modo carrera: plantillas de las ligas sin CEO ni dinero. Mismo orden que devAutoSign (país de la liga primero, luego nivel),
+// solo activos, respeta descendidos, hosts y ya fichados. Se rehacen por nivel cada año: la regla de ofertas de liga depende de ese orden.
+// Devuelve cuántos faltaron por fichar (0 si todas las ligas quedaron con 10).
+function autoFicharLigas(s){
+  let faltan=0;
+  natKeys(s).forEach(k=>{
+    const L=s.leagues[k]; const def=ldef(k);
+    const pool=activos().filter(f=>!signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
+      .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
+    for(const f of pool){ if(L.competitors.length>=10) break; L.competitors.push(f.id); L.contracts[f.id]=0; }
+    faltan+=Math.max(0, 10-L.competitors.length);
+  });
+  return faltan;
+}
 function devAutoSign(){
   const s=cur(); if(s.phase!=='pre') return;
   s.activeKeys.forEach(k=>{
