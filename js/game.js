@@ -347,6 +347,10 @@ const POT_NOVATO = [6, 14];         // margen de potencial sobre el nivel del re
 const CARRERA_PUNTOS = 300, CARRERA_ATTR_MIN = 45, CARRERA_ATTR_MAX = 75;   // puntos a repartir entre los cinco atributos (media 60) y tope por atributo
 const CARRERA_FAMA = 20;            // fama inicial: apto para todo el Under
 const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
+// Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
+const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
+const FAMA_SUBE = 0.5;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar)
+function famaSinLiga(f){ const gap=f.nivel-f.fama; const d = gap<0 ? -Math.ceil(-gap*FAMA_BAJA) : Math.round(gap*FAMA_SUBE); return Math.round(clamp(f.fama+d,5,99)); }
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
 // Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
@@ -1129,7 +1133,7 @@ function endSeason(s){
   // evolución de freestylers: progresión por atributo según experiencia, potencial y actividad
   const signed=new Set(s.activeKeys.flatMap(k=>s.leagues[k].competitors));
   const evol=evolveFreestylers(s);
-  state.freestylers.forEach(f=>{ if(!f.retirado && !signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99)); });
+  state.freestylers.forEach(f=>{ if(!f.retirado && !signed.has(f.id)) f.fama = famaSinLiga(f); });   // sin liga la fama tiende al nivel (FAMA_BAJA, FAMA_SUBE)
   s.activeKeys.forEach(k=>{
     const st=s.leagues[k].finalStandings;
     st.forEach((id,i)=>{ const f=fby(id); const delta = i===0?8:(i<3?4:(i>=st.length-2 && !isWS(k)?-3:1)); f.fama=Math.round(clamp(f.fama+delta,5,99)); });

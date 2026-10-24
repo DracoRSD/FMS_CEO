@@ -56,7 +56,7 @@ Un único volcado en `fms_ceo_v1`: `{company, freestylers, seasons, _counter}`. 
 | FMS Internacional | top 4 / top 3 + comodín / top 2 + cupo de campeón según haya 4, 5 o 6 ligas | `intlQualifiers` |
 | World Series | plantilla propia con 5 estrellas | `WS` |
 
-La fama solo se mueve en las ligas (`endSeason`: +8 campeón, +4 podio, −1 si no estás fichado) y los torneos dan hype, no fama. Para que un novato suba por la escalera hace falta que **ganar torneos dé fama** (ver 5.2).
+La fama se mueve en las ligas (`endSeason`: +8 campeón, +4 podio) y en Red Bull al jugarse; el Under y Monster Fu dan hype, no fama. Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel (`famaSinLiga`: si lo supera baja un 15 % de la distancia por año, al menos 1 punto; si está por debajo sube la mitad de la distancia). Sin esa regla el relevo de la fase 6 hundía la fama media del top 100 de 85 a 40 en 20 temporadas; con ella queda a ±1. Para que un novato suba por la escalera hace falta además que **ganar torneos dé fama** (ver 5.3).
 
 ## 2. Bucle de cada temporada
 
