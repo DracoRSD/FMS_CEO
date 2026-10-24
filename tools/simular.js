@@ -21,7 +21,8 @@ const PROGRESION = parseInt(arg('progresion', '20'), 10);   // temporadas de evo
 // Criterios de aceptación del relevo generacional tras PROGRESION temporadas (evolución + retiros + nuevos talentos)
 const TOP30_TOL = 3, TOP100_TOL = 4;   // el nivel medio del top 30 y del top 100 queda a ±esto del inicio
 const POOL_TOL = 10;                   // el pool de activos no varía más de ±esto (%)
-const FAV_MIN = 66, FAV_MAX = 72;      // % del favorito en liga con el pool de T10 y T20
+const FAV_MIN = 66, FAV_MAX = 72;      // % del favorito en liga: el promedio de T5, T10 y T15 queda aquí dentro
+const FAV_PUNTO_MIN = 66, FAV_PUNTO_MAX = 74;   // y cada punto suelto (T5, T10, T15 y T20) queda aquí dentro (T0 es la referencia)
 // Batallas por temporada fuera de las ligas, para estimar el crecimiento del guardado: 9 Red Bull nacionales + Plazas + Red Bull
 // Internacional + FMS Internacional (16 cada uno) + 4 Under de 16 + 5 de Monster Fu
 const KO_POR_TEMPORADA = 9 * 16 + 16 + 16 + 16 + 4 * 16 + 5;
@@ -154,7 +155,7 @@ w.addEventListener('load', () => setTimeout(() => {
     retTramo += ret.length; novTramo += nov.length; retTotal += ret.length; novTotal += nov.length; retMax = Math.max(retMax, ret.length); if (ret.length > NOVATO_MAX) novTope++;
     poolEv.forEach(x => { if (nf(x.attrs) !== x.nivel || KEYS.some(k => x.attrs[k] < 1 || x.attrs[k] > g('ATTR_MAX'))) desajustes++; });
     if (t % 5 === 0 || t === 1) { fotos[t] = foto(); fotos[t].ret = retTramo; fotos[t].nov = novTramo; retTramo = novTramo = 0; }
-    if (t % 5 === 0) favPool[t] = favoritoConPool();   // criterio en T10 y T20; T5 y T15 informativos
+    if (t % 5 === 0) favPool[t] = favoritoConPool();   // criterio: promedio de T5, T10 y T15, y cada punto suelto hasta T20
   }
   g('state').freestylers = pool;
 
@@ -192,15 +193,18 @@ w.addEventListener('load', () => setTimeout(() => {
   Object.entries(fotos).forEach(([t, f]) => console.log(`${('T' + t).padEnd(11)} ${f1b(f.top30).padStart(6)}   ${f1b(f.top100).padStart(7)}   ${f1b(f.todos).padStart(5)}   ${String(f.max).padStart(3)}   ${String(f.n90).padStart(3)}   ${f1b(f.brecha).padStart(13)}   ${String(f.et.joven || 0).padStart(7)} / ${String(f.et.madurez || 0).padStart(7)} / ${String(f.et.veterano || 0).padStart(9)}   ${String(f.activos).padStart(7)}   ${t === '0' ? '—' : f.ret + ' / ' + f.nov}`));
   const dTop30 = fotos[PROGRESION].top30 - fotos[0].top30, dTop100 = fotos[PROGRESION].top100 - fotos[0].top100, dPool = 100 * (fotos[PROGRESION].activos - fotos[0].activos) / fotos[0].activos;
   const okTop30 = Math.abs(dTop30) <= TOP30_TOL, okTop100 = Math.abs(dTop100) <= TOP100_TOL, okPool = Math.abs(dPool) <= POOL_TOL;
-  const favCriterio = t => t === '10' || t === '20';
-  const okFav = Object.entries(favPool).filter(([t]) => favCriterio(t)).every(([, v]) => v >= FAV_MIN && v <= FAV_MAX);
+  const favCriterio = t => t !== '0';   // T0 es solo la referencia
+  const favProm = (favPool[5] + favPool[10] + favPool[15]) / 3;
+  const okFavProm = favProm >= FAV_MIN && favProm <= FAV_MAX;
+  const okFav = okFavProm && Object.entries(favPool).filter(([t]) => favCriterio(t)).every(([, v]) => v >= FAV_PUNTO_MIN && v <= FAV_PUNTO_MAX);
   const okProg = desajustes === 0 && okTop30 && okTop100 && okPool && okFav;
   const signo = x => (x >= 0 ? '+' : '−') + f1b(Math.abs(x));
   console.log(`${desajustes === 0 ? 'OK  ' : 'FAIL'} nivel = media de atributos en todos los freestylers (novatos incluidos) en cada temporada (desajustes ${desajustes})`);
   console.log(`${okTop30 ? 'OK  ' : 'FAIL'} el top 30 queda a ${signo(dTop30)} puntos del inicio tras ${PROGRESION} temporadas (tolerancia ±${TOP30_TOL})`);
   console.log(`${okTop100 ? 'OK  ' : 'FAIL'} el top 100 queda a ${signo(dTop100)} puntos del inicio (tolerancia ±${TOP100_TOL})`);
   console.log(`${okPool ? 'OK  ' : 'FAIL'} el pool de activos pasa de ${fotos[0].activos} a ${fotos[PROGRESION].activos} (${signo(dPool)} %, tolerancia ±${POOL_TOL} %) · ${retTotal} retiros y ${novTotal} novatos en total, máximo ${retMax} retiros en una temporada${novTope ? ', el tope de ' + NOVATO_MAX + ' novatos se alcanzó en ' + novTope + ' temporadas' : ''}`);
-  Object.entries(favPool).forEach(([t, v]) => console.log(`${!favCriterio(t) ? 'INFO' : (v >= FAV_MIN && v <= FAV_MAX ? 'OK  ' : 'FAIL')} favorito en liga con el pool de la temporada ${t}: ${f1b(v)} % (entre ${FAV_MIN} y ${FAV_MAX} %${favCriterio(t) ? '' : '; informativo'})`));
+  Object.entries(favPool).forEach(([t, v]) => console.log(`${!favCriterio(t) ? 'INFO' : (v >= FAV_PUNTO_MIN && v <= FAV_PUNTO_MAX ? 'OK  ' : 'FAIL')} favorito en liga con el pool de la temporada ${t}: ${f1b(v)} % (${favCriterio(t) ? 'entre ' + FAV_PUNTO_MIN + ' y ' + FAV_PUNTO_MAX + ' %' : 'referencia'})`));
+  console.log(`${okFavProm ? 'OK  ' : 'FAIL'} promedio del favorito en T5, T10 y T15: ${f1b(favProm)} % (entre ${FAV_MIN} y ${FAV_MAX} %)`);
 
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
