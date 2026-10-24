@@ -1452,12 +1452,43 @@ function renderCarrera(){
         <div class="style-box">${styleTag(f)}<span>${esc(STYLES[styleOf(f)].txt)}</span></div></div>
     </div></div>
     ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
+    ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
       <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Pantalla provisional: el patrocinador y el resumen personal llegan en las fases siguientes.'}</p>
       ${boton}
     </div>
   </div>`;
+}
+// Próximo compromiso del jugador a partir de los datos de la temporada: jornada de su liga (con rival), cuadros de Red Bull e Internacional donde está,
+// Under y Monster Fu en los que está inscrito. Devuelve {day, nombre, key, rival} o null.
+function proximoCompromiso(s, fid){
+  if(s.phase!=='live') return null; const out=[]; const hoy=s.day;
+  const lk=signedLeagueOf(s, fid);
+  if(lk){ const L=s.leagues[lk]; if(!L.finished){ const j=L.played; const d=L.dates[j]; if(d!=null && d>=hoy){ const m=(L.rounds[j]||[]).find(x=>x.a===fid||x.b===fid); out.push({day:d, nombre:`${ldef(lk).name} · J${j+1}`, key:lk, rival: m ? (m.a===fid?m.b:m.a) : null, sinRival: m ? null : 'descansas esta jornada'}); } } }
+  if(s.intlEnabled && s.intl.date!=null && !s.intl.played && s.intl.date>=hoy){ const q = s.intl.order ? s.intl.qualifiers : (natKeys(s).every(k=>s.leagues[k].finished) ? intlQualifiers(s).ids : []); if((q||[]).includes(fid)) out.push({day:s.intl.date, nombre:INTL.name, key:INTL.key, rival:rivalDeCuadro(s.intl.order, fid)}); }
+  if(rbOn(s)) rbEventsList(s).forEach(e=>{ if(e.day<hoy) return; const ev=rbEvent(s, e.key); if(!ev || ev.played) return;
+    const ids = e.key===RB_INT.key ? (ev.voted ? ev.qualifiers : [...(s.rb.interPodium||[]), ...rbCandidatosSeguros(s)]) : (ev.participants||[]);
+    if(ids.includes(fid)) out.push({day:e.day, nombre:rbdef(e.key).name, key:e.key, rival:rivalDeCuadro(ev.order, fid)}); });
+  (s.under||[]).forEach(u=>{ if(u.played || u.day<hoy) return; const ins=inscritosEn(s, u.key); const mio = (u.participants||[]).includes(fid) || (u.key===MFU.key ? ins.some((f,i)=>f.id===fid && 1+(i%3)===u.n) : ins.some(f=>f.id===fid));
+    if(mio) out.push({day:u.day, nombre:udef(u.key).name+(u.key===MFU.key?' #'+u.n:''), key:u.key, rival:rivalDeCuadro(u.order, fid)}); });
+  out.sort((a,b)=>a.day-b.day); return out[0]||null;
+}
+function rivalDeCuadro(order, fid){ if(!order) return null; const i=order.indexOf(fid); if(i<0) return null; return order[i%2===0 ? i+1 : i-1] || null; }
+// Todas las batallas del jugador en la partida: temporadas completas con batallasDe y ligeras con lo que guardó la fase G
+function batallasDelJugador(fid){ const out=[]; state.seasons.forEach(s=>{ if(s.phase==='pre') return; if(s.ligera){ if(s.jugador && s.jugador.fid===fid) out.push(...s.jugador.batallas.map(b=>Object.assign({year:s.year}, b))); } else out.push(...batallasDe(s, fid).map(b=>Object.assign({year:s.year}, b))); }); return out; }
+// Rivales con el récord contra cada uno, ordenados por batallas
+function rivalesDelJugador(fid){ const por={}; batallasDelJugador(fid).forEach(b=>{ const r=b.a===fid?b.b:b.a; const o=por[r]=por[r]||{id:r, v:0, d:0, ultimo:null}; if(b.w===fid) o.v++; else o.d++; o.ultimo={year:b.year, gane:b.w===fid, comp:b.comp}; });
+  return Object.values(por).sort((a,b)=>(b.v+b.d)-(a.v+a.d) || b.v-a.v); }
+// Bloques de «Mi carrera» en directo: próximo compromiso y rivales
+function carreraEnDirecto(s, f){
+  const fid=f.id; const px=proximoCompromiso(s, fid);
+  const rivalTxt = !px ? '' : (px.rival ? `${miniAvatar(px.rival,22)} ${fnameH(px.rival)}` : (px.sinRival ? esc(px.sinRival) : 'rival por sortear'));
+  const prox = px ? `<p class="step-note" style="margin:0"><b>${fmtDay(s.year, px.day)}</b> · ${esc(px.nombre)} · ${rivalTxt}</p>` : `<p class="step-note" style="margin:0">No te queda ningún compromiso este año${s.day<daysInYear(s.year)?': nada en el calendario donde estés inscrito':''}.</p>`;
+  const riv=rivalesDelJugador(fid).slice(0, 8); const rec=batallasDelJugador(fid); const v=rec.filter(b=>b.w===fid).length;
+  const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : ''}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v}-${r.d}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Próximo compromiso</span>${prox}</div>
+    <div class="step" style="margin-top:16px;"><span class="field-label">Rivales · récord total ${v}-${rec.length-v}</span>${filas}</div>`;
 }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
