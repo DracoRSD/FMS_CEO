@@ -208,7 +208,7 @@ Antes solo las ligas y Red Bull (+5/+2/+1 al podio nacional, Plazas incluido, y 
 | Liga FMS | oferta relativa al país (5.5) | plaza en la plantilla si acepta |
 | FMS Internacional | clasificación de liga | automático |
 
-La inscripción garantiza la plaza (decidido): el jugador no pasa por `underPick` ni por `probPick`, ocupa un cupo fijo y el sorteo reparte los 15 restantes. Un jugador libre (sin liga) puede inscribirse en todo lo demás a la vez; con liga, solo en Red Bull nacional y Plazas, como hacen los reales.
+La inscripción garantiza la plaza (decidido): el jugador no pasa por `underPick` ni por `probPick`, ocupa un cupo fijo y el sorteo reparte los 15 restantes. Un jugador libre (sin liga) puede inscribirse en todo lo demás a la vez; con liga, solo en Red Bull nacional y Plazas, como hacen los reales. Plazas es para quien no juega su nacional: inscrito en la nacional, Plazas deja de estar disponible. Y al revés también: los jugadores **no entran en ningún sorteo al azar**, así que si no se inscriben no juegan (Red Bull Internacional sigue siendo automática). En Monster Fu cada inscrito juega una de las tres fechas. Las decisiones viven en el freestyler (`f.plan`: `liga`, `entreno`, `inscrito`, `ofertas`, `racha`) para que el simulador pueda llevar varios jugadores en un mismo mundo; `torneosDelJugador` da la lista con la aptitud y el motivo.
 
 ### 5.5 Regla de oferta de liga, relativa al país
 
@@ -253,7 +253,7 @@ Pantalla final con:
 
 ## 8. Fases, commits y criterios medibles
 
-Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits pequeños. Las cifras se miden con `--carrera 50`: 50 carreras pasivas (sin elegir entrenamiento, se inscriben en todo lo que pueden, aceptan la primera oferta de liga) y 50 activas (entrenan el atributo más bajo, igual inscripción), semillas 1, 2, 3 y 7.
+Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits pequeños. Las cifras de carrera se miden con `--carreras 10`: diez mundos de carrera (semillas 1 a 10) de 20 temporadas, cada uno con **un jugador pasivo y uno activo por país de liga** (14 jugadores, todos con 60 en cada atributo). El pasivo no entrena, el activo entrena su atributo más bajo; los dos se inscriben en todo lo que pueden y aceptan la primera oferta de liga. Cada país y perfil da así 10 muestras por ejecución.
 
 ### Fase C1 · El mundo corre solo
 
@@ -267,8 +267,8 @@ Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits p
 
 ### Fase C3 · Escalera, inscripciones y entrenamiento
 
-- Commits: fama por torneos (todos los modos); plaza fija del jugador en Under, Monster Fu, Red Bull y Plazas; ofertas de liga en pretemporada; entrenamiento en `endSeason`; medición en `--carrera`.
-- Criterios, medidos **por país** con las 7 ligas por separado (España, Argentina, México, Chile, Perú, Colombia y Caribe), 50 carreras por país y semilla: el jugador pasivo recibe su primera oferta de liga entre la temporada 4 y la 8 en al menos el 80 % de las carreras de cada país, y nunca antes de la 3 en ninguno; el activo entre la 3 y la 6 en al menos el 80 % de cada país; la diferencia entre la mediana del país más duro (España) y el más blando no supera las 3 temporadas, y si la supera se ajusta la apuesta de la liga (`11 ≤ p ≤ 14`, 50 %) antes que el entrenamiento; mediana de nivel del activo a los 10 años entre 84 y 90 en todos los países; el favorito en liga ≤ 70 % y el relevo en verde con la fama por torneos. El simulador imprime una fila por país: mediana y percentiles 10 y 90 de la temporada de la primera oferta, pasivo y activo.
+- Commits: C3a, fama por torneos en todos los modos (hecha, con la deflación de fama); C3b, plan del jugador y ofertas de liga por país, plaza fija en Under, Monster Fu, Red Bull y Plazas, entrenamiento en la progresión, pantalla provisional con liga, entrenamiento y torneos, y medición con `--carreras`.
+- Criterios, medidos **por país** con las 7 ligas por separado (España, Argentina, México, Chile, Perú, Colombia y Caribe, con un dominicano) sobre las 10 muestras por país y perfil: el pasivo recibe su primera oferta de liga entre la temporada 4 y la 8 en al menos 8 de 10, nunca antes de la 3, y su mediana queda dentro de ese rango; el activo entre la 3 y la 6 con las mismas condiciones; la mediana de España y la del país más blando no se separan más de 3 temporadas, y si se separan se ajusta la apuesta de la liga (`11 ≤ p ≤ 14`, 50 %) antes que el entrenamiento; la mediana de nivel del activo a los 10 años entre 84 y 90 en todos los países; el favorito en liga ≤ 70 %, el relevo y la fama en verde. El simulador imprime una fila por país: mediana, percentiles 10 y 90 y cuántas de las 10 quedan dentro, para el pasivo y el activo, más el nivel del activo a los 10 años y las temporadas en liga.
 
 ### Fase C4 · Interfaz de temporada
 

@@ -24,6 +24,13 @@ const REF_KO = { favorito: 71.6, sembrado: 40.6 }, REF_UNDER = { favorito: 71.1,
 const CUADROS = parseInt(arg('cuadros', '4000'), 10);
 const PROGRESION = parseInt(arg('progresion', '20'), 10);   // temporadas de evolución del pool (informe de progresión y relevo)
 const CARRERA = parseInt(arg('carrera', '20'), 10);         // temporadas que el mundo corre solo en modo carrera (0 = no se prueba)
+// Carreras del jugador (fase C3b): CARRERAS mundos de carrera con las semillas 1..CARRERAS, cada uno con un jugador pasivo (sin entrenar) y uno activo
+// (entrena su atributo más bajo) por país de liga, todos inscritos en todo lo permitido y aceptando la primera oferta. Criterios sobre las CARRERAS muestras
+// por país y perfil: al menos CARRERA_OK_MIN de CARRERAS dentro del rango (pasivo T4-T8, activo T3-T6), nunca antes de T3, mediana dentro del rango,
+// España y el país más blando a 3 temporadas o menos, y nivel del activo a los 10 años con mediana entre 84 y 90.
+const CARRERAS = parseInt(arg('carreras', '10'), 10);
+const CARRERA_OK_MIN = Math.ceil(0.8 * CARRERAS), OFERTA_PASIVO = [4, 8], OFERTA_ACTIVO = [3, 6], OFERTA_NUNCA_ANTES = 3, BRECHA_PAISES_MAX = 3, NIVEL_ACTIVO_T10 = [84, 90];
+const PAISES_CARRERA = [['España', 'fms_espana'], ['Argentina', 'fms_argentina'], ['México', 'fms_mexico'], ['Chile', 'fms_chile'], ['Perú', 'fms_peru'], ['Colombia', 'fms_colombia'], ['República Dominicana', 'fms_caribe']];
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
@@ -342,8 +349,62 @@ w.addEventListener('load', () => setTimeout(() => {
   const okModos = !modos.excepcion && modos.migra && modos.crea && modos.ano && modos.exporta && modos.dosClaves && modos.abreCarrera && modos.abreCeo;
   console.log(`\n${okModos ? 'OK  ' : 'FAIL'} modos y guardado: CEO dbv 7 → 9 sin cambios (${!!modos.migra}), carrera creada con nivel = media, fama 20, experiencia 0 y potencial 92 (${!!modos.crea}), un año con el botón y nivel = media (${!!modos.ano}), exportar e importar idéntico (${!!modos.exporta}), dos claves a la vez (${!!modos.dosClaves}) y las dos abren (${!!(modos.abreCarrera && modos.abreCeo)})${modos.excepcion ? ' · excepción: ' + modos.excepcion : ''}`);
 
+  // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
+  const carreras = { porPais: {}, excepciones: [], anos: 0 };
+  PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [] }; });
+  for (let semilla = 1; semilla <= CARRERAS; semilla++) {
+    w.Math.random = mulberry32(semilla);
+    const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
+    w.eval('var _aligerarReal2 = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
+    try {
+      const attrs = Object.fromEntries(g('ATTR_KEYS').map(k => [k, 60]));
+      g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Pasivo ' + PAISES_CARRERA[0][0], country: PAISES_CARRERA[0][0], style: 'Flow', attrs }); g('nuevaCarrera')();
+      const jugs = [{ fid: S.company.carrera.fid, pais: PAISES_CARRERA[0][0], perfil: 'pasivo', primera: null, enLiga: 0, nivel10: null }];
+      PAISES_CARRERA.forEach(([c], i) => { ['pasivo', 'activo'].forEach(perfil => { if (i === 0 && perfil === 'pasivo') return; const f = g('crearJugadorCarrera')({ name: perfil + ' ' + c, country: c, style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: c, perfil, primera: null, enLiga: 0, nivel10: null }); }); });
+      for (let t = 1; t <= CARRERA; t++) {
+        const s = g('cur')(); g('asegurarOfertas')(s);
+        jugs.forEach(j => { const f = g('fby')(j.fid); const p = g('planDe')(f); if (j.perfil === 'pasivo') p.entreno = null; if (p.ofertas.length && j.primera == null) j.primera = t; });
+        g('autoPretemporada')(s); g('autoFicharLigas')(s); const iss = g('preseasonIssues')(s); if (iss.length) { carreras.excepciones.push(`semilla ${semilla} T${t}: ${iss[0]}`); break; }
+        g('startSeason')();
+        jugs.forEach(j => { if (g('signedLeagueOf')(s, j.fid)) j.enLiga++; });
+        for (let v = 0; v < 3 && s.phase === 'live'; v++) g('advance')('year');
+        if (s.phase !== 'done') { carreras.excepciones.push(`semilla ${semilla} T${t}: pausa en el día ${s.day}`); break; }
+        carreras.anos++;
+        if (t === 10) jugs.forEach(j => { j.nivel10 = g('fby')(j.fid).nivel; });
+        g('closeModal')(); g('nextSeason')(); g('closeModal')();
+      }
+      jugs.forEach(j => { const pp = carreras.porPais[j.pais]; pp[j.perfil].push(j.primera == null ? Infinity : j.primera); if (j.perfil === 'activo') { pp.nivel10.push(j.nivel10); pp.ligaActivo.push(j.enLiga); } else pp.ligaPasivo.push(j.enLiga); });
+    } catch (e) { carreras.excepciones.push(`semilla ${semilla}: ` + String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
+    w.eval('aligerarAntiguas = _aligerarReal2;'); mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
+  }
+  let okCarreras = carreras.excepciones.length === 0;
+  if (CARRERAS > 0) {
+    const mediana = a => { const b = a.slice().sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+    const pct = (a, q) => { const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
+    const fmtT = v => v === Infinity ? 'nunca' : ('T' + (Number.isInteger(v) ? v : v.toFixed(1)));
+    console.log(`\nCarreras del jugador: ${CARRERAS} mundos (semillas 1 a ${CARRERAS}) de ${CARRERA} temporadas con un pasivo y un activo por país (${carreras.anos} temporadas jugadas)`);
+    console.log('     País                  Pasivo: 1.ª oferta mediana · p10-p90 · dentro T4-T8     Activo: 1.ª oferta mediana · p10-p90 · dentro T3-T6     Nivel activo T10   Temporadas en liga pasivo / activo');
+    const medP = {}, medA = {};
+    PAISES_CARRERA.forEach(([c]) => { const pp = carreras.porPais[c]; if (!pp.pasivo.length) return;
+      const dentro = (a, r) => a.filter(v => v >= r[0] && v <= r[1]).length; const antes = a => a.filter(v => v < OFERTA_NUNCA_ANTES).length;
+      medP[c] = mediana(pp.pasivo); medA[c] = mediana(pp.activo); const n10 = mediana(pp.nivel10.filter(v => v != null));
+      const okP = dentro(pp.pasivo, OFERTA_PASIVO) >= CARRERA_OK_MIN && antes(pp.pasivo) === 0 && medP[c] >= OFERTA_PASIVO[0] && medP[c] <= OFERTA_PASIVO[1];
+      const okA = dentro(pp.activo, OFERTA_ACTIVO) >= CARRERA_OK_MIN && antes(pp.activo) === 0 && medA[c] >= OFERTA_ACTIVO[0] && medA[c] <= OFERTA_ACTIVO[1];
+      const okN = n10 >= NIVEL_ACTIVO_T10[0] && n10 <= NIVEL_ACTIVO_T10[1];
+      okCarreras = okCarreras && okP && okA && okN;
+      const col = (a, r) => `${fmtT(mediana(a)).padEnd(6)} ${(fmtT(pct(a, 0.1)) + '-' + fmtT(pct(a, 0.9))).padEnd(13)} ${dentro(a, r)}/${a.length}${antes(a) ? ' (' + antes(a) + ' antes de T3)' : ''}`;
+      console.log(`${okP && okA && okN ? 'OK  ' : 'FAIL'} ${c.padEnd(21)} ${col(pp.pasivo, OFERTA_PASIVO).padEnd(56)} ${col(pp.activo, OFERTA_ACTIVO).padEnd(56)} ${String(n10).padEnd(18)} ${mediana(pp.ligaPasivo)} / ${mediana(pp.ligaActivo)}`);
+    });
+    const finitos = o => Object.values(o).filter(v => v !== Infinity);
+    const brecha = m => !finitos(m).length ? 0 : (m['España'] === Infinity ? Infinity : m['España'] - Math.min(...finitos(m)));
+    const brechaP = brecha(medP), brechaA = brecha(medA);
+    const okBrecha = brechaP <= BRECHA_PAISES_MAX && brechaA <= BRECHA_PAISES_MAX; okCarreras = okCarreras && okBrecha;
+    const inf = v => v === Infinity ? 'infinitas' : v;
+    console.log(`${okBrecha ? 'OK  ' : 'FAIL'} España y el país más blando se separan ${inf(brechaP)} temporadas en el pasivo y ${inf(brechaA)} en el activo (máximo ${BRECHA_PAISES_MAX}). Criterios: ${CARRERA_OK_MIN} de ${CARRERAS} dentro del rango, nunca antes de T${OFERTA_NUNCA_ANTES}, mediana dentro, nivel del activo a los 10 años entre ${NIVEL_ACTIVO_T10[0]} y ${NIVEL_ACTIVO_T10[1]}`);
+    if (carreras.excepciones.length) console.log(`FAIL carreras con error: ${carreras.excepciones.join('; ')}`);
+  }
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras ? 0 : 1);
 }, 800));
