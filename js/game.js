@@ -659,14 +659,14 @@ function toggleSign(key, id){
 }
 function preselectRoster(s, key){
   const L=s.leagues[key]; if(!L || L.competitors.length) return 0; let n=0;
-  (L.prevRoster||[]).filter(id=> fby(id) && !L.blocked.includes(id) && !isSpeakerId(s,id) && (isWS(key) || !signedLeagueOf(s,id))).forEach(id=>{
+  (L.prevRoster||[]).filter(id=> fbyActivo(id) && !L.blocked.includes(id) && !isSpeakerId(s,id) && (isWS(key) || !signedLeagueOf(s,id))).forEach(id=>{
     if(L.competitors.length>=10) return; const sal=contractCost(fby(id),key); if(state.company.money<sal) return;
     L.competitors.push(id); L.contracts[id]=sal; state.company.money-=sal; s.fin.salaries+=sal; n++; });
   return n;
 }
 function keepRoster(key){
   const s=cur(); const L=s.leagues[key];
-  const ids=L.prevRoster.filter(id=> fby(id) && !L.blocked.includes(id) && !isSpeakerId(s,id) && !L.competitors.includes(id) && (isWS(key) || !signedLeagueOf(s,id)));
+  const ids=L.prevRoster.filter(id=> fbyActivo(id) && !L.blocked.includes(id) && !isSpeakerId(s,id) && !L.competitors.includes(id) && (isWS(key) || !signedLeagueOf(s,id)));
   let added=0, skipped=0;
   ids.forEach(id=>{
     if(L.competitors.length>=10) return;
@@ -931,7 +931,7 @@ function intlQualifiers(s){
     return {ids:out, note:`Top 3 de cada liga + comodín: ${fname(wc)} (mejor cuarto).`, wildcards:[wc]};
   }
   // 6 ligas: top 2 (12) + cupo de campeón + 3 comodines entre terceros
-  const D=s.defendingChampion; const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
+  const D=fbyActivo(s.defendingChampion) ? s.defendingChampion : null;   // un campeón vigente retirado no se clasifica const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
   let dKey=null, dPos=null;
   if(D) keys.forEach(k=>{ const i=st(k).indexOf(D); if(i>=0 && dKey==null){ dKey=k; dPos=i; } });
   let extra=null, exclude=null, note='';
@@ -1598,7 +1598,7 @@ function renderLeague(key){
 function renderSigning(s,key){
   const L=s.leagues[key]; const def=ldef(key);
   const fk='sf_'+key; const filter=state.ui[fk]||''; const allC=state.ui['sall_'+key]; const sort=state.ui['ssort_'+key]||'fama';
-  let pool=state.freestylers.filter(f=> allC || !def.countries || def.countries.includes(f.country) || L.competitors.includes(f.id));
+  let pool=activos().filter(f=> allC || !def.countries || def.countries.includes(f.country) || L.competitors.includes(f.id));
   if(filter) pool=pool.filter(f=> fMatch(f,filter));
   const sorters={nivel:(a,b)=>b.nivel-a.nivel, fama:(a,b)=>b.fama-a.fama, salario:(a,b)=>contractCost(a,key)-contractCost(b,key), hype:(a,b)=>(b.hype||0)-(a.hype||0)};
   pool.sort(sorters[sort]);
@@ -1920,7 +1920,7 @@ function devAutoSign(){
   const s=cur(); if(s.phase!=='pre') return;
   s.activeKeys.forEach(k=>{
     const L=s.leagues[k]; const def=ldef(k);
-    const pool=state.freestylers.filter(f=>!signedLeagueOf(s,f.id) && !L.blocked.includes(f.id)).sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
+    const pool=activos().filter(f=>!signedLeagueOf(s,f.id) && !L.blocked.includes(f.id)).sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
     for(const f of pool){ if(L.competitors.length>=10) break; if(state.company.money<contractCost(f,k)) continue; toggleSign(k,f.id); }
   });
   render();
@@ -2081,14 +2081,14 @@ function probPick(sorted, n){
 }
 function rbPrevSeason(s){ const i=state.seasons.indexOf(s); return i>0 ? state.seasons[i-1] : null; }
 function rbFirstPodium(){
-  const ids=RB_FIRST_PODIUM.map(n=>state.freestylers.find(f=>f.name.toLowerCase()===n.toLowerCase())).filter(Boolean).map(f=>f.id);
-  state.freestylers.slice().sort((a,b)=>b.fama-a.fama).forEach(f=>{ if(ids.length<3 && !ids.includes(f.id)) ids.push(f.id); });
+  const ids=RB_FIRST_PODIUM.map(n=>activos().find(f=>f.name.toLowerCase()===n.toLowerCase())).filter(Boolean).map(f=>f.id);
+  activos().slice().sort((a,b)=>b.fama-a.fama).forEach(f=>{ if(ids.length<3 && !ids.includes(f.id)) ids.push(f.id); });
   return ids;
 }
 function rbDraw(s){
   if(!rbOn(s) || s.rb.drawn) return;
   const prev=rbPrevSeason(s); const prevRB=rbOn(prev) ? prev.rb : null;
-  s.rb.interPodium = (prevRB && prevRB.inter.played) ? [prevRB.inter.champion, prevRB.inter.runnerUp, prevRB.inter.third].filter(id=>id&&fby(id)) : rbFirstPodium();
+  s.rb.interPodium = (prevRB && prevRB.inter.played) ? [prevRB.inter.champion, prevRB.inter.runnerUp, prevRB.inter.third].filter(id=>id&&fbyActivo(id)) : rbFirstPodium();
   const isJal=id=>(fby(id)||{}).name==='Jaloner';
   s.rb.interPodium=s.rb.interPodium.filter(id=>!isJal(id));
   const used=new Set(s.rb.interPodium);
@@ -2102,12 +2102,12 @@ function rbDraw(s){
   const elig=(def,f)=> shared.includes(def.key) ? shared.some(k=>rbdef(k).countries.includes(f.country)) : def.countries.includes(f.country);
   // primero los podios de todas las nacionales
   const seedsBy={};
-  RB_NATS.forEach(def=>{ const sd=prevPodium(def.key).filter(id=>id && fby(id) && !used.has(id) && elig(def,fby(id))); sd.forEach(id=>used.add(id)); seedsBy[def.key]=sd; });
+  RB_NATS.forEach(def=>{ const sd=prevPodium(def.key).filter(id=>id && fbyActivo(id) && !used.has(id) && elig(def,fby(id))); sd.forEach(id=>used.add(id)); seedsBy[def.key]=sd; });
   // Torneo de Plazas (se sortea antes que las nacionales): un competidor por país, sin estrellas (como mucho 2 de +83 de fama).
   // El podio anterior entra directo y no cuenta para la regla de un país por edición.
   { const pev=rbEvent(s,RB_PLZ.key);
-    const seeds=prevPodium(RB_PLZ.key).filter(id=>id && fby(id) && !used.has(id)); seeds.forEach(id=>used.add(id));
-    const byCountry={}; state.freestylers.filter(f=>!used.has(f.id)).forEach(f=>{ (byCountry[f.country]=byCountry[f.country]||[]).push(f); });
+    const seeds=prevPodium(RB_PLZ.key).filter(id=>id && fbyActivo(id) && !used.has(id)); seeds.forEach(id=>used.add(id));
+    const byCountry={}; activos().filter(f=>!used.has(f.id)).forEach(f=>{ (byCountry[f.country]=byCountry[f.country]||[]).push(f); });
     const need=16-seeds.length; const countries=shuffle(Object.keys(byCountry)); let starsLeft=Math.floor(Math.random()*3); const picked=[];
     for(const c of countries){ if(picked.length>=need) break;
       const list=byCountry[c].slice().sort((a,b)=>quality(b)-quality(a));
@@ -2117,7 +2117,7 @@ function rbDraw(s){
       else if(low.length){ const top=low.slice(0, Math.max(3, Math.ceil(low.length*0.5))); f=top[Math.floor(Math.random()*top.length)]; }
       if(f){ picked.push(f.id); used.add(f.id); } }
     // si no hay países suficientes, se completa (sin estrellas) repitiendo país lo mínimo posible
-    if(picked.length<need){ const extra=state.freestylers.filter(f=>!used.has(f.id) && f.fama<=83).sort((a,b)=>quality(b)-quality(a));
+    if(picked.length<need){ const extra=activos().filter(f=>!used.has(f.id) && f.fama<=83).sort((a,b)=>quality(b)-quality(a));
       const cnt={}; picked.forEach(id=>{ const c=fby(id).country; cnt[c]=(cnt[c]||0)+1; });
       extra.sort((a,b)=>(cnt[a.country]||0)-(cnt[b.country]||0)); for(const f of extra){ if(picked.length>=need) break; picked.push(f.id); used.add(f.id); cnt[f.country]=(cnt[f.country]||0)+1; } }
     pev.seeds=seeds; pev.participants=[...seeds, ...picked]; }
@@ -2126,7 +2126,7 @@ function rbDraw(s){
   // las dos compartidas eligen alternándose, para que ninguna se quede con todos los buenos
   order.forEach(def=>{
     const ev=rbEvent(s,def.key); const seeds=seedsBy[def.key];
-    const pool=state.freestylers.filter(f=>elig(def,f) && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a));
+    const pool=activos().filter(f=>elig(def,f) && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a));
     const picked=probPick(pool, 16-seeds.length); picked.forEach(id=>used.add(id));
     ev.seeds=seeds; ev.participants=[...seeds, ...picked];
   });
@@ -2136,7 +2136,7 @@ function rbDraw(s){
     let progress=false;
     for(const def of sh){
       const ev=rbEvent(s,def.key); if(ev.participants.length>=16) continue;
-      const pool=state.freestylers.filter(f=>elig(def,f) && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a));
+      const pool=activos().filter(f=>elig(def,f) && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a));
       const pk=probPick(pool,1); if(pk.length){ ev.participants.push(pk[0]); used.add(pk[0]); progress=true; }
     }
     if(!progress) break;
@@ -2146,7 +2146,7 @@ function rbDraw(s){
     if(ev.participants.length>=16) return;
     const near=['México','Venezuela','Colombia','Cuba','Puerto Rico','República Dominicana','Panamá','Costa Rica'];
     const pref=f=> (ev.key==='rb_usa'||ev.key==='rb_cen') && near.includes(f.country) ? 1 : 0;
-    const extra=state.freestylers.filter(f=>!used.has(f.id)).sort((a,b)=>pref(b)-pref(a) || quality(b)-quality(a));
+    const extra=activos().filter(f=>!used.has(f.id)).sort((a,b)=>pref(b)-pref(a) || quality(b)-quality(a));
     while(ev.participants.length<16 && extra.length){ const f=extra.shift(); ev.participants.push(f.id); used.add(f.id); }
   });
   s.rb.drawn=true;
@@ -3066,10 +3066,10 @@ function underPick(list, n){ const sorted=list.slice().sort((a,b)=>quality(b)-qu
 function runUnder(s, ev, d){
   const def=udef(ev.key);
   if(ev.key===MFU.key){
-    const es=state.freestylers.filter(f=>f.country==='España' && (f.fama<=83 || ['Sweet Pain','Zasko','Swit Eme'].includes(f.name) || UNDER_EXC.includes(f.name)) && f.name!=='Khan');
-    const intl=state.freestylers.filter(f=>f.country!=='España' && f.fama<=83);
+    const es=activos().filter(f=>f.country==='España' && (f.fama<=83 || ['Sweet Pain','Zasko','Swit Eme'].includes(f.name) || UNDER_EXC.includes(f.name)) && f.name!=='Khan');
+    const intl=activos().filter(f=>f.country!=='España' && f.fama<=83);
     const ni=rint(0,2); const ids=[...underPick(es, 10-ni), ...underPick(intl, ni)];
-    const must=['Zasko','Sweet Pain'].map(n=>state.freestylers.find(f=>f.name===n)).filter(Boolean);
+    const must=['Zasko','Sweet Pain'].map(n=>activos().find(f=>f.name===n)).filter(Boolean);
     if(must.length && !must.some(f=>ids.includes(f.id))){ const pickM=shuffle(must); const want=Math.random()<0.4 ? pickM : [pickM[0]];
       want.forEach(f=>{ const i=ids.findIndex(id=>!must.some(x=>x.id===id) && fby(id).country==='España'); if(i>=0) ids[i]=f.id; else ids.push(f.id); }); }
     const ord=shuffle(ids); ev.battles=[]; const mfuJudges=tourneyJudges(['España']); ev.judges=mfuJudges;
@@ -3083,11 +3083,11 @@ function runUnder(s, ev, d){
   addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype).`, 'rb');
 }
 function underDraw(ev){ const def=udef(ev.key); let ids;
-  if(def.perCountry){ const by={}; state.freestylers.filter(f=>underEligible(f,def)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
+  if(def.perCountry){ const by={}; activos().filter(f=>underEligible(f,def)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
     ids=shuffle(Object.keys(by)).slice(0,16).map(c=>underPick(by[c],1)[0]);
-    if(ids.length<16){ const rest=state.freestylers.filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
-  else ids=underPick(state.freestylers.filter(f=>def.countries.includes(f.country) && underEligible(f,def)), 16);
-  if(ids.length<16){ ids.push(...underPick(state.freestylers.filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), 16-ids.length)); }
+    if(ids.length<16){ const rest=activos().filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
+  else ids=underPick(activos().filter(f=>def.countries.includes(f.country) && underEligible(f,def)), 16);
+  if(ids.length<16){ ids.push(...underPick(activos().filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), 16-ids.length)); }
   ev.participants=ids; return ids;
 }
 function openMFU(day){
@@ -3174,7 +3174,7 @@ function wsPairingEditor(s, key){
       <div class="ex-row">${e.c?`${miniAvatar(e.c,24)} ${fnameH(e.c)}`:'<span class="step-note">Competidor…</span>'} <span class="vs">vs</span> ${e.x?`${fnameH(e.x)} ${miniAvatar(e.x,24)}<small class="step-note">${moneyK(wsEpFee(fby(e.x)))}</small>`:'<span class="step-note">Extraplayer…</span>'}</div>
       ${(e.c||e.x)?`<button class="btn small ghost" onclick="event.stopPropagation(); wsClearEp('${key}',${i})">Quitar</button>`:''}</div>`;
   let grid='';
-  if(d.slot!=null){ const q=state.ui.wsQ||''; const el=state.freestylers.filter(f=>!L.competitors.includes(f.id) && fMatch(f,q)).sort((a,b)=>b.fama-a.fama).slice(0,40);
+  if(d.slot!=null){ const q=state.ui.wsQ||''; const el=activos().filter(f=>!L.competitors.includes(f.id) && fMatch(f,q)).sort((a,b)=>b.fama-a.fama).slice(0,40);
     grid=`<p class="step-note" style="margin:8px 0">Toca arriba al competidor que se enfrentará al extraplayer ${d.slot+1} (cada uno solo una vez en la temporada) y elige aquí al extraplayer. Se puede repetir extraplayer.</p>
       <input id="wsQ" class="ex-q" placeholder="Buscar extraplayer por nombre o país" value="${esc(q)}" oninput="state.ui.wsQ=this.value; render()">
       <div class="pick-grid ex-grid">${el.map(f=>`<div class="pick-item ${d.eps[d.slot].x===f.id?'checked':''}" onclick="wsPickX('${key}','${f.id}')">
@@ -3222,7 +3222,7 @@ function wsClear(key){ const d=wsDraft(key); d.pairs=[]; d.eps=[{c:null,x:null},
 function wsAuto(key, silent){ const s=cur(); const L=s.leagues[key]; const d=wsDraft(key); const st=wsState(L);
   const sol=wsSolve(L.competitors, st.used, st.ep, d.pairs, d.eps.map(x=>x.c).filter(Boolean), WS_JORNADAS-L.played);
   if(!sol){ toast('No hay forma de completar con esos cruces. Deshaz alguno.'); return false; }
-  d.pairs=sol[0].pairs; const cs=sol[0].eps.slice(); const pool=state.freestylers.filter(f=>!L.competitors.includes(f.id)).sort((a,b)=>b.fama-a.fama).slice(0,30);
+  d.pairs=sol[0].pairs; const cs=sol[0].eps.slice(); const pool=activos().filter(f=>!L.competitors.includes(f.id)).sort((a,b)=>b.fama-a.fama).slice(0,30);
   d.eps.forEach(e=>{ if(!e.c){ e.c=cs.find(c=>!d.eps.some(x=>x.c===c)); } if(!e.x){ const f=pool[Math.floor(Math.random()*pool.length)]; e.x=f&&f.id; } });
   if(!d.sede) d.sede=SEDES[Math.floor(Math.random()*SEDES.length)];
   d.sel=null; if(!silent) render(); return true; }
@@ -3285,7 +3285,7 @@ function uqReplace(s, key, oldId, newId){
   return true;
 }
 function uqCandidates(s, key){ const L=s.leagues[key]; const bad=new Set([...(s.refused||[]), ...L.blocked]);
-  return state.freestylers.filter(f=>(isWS(key) ? !L.competitors.includes(f.id) : !signedLeagueOf(s,f.id)) && !bad.has(f.id)).sort((a,b)=>b.fama-a.fama); }
+  return activos().filter(f=>(isWS(key) ? !L.competitors.includes(f.id) : !signedLeagueOf(s,f.id)) && !bad.has(f.id)).sort((a,b)=>b.fama-a.fama); }
 function uqAutoReplace(s, key){ const L=s.leagues[key]; (L.pendingRep||[]).slice().forEach(old=>{ const c=uqCandidates(s,key).filter(f=>f.country===fby(old).country)[0] || uqCandidates(s,key)[0]; if(c) uqReplace(s,key,old,c.id); }); }
 function uqApply(s, ev){
   const L=s.leagues[ev.key];
@@ -3492,7 +3492,7 @@ function exViewMult(m){ return ((fby(m.a).fama<80 || fby(m.b).fama<80) ? 0.5 : 0
 const EXH_UNKNOWN=60, EXH_FAMOUS=80;   // fama por debajo = desconocido · fama desde = con bastante fama
 function exhibCost(f, key){ const y=cur()&&cur().year; const disc=(f.exOffer===y && UQ_REFUSE[f.name]) ? (UQ_REFUSE[f.name].exDisc||0) : 0; return Math.max(100, Math.round(contractCost(f,key)*0.025*(1-disc)*(1-fxVal(key,'exfee'))/100)*100); }
 function exhibBusy(s){ const set=new Set(); s.activeKeys.forEach(k=>{ const L=s.leagues[k]; Object.entries(L.exhib||{}).forEach(([j,x])=>{ if(+j>=L.played){ set.add(x.a); set.add(x.b); } }); }); return set; }
-function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&s.leagues[key]?s.leagues[key].competitors:[]); return state.freestylers.filter(f=>!own.has(f.id) && !busy.has(f.id)); }
+function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&s.leagues[key]?s.leagues[key].competitors:[]); return activos().filter(f=>!own.has(f.id) && !busy.has(f.id)); }
 function renderExhib(s, L, key, j){
   const ex=L.exhib && L.exhib[j];
   if(ex && ex.m && ex.m.result){ const m=ex.m, r=m.result, p=ptbOf(m);
@@ -4362,7 +4362,7 @@ function luGenerate(s, k){
     if(!fv.length && !ht.length){ if(!local && Math.random()<(neutral?0.07:0.05)) otras.push(a); return; }
     fv.forEach(id=>{ if(back.has(id)) opts.push({cat:'ret', id, sent:2, w:5}); else opts.push({cat: local||neutral ? 'fav' : 'favF', id, sent:1, w:1}); });
     ht.forEach(id=>{ const f=fby(id);
-      if(local && lc && !lc.includes(f.country)){ const alt=(a.fav||[]).filter(n=>!inLU[nrm(n)] && state.freestylers.some(x=>nrm(x.name)===nrm(n))); if(alt.length){ opts.push({cat:'swap', id, alt:pick(alt), sent:-1, w:1.3}); return; } }
+      if(local && lc && !lc.includes(f.country)){ const alt=(a.fav||[]).filter(n=>!inLU[nrm(n)] && activos().some(x=>nrm(x.name)===nrm(n))); if(alt.length){ opts.push({cat:'swap', id, alt:pick(alt), sent:-1, w:1.3}); return; } }
       opts.push({cat: local||neutral ? 'hate' : 'hateF', id, sent:-1, w:1}); });
     const p = opts.some(o=>o.cat==='ret') ? 1 : (local ? 1 : (neutral ? 0.6 : 0.45)); if(Math.random()>p) return;
     const ok=opts.filter(o=>(per[o.id]||0)<cap(o.id) || o.cat==='ret'); if(!ok.length) return;
@@ -4379,7 +4379,7 @@ function luGenerate(s, k){
   // ¿dónde está mi favorito? (favoritos de su país que no están en su liga nacional)
   if(lc){ let nm=0; const signedNow=new Set(s.activeKeys.flatMap(x=>(s.leagues[x]&&s.leagues[x].competitors)||[]));
     accs.filter(a=>isLocal(a) && !used.has(a.handle)).forEach(a=>{ if(nm>=3) return;
-      const miss=(a.fav||[]).map(n=>state.freestylers.find(z=>nrm(z.name)===nrm(n))).filter(z=>z && lc.includes(z.country) && !inLU[nrm(z.name)] && !signedNow.has(z.id));
+      const miss=(a.fav||[]).map(n=>activos().find(z=>nrm(z.name)===nrm(n))).filter(z=>z && lc.includes(z.country) && !inLU[nrm(z.name)] && !signedNow.has(z.id));
       if(!miss.length || Math.random()>0.45) return; const f=pick(miss); const ht=(a.hate||[]).map(n=>inLU[nrm(n)]).filter(Boolean);
       used.add(a.handle); nm++;
       if(ht.length && Math.random()<0.6){ const id=pick(ht); add(a, fill(D(a,'missVs'),{n:fname(id), f:f.name, liga}), -1, at(id)); }
@@ -4396,7 +4396,7 @@ function luGenerate(s, k){
       crew.forEach(id=>add(q, fill(pk(PATRON_TX.quesadaLU),{n:fname(id),liga}), 1, at(id), {fid:id}));
       if(sv.n>=6 && !sv.rep.length) add(q, fill(pick(['Esto es un cartel variado 🔥','Variedad de estilos en {liga}. Así sí 🔥','Hay de todo en este line up. Me gusta 🔥🔥']),{liga}), 1, END); } }
   // Gazir anima a los suyos
-  { const gz=state.freestylers.find(f=>f.name==='Gazir'); if(gz){ const ga={handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)};
+  { const gz=activos().find(f=>f.name==='Gazir'); if(gz){ const ga={handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)};
       ids.filter(id=>GZ_CREW.some(n=>nrm(n)===nrm(fname(id)))).forEach(id=>add(ga, fill(pk(PATRON_TX.gazirLU),{h:twHandle(fname(id)), liga}), 1, at(id), {fid:id})); } }
   // 3) competidores: 2-3 tuits (bienvenidas a fichajes de otra liga o "voy a por todo")
   if(!isI){ let budget=rint(2,3);
@@ -4541,7 +4541,7 @@ var SPEAKERS=[
   {name:'Mbaka',      cost:2000, country:'España',    fx:'ptb',    v:0.04, vf:0.02,  txt:'Los competidores suben de nivel: {p} de PTB en las jornadas'},
 ];
 function spkBy(n){ return SPEAKERS.find(x=>x.name===n); }
-function spkFs(sp){ return sp.fs ? state.freestylers.find(f=>nrm(f.name)===nrm(sp.name)) : null; }
+function spkFs(sp){ return sp.fs ? activos().find(f=>nrm(f.name)===nrm(sp.name)) : null; }
 function spkCountry(sp){ const f=spkFs(sp); return sp.country || (f?f.country:'—'); }
 function spkImg(sp){ const f=spkFs(sp); if(f) return photoOf(f); const k='spk_'+sp.name.toLowerCase().replace(/[^a-z]/g,''); return (typeof EXTRA_IMG!=='undefined' && EXTRA_IMG[k]) || null; }
 function spkLocal(sp, key){
@@ -4823,13 +4823,13 @@ function pvGenerate(s, k, j){
       const fan=accs.find(a=>!used.has(a.handle) && like(a,x)), hater=accs.find(a=>!used.has(a.handle) && dis(a,x));
       if(fan){ used.add(fan.handle); add(fan, fill(P(fan,'epYes'),{a:A,x:X}), 1, i); }
       if(hater){ used.add(hater.handle); add(hater, fill(P(hater,'epNo'),{a:A,x:X}), -1, i); }
-      const alt=shuffle(accs.filter(a=>!used.has(a.handle) && !like(a,x))).map(a=>({a, f:(a.fav||[]).map(n=>state.freestylers.find(z=>nrm(z.name)===nrm(n))).find(z=>z && z.id!==x && !inWS.has(z.id) && z.fama>=75)})).find(o=>o.f);
+      const alt=shuffle(accs.filter(a=>!used.has(a.handle) && !like(a,x))).map(a=>({a, f:(a.fav||[]).map(n=>activos().find(z=>nrm(z.name)===nrm(n))).find(z=>z && z.id!==x && !inWS.has(z.id) && z.fama>=75)})).find(o=>o.f);
       if(alt && Math.random()<0.7){ used.add(alt.a.handle); add(alt.a, fill(P(alt.a,'epAlt'),{a:A,x:X,f:alt.f.name}), -1, i); }
       if(!fan && !hater && !alt){ const a=free(); add(a, fill(P(a, fby(x).fama>=80?'epYes':'epNo'),{a:A,x:X}), fby(x).fama>=80?1:-1, i); } }
     else if(!nb && Math.random()<0.35){ const a=free(); add(a, fill(P(a,'gen'),{a:A,b:B}), 0, i); }
   });
   // padrinos: Quesada y Gazir, como mucho un tuit cada uno por jornada
-  { const Q=TWITTEROS.find(t=>t.special==='quesada'); const q=Q&&twAcc(Q); const gz=state.freestylers.find(f=>f.name==='Gazir');
+  { const Q=TWITTEROS.find(t=>t.special==='quesada'); const q=Q&&twAcc(Q); const gz=activos().find(f=>f.name==='Gazir');
     const inC=(list,id)=>list.some(n=>nrm(n)===nrm(fname(id)));
     const one=(list, exclude, bothList)=>{ const ix=items.map((it,i)=>({it,i})).filter(x=>!x.it.ex && x.it.a!==exclude && x.it.b!==exclude); const bl=bothList||list;
       const both=shuffle(ix.filter(x=>inC(bl,x.it.a)&&inC(bl,x.it.b))); if(both.length) return {...both[0], both:true};
@@ -4952,7 +4952,7 @@ function chGenerate(s, k){
   // compañeros de liga felicitan (el subcampeón incluido), nunca un rival
   [L.finalStandings[1], ...shuffle(L.finalStandings.slice(2))].filter(x=>x && !isRival(x,id)).slice(0,rint(1,2)).forEach(x=>{ const f=fby(x);
     add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pick(TWC_COMP[twDia(f.country)==='es'?'es':'la']),{h:twHandle(fname(id))}), 1); });
-  if(GZ_CREW.some(n=>nrm(n)===nrm(fname(id)))){ const gz=state.freestylers.find(f=>f.name==='Gazir'); if(gz && gz.id!==id) add({handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)}, fill(pick(PATRON_TX.gazirCH),{h:twHandle(fname(id)), cw, liga}), 1); }
+  if(GZ_CREW.some(n=>nrm(n)===nrm(fname(id)))){ const gz=activos().find(f=>f.name==='Gazir'); if(gz && gz.id!==id) add({handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)}, fill(pick(PATRON_TX.gazirCH),{h:twHandle(fname(id)), cw, liga}), 1); }
   // última jornada: contra quién jugó
   const lastR=L.rounds[L.rounds.length-1]||[]; const fm=lastR.find(m=>m.a===id||m.b===id); const opp=fm ? (fm.a===id?fm.b:fm.a) : null; const won=fm && fm.result && fm.result.winner===id;
   const intl = !isWS(k) && s.intlEnabled && s.intl && s.intl.sede; const sedeF = intl ? flagOf(s.intl.sede) : '';
