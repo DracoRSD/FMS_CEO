@@ -2344,17 +2344,19 @@ function fmsLabel(m){
   return `${w}-${l}${nR?` (${nR} réplica${nR>1?'s':''})`:''}`;
 }
 // judges: los 5 ids de juez de la liga (judgesOf(L)). Sin ellos, los 5 internacionales.
-function simulateFMSBattle(m, lvB, judges){
-  const A=fby(m.a), B=fby(m.b); lvB=lvB||0;
+// opts.short: formato corto aunque la temporada sea larga (eliminatorias) · opts.bonus(id): puntos de nivel extra por competidor (sede, speaker)
+function simulateFMSBattle(m, lvB, judges, opts){
+  const A=fby(m.a), B=fby(m.b); lvB=lvB||0; opts=opts||{};
+  const bonusOf=id=> (typeof opts.bonus==='function' ? (opts.bonus(id)||0) : 0);
   if(!Array.isArray(judges) || judges.length!==5) judges=judgesByGroup('Internacional').slice(0,5).map(j=>j.id);
   const JJ=judges.map(id=>JUDGE_BY_ID[id]||null);
   const fa=gauss()*7*mentalFactor(A), fb=gauss()*7*mentalFactor(B);     // forma del día: no siempre se rinde al nivel; la mentalidad la estabiliza
-  const fmt=WS_SHORT ? 'short' : seasonFormat(cur()); const RS=ROUND_SETS[fmt];
+  const fmt=(WS_SHORT || opts.short) ? 'short' : seasonFormat(cur()); const RS=ROUND_SETS[fmt];
   const SA=STYLES[styleOf(A)], SB=STYLES[styleOf(B)];
   const perf=(F,S,form,rt)=>{
     if(F.name==='Khan') return 47.5 + form*0.4 + gauss()*4;    // PTB muy bajo (60-120 en formato largo)
     if(F.name==='Navas') return 57 + form*0.4 + gauss()*4;     // bajo (110-170 en formato largo)
-    let p=roundBase(F,rt)+lvB+form+gauss()*8*S.v*mentalFactor(F)+(S.m[rt]||0)*STYLE_ROUND_MOD+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0);
+    let p=roundBase(F,rt)+lvB+bonusOf(F.id)+form+gauss()*8*S.v*mentalFactor(F)+(S.m[rt]||0)*STYLE_ROUND_MOD+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0);
     if(S.spike && Math.random()<0.12) p+=11; return p; };
   let s='';
   const tA=[0,0,0,0,0], tB=[0,0,0,0,0];
@@ -2382,7 +2384,7 @@ function simulateFMSBattle(m, lvB, judges){
   let aWins, h=null, tiebreak=false;
   if(nA<3 && nB<3){   // sin 3 votos para nadie → réplica (p. ej. 2-2-1 o 2 votos + 2 réplicas + 1)
     tiebreak=true;
-    const p=1/(1+Math.pow(10,((B.nivel+fb)-(A.nivel+fa)+MENTAL_REPLICA*(attrOf(B,'mentalidad')-attrOf(A,'mentalidad')))/18));
+    const p=1/(1+Math.pow(10,((B.nivel+bonusOf(B.id)+fb)-(A.nivel+bonusOf(A.id)+fa)+MENTAL_REPLICA*(attrOf(B,'mentalidad')-attrOf(A,'mentalidad')))/18));
     let ha=0; for(let j=0;j<5;j++) if(Math.random()<p) ha++;
     aWins=ha>=3; h=aWins?[ha,5-ha]:[5-ha,ha];
   } else aWins=nA>nB;
@@ -2394,6 +2396,8 @@ function simulateFMSBattle(m, lvB, judges){
   m.lb=fmsLabel(m);
   return {upset:(Lo.nivel-W.nivel)>=10, tiebreak, W, Lo};
 }
+// Batalla de eliminatoria o Under: mismo motor que las ligas, siempre en formato corto. bonus(id) = sede/speaker.
+function simulateKOBattle(m, bonus, judges){ return simulateFMSBattle(m, 0, judges, {short:true, bonus: typeof bonus==='function' ? bonus : null}); }
 // visitas de YouTube: la fama es lo que más pesa, luego el hype y un poco el nivel
 // batallas repetidas temporada tras temporada: a partir de la 3ª seguida, -10% de visitas por temporada
 const PAIR_CACHE={};
