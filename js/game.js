@@ -786,7 +786,7 @@ function runIntl(s, d){
   const q = s.intl.order ? {ids:s.intl.qualifiers, note:s.intl.note} : intlQualifiers(s);
   if(!s.intl.spkDone) intlSpkAuto(s);
   const sb=sedeBonus(s.intl.sede), slv=spkLv(INTL.key); SPK_BH=spkVal(INTL.key,'bhype');
-  const ko=runKnockout(s.intl.order||shuffle(q.ids), (sb||slv)? (id=>(sb?sb(id):0)+slv) : null, 1.8*0.4*(1+0.08*stars)*(s.intl.lu? 1+s.intl.lu.delta/100 : 1)*(1+spkVal(INTL.key,'views'))); SPK_BH=0; { const fin=ko.bracket.rounds[ko.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15*1.5); }   // Inter -60%, final -40%
+  const ko=runKnockout(s.intl.order||shuffle(q.ids), (sb||slv)? (id=>(sb?sb(id):0)+slv) : null, 1.8*0.4*(1+0.08*stars)*(s.intl.lu? 1+s.intl.lu.delta/100 : 1)*(1+spkVal(INTL.key,'views')), pickJudges(null)); SPK_BH=0; { const fin=ko.bracket.rounds[ko.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15*1.5); }   // Inter -60%, final -40%
   s.intl.bracket=ko.bracket; uqViral(s, ko.bracket, 'fms', d);
   { const B=ko.bracket; const chk=(m,ri,mi)=>{ if(!m||!m.result||!isRival(m.a,m.b)) return; const w=m.result.winner, l=m.result.loser; const sd=s.intl.sede;
       const loc=fby(w).country===sd && fby(l).country!==sd; if(loc || Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', comp:'fms', key:INTL.key, ri, mi, a:m.a, b:m.b, w, v: loc?14:rint(0,13)}); };
@@ -1962,23 +1962,25 @@ function rbDraw(s){
 }
 
 /* ---- eliminatorias ---- */
-function runKnockout(ids, bonus, vmult){
+// judges: 5 ids de juez para todo el cuadro (tourneyJudges / pickJudges). Sin ellos, 5 internacionales
+function runKnockout(ids, bonus, vmult, judges){
   const rounds=[]; const r0=[];
+  if(!Array.isArray(judges) || judges.length!==5) judges=pickJudges(null);
   for(let i=0;i<ids.length;i+=2) r0.push({a:ids[i], b:ids[i+1], result:null});
   rounds.push(r0);
   let semis=[];
   while(true){
     const r=rounds[rounds.length-1];
-    r.forEach(m=> simulateBattle(m, bonus));
+    r.forEach(m=> simulateKOBattle(m, bonus, judges));
     if(r.length===2) semis=r.map(m=>m.result.loser);
     if(r.length===1) break;
     const nx=[]; for(let i=0;i<r.length;i+=2) nx.push({a:r[i].result.winner, b:r[i+1].result.winner, result:null});
     rounds.push(nx);
   }
-  const third={a:semis[0], b:semis[1], result:null}; simulateBattle(third, bonus);
+  const third={a:semis[0], b:semis[1], result:null}; simulateKOBattle(third, bonus, judges);
   const fin=rounds[rounds.length-1][0];
   rounds.flat().concat([third]).forEach(m=>{ m.views=battleViews(m, vmult||1); });
-  return {bracket:{rounds, third}, champion:fin.result.winner, runnerUp:fin.result.loser, third:third.result.winner, fourth:third.result.loser};
+  return {bracket:{rounds, third, judges:judges.slice()}, champion:fin.result.winner, runnerUp:fin.result.loser, third:third.result.winner, fourth:third.result.loser};
 }
 const RB_DECLINE={'Jaloner':1, 'Walls':0.9, 'Piezas':0.9, 'Wos':0.8, 'Trueno':0.8, 'Duki':0.8, 'Lit Killah':0.8, 'ChysteMC':0.8, 'Dani Ribba':0.8, 'Khan':0.8, 'Papo':0.7, 'Bnet':0.7, 'Acru':0.7, 'TiagoPZK':0.7};
 function sedeBonus(sede){ return sede ? (id=> { const f=fby(id); if(!f) return 0; return (f.country===sede ? LOCAL_BONUS : 0) + (sede==='México' && f.name==='Aczino' ? 10 : 0); }) : null; }
@@ -1988,7 +1990,7 @@ function addFama(id, d){ const f=fby(id); if(f) f.fama=Math.round(clamp(f.fama+d
 
 function runRBEvent(s, ev, d){
   if(!s.rb.drawn) rbDraw(s);
-  const r=runKnockout(ev.order||shuffle(ev.participants), null, 0.8*0.8*(ev.key===RB_PLZ.key?1:1.1));
+  const r=runKnockout(ev.order||shuffle(ev.participants), null, 0.8*0.8*(ev.key===RB_PLZ.key?1:1.1), tourneyJudges(rbdef(ev.key).countries));
   Object.assign(ev, r, {played:true});
   addFama(r.champion,5); addFama(r.runnerUp,2); addFama(r.third,1);
   const hn=finalHype(r.champion, r.runnerUp, false);
@@ -2046,7 +2048,7 @@ function confirmRBVote(){
 function runRBInter(s, d){
   const I=s.rb.inter;
   if(!I.voted) rbResolveVote(s, []);
-  const r=runKnockout(I.order||shuffle(I.qualifiers), sedeBonus(I.sede), 2.2*0.4); { const fin=r.bracket.rounds[r.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15); }
+  const r=runKnockout(I.order||shuffle(I.qualifiers), sedeBonus(I.sede), 2.2*0.4, pickJudges(null)); { const fin=r.bracket.rounds[r.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15); }
   Object.assign(I, r, {played:true}); uqViral(s, r.bracket, 'rb', d); uqLocalismo(s, I.qualifiers, I.sede, 'rb', d, r.champion);
   addFama(r.champion,10); addFama(r.runnerUp,4); addFama(r.third,2);
   const hn=finalHype(r.champion, r.runnerUp, true);
@@ -2874,12 +2876,12 @@ function runUnder(s, ev, d){
     const must=['Zasko','Sweet Pain'].map(n=>state.freestylers.find(f=>f.name===n)).filter(Boolean);
     if(must.length && !must.some(f=>ids.includes(f.id))){ const pickM=shuffle(must); const want=Math.random()<0.4 ? pickM : [pickM[0]];
       want.forEach(f=>{ const i=ids.findIndex(id=>!must.some(x=>x.id===id) && fby(id).country==='España'); if(i>=0) ids[i]=f.id; else ids.push(f.id); }); }
-    const ord=shuffle(ids); ev.battles=[];
-    for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateBattle(m, null); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); ev.battles.push(m); }
+    const ord=shuffle(ids); ev.battles=[]; const mfuJudges=tourneyJudges(['España']); ev.judges=mfuJudges;
+    for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateKOBattle(m, null, mfuJudges); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); ev.battles.push(m); }
     ev.played=true; underTutQueue(ev.key, ev.battles.map(m=>m.result.winner)); addLog(s, d, `🟢 ${def.name} #${ev.n}: ${ev.battles.map(m=>fname(m.result.winner)).join(', ')} ganan sus batallas.`, 'rb'); return;
   }
   const ids=ev.order && ev.order.length===16 ? ev.order.slice() : underDraw(ev);
-  const r=runKnockout(ev.order||shuffle(ids), null, 0.15);
+  const r=runKnockout(ev.order||shuffle(ids), null, 0.15, tourneyJudges(udef(ev.key).countries));
   Object.assign(ev, r, {participants:ids, played:true});
   addHype(r.champion, 5); underTutQueue(ev.key, [r.champion]);
   addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype).`, 'rb');
