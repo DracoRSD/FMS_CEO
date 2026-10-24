@@ -61,7 +61,7 @@ const DOW = ['L','M','X','J','V','S','D'];
 const STAR_THRESHOLDS = [0, 70, 220, 450, 780, 1200];   // reputación necesaria para 0..5 estrellas
 const START_MONEY = 250000;
 const JORNADAS = 9;
-function maxLeagues(stars){ return Math.min(6, stars+1); }
+function maxLeagues(stars){ return modoCarrera() ? LEAGUES.length : Math.min(6, stars+1); }   // en carrera el mundo tiene las 7 ligas
 function starsFor(rep){ let s=0; STAR_THRESHOLDS.forEach((t,i)=>{ if(rep>=t) s=i; }); return s; }
 
 // Hype: días seguidos sin jornada de esa liga -> pérdida diaria
@@ -483,6 +483,7 @@ let state = { company:null, freestylers:[], seasons:[], logos:{}, _counter:1, vi
 let _skipScrollRestore = false;
 function uid(p){ return p + (state._counter++); }
 function fby(id){ return state.freestylers.find(f=>f.id===id); }
+function modoCarrera(){ return !!(state.company && state.company.modo==='carrera'); }   // modo carrera: el mundo corre solo, sin CEO
 function activos(){ return state.freestylers.filter(f=>!f.retirado); }                     // los que siguen en activo: todo lo que elige gente usa esto
 function fbyActivo(id){ const f=fby(id); return f && !f.retirado ? f : null; }            // fby sigue encontrando a los retirados (historiales, cuadros)
 function fname(id){ const f=fby(id); return f? f.name : '—'; }
@@ -996,7 +997,7 @@ function simulateDay(auto){
   // exhibiciones: 7 días después, la comunidad opina
   const xe=(s.exEvents||[]).find(x=>!x.done && x.day<=d);
   if(xe){ applyExhibEvent(s, xe); if(!auto) return {pause:'exhib', xe}; }
-  if(rbNeedsVote(s,d)) return {pause:'vote'};
+  if(rbNeedsVote(s,d)){ if(modoCarrera()) rbResolveVote(s, []); else return {pause:'vote'}; }   // en carrera nadie vota: entran los 3 de más fama
   // revelación del line up: 15 días antes de la J1 de cada liga
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(!L || L.finished || L.played>0 || (L.lu && L.lu.shown)) continue;
     const nd=L.dates.slice().sort((a,b)=>a-b)[0]; if(nd==null || d<nd-LU_DAYS) continue;
