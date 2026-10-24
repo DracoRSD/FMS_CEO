@@ -347,6 +347,11 @@ const POT_NOVATO = [6, 14];         // margen de potencial sobre el nivel del re
 const CARRERA_PUNTOS = 300, CARRERA_ATTR_MIN = 45, CARRERA_ATTR_MAX = 75;   // puntos a repartir entre los cinco atributos (media 60) y tope por atributo
 const CARRERA_FAMA = 20;            // fama inicial: apto para todo el Under
 const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
+// Entrenamiento del jugador (fase C3b, docs/modo-carrera.md 5.2): un empujón más en el atributo elegido, con el tope de los empujones (pot + BOOST_OVER_POT)
+const ENTRENO_JOVEN = 1.5;          // joven: además del crecimiento normal
+const ENTRENO_MADUREZ = 1.0;        // madurez
+const ENTRENO_VETERANO = 0.5;       // veterano: el declive de ese atributo se multiplica por esto
+const ENTRENO_REPETICION = 3, ENTRENO_REPETICION_MULT = 0.5;   // el mismo atributo tres años seguidos rinde la mitad desde el tercero
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
 const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
 const FAMA_SUBE = 0.3;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar); el mínimo que mantiene la fama del top 100 a ±3 con los torneos
@@ -396,12 +401,16 @@ function evolveFreestylers(s){
     ensureAttrs(f); ensureCarrera(f);
     const before=f.nivel; f.attrsPrev={...f.attrs};
     const etapa=etapaOf(f); const exp=f.carrera.exp; const pot=f.carrera.pot;
+    // entrenamiento del jugador: atributo elegido en f.plan.entreno; la racha cuenta los años seguidos con el mismo
+    const ent = f.jugador && f.plan && ATTR_KEYS.includes(f.plan.entreno) ? f.plan.entreno : null; let entMult=0;
+    if(f.jugador && f.plan){ const r=f.plan.racha||{attr:null, n:0}; const n = ent ? (r.attr===ent ? r.n+1 : 1) : 0; f.plan.racha={attr:ent, n}; if(ent) entMult = n>=ENTRENO_REPETICION ? ENTRENO_REPETICION_MULT : 1; }
+    const entBonus = ent ? (etapa==='joven' ? ENTRENO_JOVEN : (etapa==='madurez' ? ENTRENO_MADUREZ : 0))*entMult : 0;
     const d={};
     ATTR_KEYS.forEach(k=>{
       let v=0;
       if(etapa==='joven'){ const marg=Math.max(0, pot-f.attrs[k]); if(marg>0) v=clamp(marg*GROW_RATE*GROW_WEIGHT[k], GROW_MIN, GROW_MAX)*(0.7+Math.random()*0.6); }
       else if(etapa==='madurez'){ v=rnd(-MID_NOISE, MID_NOISE); const marg=Math.max(0, pot-GROW_MID_SLACK-f.attrs[k]); if(marg>0) v+=Math.min(GROW_MID_MAX, marg*GROW_MID_RATE*GROW_WEIGHT[k])*(0.7+Math.random()*0.6); }
-      else { const years=exp-EXP_MID_MAX; v=-Math.min(DECLINE_MAX, DECLINE_START+DECLINE_STEP*(years-1))*DECLINE_WEIGHT[k]*(0.7+Math.random()*0.6); }
+      else { const years=exp-EXP_MID_MAX; v=-Math.min(DECLINE_MAX, DECLINE_START+DECLINE_STEP*(years-1))*DECLINE_WEIGHT[k]*(0.7+Math.random()*0.6); if(k===ent) v*=1-(1-ENTRENO_VETERANO)*entMult; }
       if((k==='impro'||k==='mentalidad') && f.attrs[k]<EXP_SUPPORT_CAP) v+=EXP_SUPPORT;
       if(!competed.has(f.id)) v-=INACTIVE_PENALTY;
       d[k]=v;
@@ -410,7 +419,8 @@ function evolveFreestylers(s){
     ATTR_KEYS.forEach(k=>{
       let nv=f.attrs[k]+d[k];
       if(etapa!=='veterano' && nv>pot && d[k]>0) nv=Math.max(f.attrs[k], pot);   // el crecimiento normal no pasa del potencial
-      nv+=b; if(b>0 && nv>pot+BOOST_OVER_POT) nv=Math.max(f.attrs[k], pot+BOOST_OVER_POT);
+      const bk=b+(k===ent ? entBonus : 0);   // empujones de títulos y entrenamiento: pueden pasar del potencial hasta BOOST_OVER_POT
+      nv+=bk; if(bk>0 && nv>pot+BOOST_OVER_POT) nv=Math.max(f.attrs[k], pot+BOOST_OVER_POT);
       f.attrs[k]=clamp(Math.round(nv*10)/10, 1, ATTR_MAX);
     });
     ATTR_KEYS.forEach(k=>f.attrs[k]=Math.round(f.attrs[k]));
