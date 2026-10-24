@@ -503,7 +503,7 @@ function save(){
     localStorage.setItem(storageKey(), JSON.stringify(dump, (k,v)=> (k==='img' && typeof v==='string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v));   // las fotos de los tuits se recuperan al pintar
     state.ui.saveFailed=false;
   }catch(e){
-    if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(()=>toast('No cabe más en el guardado del navegador (demasiadas imágenes). Exporta la partida para no perderla.'),50); }
+    if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(()=>toast('El guardado del navegador está lleno. Exporta la partida para no perderla.'),50); }
   }
 }
 function load(modo){   // modo: 'ceo' o 'carrera'; sin modo, la partida de CEO
@@ -1187,7 +1187,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:8, modo:'ceo'}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:9, modo:'ceo'}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1435,7 +1435,7 @@ function jugarTemporadaCarrera(){
 function nuevaCarrera(){
   const d=state.ui.cc; if(!d) return; const prob=ccProblemas(d); if(prob.length){ toast(prob[0]); return; }
   const name=d.name.trim();
-  state.company={modo:'carrera', name:'Mundo', stars:5, infinite:true, money:0, reputation:0, dbv:8, tut:{inf:true, s2:true, intl:true}, spStart:true, spReal:true, carrera:null};
+  state.company={modo:'carrera', name:'Mundo', stars:5, infinite:true, money:0, reputation:0, dbv:9, tut:{inf:true, s2:true, intl:true}, spStart:true, spReal:true, carrera:null};
   state.freestylers=generatePool();
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
   const f={id:uid('f'), name, country:d.country, style:d.style, nivel:0, fama:CARRERA_FAMA, hype:randHype(CARRERA_FAMA), legend:false, jugador:true, attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, d.attrs[k]])), carrera:{exp:0, pot:POT_CARRERA}};
@@ -2184,6 +2184,9 @@ function syncRealPool(){
   if(state.company && (state.company.dbv||0)<8){   // v8: modo de partida ('ceo' o 'carrera'). Solo añade el campo; no toca niveles ni atributos
     if(!state.company.modo) state.company.modo='ceo';
     state.company.dbv=8; }
+  if(state.company && (state.company.dbv||0)<9){   // v9: guardado ligero. Las temporadas cerradas salvo las dos últimas se quedan en versión ligera
+    aligerarAntiguas();
+    state.company.dbv=9; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }
