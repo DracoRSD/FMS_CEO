@@ -1715,7 +1715,10 @@ function showBattle(key, j, mi){
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button></div>`, 'wide');
 }
 // Barras de los cinco atributos (valor mostrado con tope 99). Solo lectura.
-function attrBars(f){ return `<div class="attr-bars"><span class="attr-title">Atributos</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${v}</b></div>`; }).join('')}</div>`; }
+// Flecha ▲▼ con la diferencia frente a la temporada anterior (f.attrsPrev, guardado en endSeason). Sin dato → nada
+function attrArrow(f,k){ if(!f.attrsPrev || typeof f.attrsPrev[k]!=='number') return '<span class="attr-arrow"></span>'; const d=Math.min(ATTR_SHOWN_MAX, Math.round(attrOf(f,k)))-Math.min(ATTR_SHOWN_MAX, Math.round(f.attrsPrev[k])); if(!d) return '<span class="attr-arrow"></span>'; return `<span class="attr-arrow ${d>0?'up':'down'}" title="${d>0?'Sube':'Baja'} ${Math.abs(d)} respecto a la temporada anterior">${d>0?'▲':'▼'}${Math.abs(d)}</span>`; }
+function attrBars(f){ const car=f.carrera ? ` · ${etapaOf(f)=='joven'?'Joven':(etapaOf(f)=='madurez'?'Madurez':'Veterano')} · ${f.carrera.exp} temporada${f.carrera.exp===1?'':'s'}` : '';
+  return `<div class="attr-bars"><span class="attr-title">Atributos${esc(car)}</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${v}</b>${attrArrow(f,k)}</div>`; }).join('')}</div>`; }
 
 /* ---------- imágenes (fotos y logos) ---------- */
 function pickImage(target){ state.ui.imgTarget=target; document.getElementById('imgFileInput').click(); }

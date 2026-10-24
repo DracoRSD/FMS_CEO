@@ -544,6 +544,8 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .attr-row{margin-top:2px; font-size:12.5px;}
 .attr-lbl{min-width:92px;}
 .attr-row .hype > i{background:var(--red); opacity:.85;}
+.attr-arrow{display:inline-block; min-width:30px; font-size:11px; font-weight:700; text-align:left;}
+.attr-arrow.up{color:#4bd18f;} .attr-arrow.down{color:#ff6b6b;}
 .welcome{max-width:620px; margin:30px auto;}
 
 @media(max-width:640px){
