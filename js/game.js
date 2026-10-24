@@ -1443,10 +1443,17 @@ function confirmSimYear(){
 function evolHtml(s){ const e=s.summary && s.summary.evol; if(!e || (!e.up.length && !e.down.length)) return '';
   const row=x=>{ const f=fby(x.id); if(!f) return ''; return `<div class="evol-row"><span class="evol-who">${miniAvatar(x.id,22)} ${nameH(f)}</span><span class="evol-lv">${f.nivel}</span><b class="${x.delta>0?'pos-v':'neg-v'}">${x.delta>0?'▲':'▼'}${Math.abs(x.delta)}</b></div>`; };
   return `<div class="evol-grid"><div><div class="sum-sec">Los que más suben</div>${e.up.map(row).join('')||'<p class="step-note">Nadie sube.</p>'}</div><div><div class="sum-sec">Los que más bajan</div>${e.down.map(row).join('')||'<p class="step-note">Nadie baja.</p>'}</div></div>`; }
+// Retirados y novatos de la temporada (summary.relevo)
+function relevoHtml(s){ const r=s.summary && s.summary.relevo; if(!r || (!r.retirados.length && !r.novatos.length)) return '';
+  const rowR=id=>{ const f=fby(id); if(!f) return ''; return `<div class="evol-row"><span class="evol-who">${miniAvatar(id,22)} ${nameH(f)}</span><span class="evol-sub">${esc(f.country)} · ${f.carrera?f.carrera.exp:'—'} años</span><span class="evol-lv">${f.nivel}</span></div>`; };
+  const rowN=id=>{ const f=fby(id); if(!f) return ''; const promesa=f.carrera && f.carrera.pot>=POT_PROMESA[0]; return `<div class="evol-row"><span class="evol-who">${miniAvatar(id,22)} ${nameH(f)}${promesa?'<span class="rtag">promesa</span>':''}</span><span class="evol-sub">${esc(f.country)} · ${esc(styleOf(f))}</span><span class="evol-lv">${f.nivel}</span></div>`; };
+  return `<div class="evol-grid"><div><div class="sum-sec">Se retiran (${r.retirados.length})</div>${r.retirados.map(rowR).join('')||'<p class="step-note">Nadie se retira.</p>'}</div><div><div class="sum-sec">Debutan (${r.novatos.length})</div>${r.novatos.map(rowN).join('')||'<p class="step-note">Nadie debuta.</p>'}</div></div>`; }
 function sumRight(s){
-  const ev=evolHtml(s);
-  return `<div class="sum-tabs"><button class="seg on" onclick="sumTab(this,0)">Top 10 batallas</button><button class="seg" onclick="sumTab(this,1)">Top 10 freestylers</button>${ev?'<button class="seg" onclick="sumTab(this,2)">Evolución</button>':''}</div>
-    <div class="sum-pane on">${topBattlesHtml(s)||'<p class="step-note">Sin batallas.</p>'}</div><div class="sum-pane">${topFreestylersHtml(s)||'<p class="step-note">Sin datos.</p>'}</div>${ev?`<div class="sum-pane">${ev}</div>`:''}`;
+  const ev=evolHtml(s), rl=relevoHtml(s);
+  const tabs=[['Top 10 batallas', topBattlesHtml(s)||'<p class="step-note">Sin batallas.</p>'], ['Top 10 freestylers', topFreestylersHtml(s)||'<p class="step-note">Sin datos.</p>']];
+  if(ev) tabs.push(['Evolución', ev]); if(rl) tabs.push(['Relevo', rl]);
+  return `<div class="sum-tabs">${tabs.map(([t],i)=>`<button class="seg ${i===0?'on':''}" onclick="sumTab(this,${i})">${t}</button>`).join('')}</div>
+    ${tabs.map(([,h],i)=>`<div class="sum-pane ${i===0?'on':''}">${h}</div>`).join('')}`;
 }
 function sumTab(btn,i){ const w=btn.closest('.sum-right'); w.querySelectorAll('.sum-tabs .seg').forEach((b,k)=>b.classList.toggle('on',k===i)); w.querySelectorAll('.sum-pane').forEach((p,k)=>p.classList.toggle('on',k===i)); }
 function champRows(s){
@@ -1647,7 +1654,7 @@ function renderIntl(){
   if(!b){
     const n=s.activeKeys.length;
     return h+(s.phase==='pre'?sedePicker():'')+`<div class="banner">${s.intl.sede?`📍 ${s.intl.sede}. `:''}${s.intl.date!=null?`Se juega el <b>${fmtDay(s.year,s.intl.date)}</b>. `:'Aún sin fecha. '}Clasificación: ${n===4?'top 4 de cada una de las 4 ligas':(n===5?'top 3 de cada liga (15) + el mejor cuarto':'top 2 de cada liga (12) + cupo del campeón vigente + mejores terceros')}. Los cruces se sortean el día del evento.</div>
-    ${s.defendingChampion?`<p class="step-note">Campeón vigente: <b>${fnameH(s.defendingChampion)}</b></p>`:''}`;
+    ${s.defendingChampion?`<p class="step-note">Campeón vigente: <b>${fnameH(s.defendingChampion)}</b>${fbyActivo(s.defendingChampion)?'':' (retirado: su cupo no se aplica)'}</p>`:''}`;
   }
   const names=['Octavos','Cuartos','Semifinal','Final'];
   h+=`<div class="banner">${s.intl.sede?'📍 '+s.intl.sede+'. ':''}${esc(s.intl.note||'')}</div><div class="bracket-scroll"><div class="bracket">${b.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]||'Ronda '+(ri+1)}</div>${r.map((m,mi)=>bm(m,'intl',ri,mi)).join('')}</div>`).join('')}
@@ -1668,20 +1675,22 @@ function bm(m, key, ri, mi){
 /* ---------- freestylers ---------- */
 function renderFreestylers(){
   const s=cur(); const q=state.ui.fq||''; const c=state.ui.fc||''; const sort=state.ui.fs||'nivel';
-  let list=state.freestylers.slice();
+  const verRet=!!state.ui.fr; let list=verRet ? state.freestylers.slice() : activos();
   if(q) list=list.filter(f=>fMatch(f,q));
   if(c) list=list.filter(f=>f.country===c);
   list.sort(sort==='fama'?(a,b)=>b.fama-a.fama:sort==='hype'?(a,b)=>(b.hype||0)-(a.hype||0):(sort==='salario'?(a,b)=>salaryOf(b)-salaryOf(a):(a,b)=>b.nivel-a.nivel));
-  const countries=[...new Set(state.freestylers.map(f=>f.country))].sort();
-  return `<div class="detail-head"><h1>Freestylers</h1><span class="tag" style="font-family:var(--font-cond);color:var(--gray)">${state.freestylers.length}</span></div>
+  const countries=[...new Set(list.map(f=>f.country))].sort();
+  const nRet=state.freestylers.length-activos().length;
+  return `<div class="detail-head"><h1>Freestylers</h1><span class="tag" style="font-family:var(--font-cond);color:var(--gray)">${activos().length}</span></div>
   <div class="fl-toolbar">
     <input id="fq" placeholder="Buscar" value="${esc(q)}" oninput="state.ui.fq=this.value; render()">
     <select onchange="state.ui.fc=this.value; render()" aria-label="País"><option value="">Todos los países</option>${countries.map(x=>`<option ${x===c?'selected':''}>${esc(x)}</option>`).join('')}</select>
     <select onchange="state.ui.fs=this.value; render()" aria-label="Ordenar">${['nivel','fama','hype','salario'].map(o=>`<option value="${o}" ${o===sort?'selected':''}>Por ${o}</option>`).join('')}</select>
+    ${nRet?`<label class="step-note" style="display:flex;gap:6px;align-items:center;margin:0;"><input type="checkbox" ${verRet?'checked':''} onchange="state.ui.fr=this.checked; render()"> Mostrar retirados (${nRet})</label>`:''}
   </div>
   <div class="fl-grid">${list.map(f=>{ const lk=signedLeagueOf(s,f.id); const d=lk?ldef(lk):null;
     return `<div class="fl-card" onclick="showFreestyler('${f.id}')"><div class="fl-avatar" style="${avatarDivStyle(f)}">${avatarContent(f)}</div>
-    <div style="min-width:0;"><div class="fname">${nameH(f)}</div><div class="fcountry">${esc(f.country)}${d?` <span class="tag-mini" style="background:${d.badge};color:${d.fg}">${d.short}</span>`:''}</div></div>
+    <div style="min-width:0;"><div class="fname">${nameH(f)}</div><div class="fcountry">${esc(f.country)}${d?` <span class="tag-mini" style="background:${d.badge};color:${d.fg}">${d.short}</span>`:''}${f.retirado?' <span class="ret-tag">Retirado</span>':(f.debut?` <span class="ret-tag nov">Debut ${f.debut}</span>`:'')}</div></div>
     <div class="pick-stats">Nivel <b>${f.nivel}</b><br>Fama <b>${f.fama}</b><br>Hype <b>${f.hype!=null?Math.round(f.hype):'—'}</b><br><span class="sal">${moneyK(salaryOf(f))}</span></div></div>`; }).join('')}</div>`;
 }
 function titlesOf(id){
@@ -1699,7 +1708,7 @@ function showFreestyler(id){
   const f=fby(id); const s=cur(); const lk=signedLeagueOf(s,id); const t=titlesOf(id);
   openModal(`<div class="profile-top" style="margin-bottom:10px;">
     <button class="profile-avatar avatar-edit" style="${avatarDivStyle(f)}" onclick="pickImage({type:'photo', id:'${id}'})" aria-label="Cambiar foto">${avatarContent(f)}<em>Foto</em></button>
-    <div style="min-width:0; flex:1;"><h3 style="margin:0">${nameH(f)}</h3><div class="pc">${esc(f.country)}${lk?' · '+ldef(lk).name:' · Libre'}</div>
+    <div style="min-width:0; flex:1;"><h3 style="margin:0">${nameH(f)}</h3><div class="pc">${esc(f.country)}${f.retirado?` · <span class="ret-tag">Retirado en ${f.retiradoEn||'—'}</span>`:(lk?' · '+ldef(lk).name:' · Libre')}${f.debut?` · Debut ${f.debut}`:''}</div>
     <div class="avatar-upload-btns"><button class="btn small" onclick="pickImage({type:'photo', id:'${id}'})">${f.photo?'Cambiar foto':'Subir foto'}</button>${f.photo?`<button class="btn small danger" onclick="removePhoto('${id}')">Quitar foto</button>`:''}</div></div></div>
   <label class="field-label" for="fs_name">Nombre</label>
   <div class="formrow"><input id="fs_name" value="${esc(f.name)}" maxlength="40" onkeydown="if(event.key==='Enter') renameFreestyler('${id}')"><button class="btn" onclick="renameFreestyler('${id}')">Guardar nombre</button></div>
