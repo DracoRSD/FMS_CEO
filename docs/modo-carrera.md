@@ -56,7 +56,7 @@ Un único volcado en `fms_ceo_v1`: `{company, freestylers, seasons, _counter}`. 
 | FMS Internacional | top 4 / top 3 + comodín / top 2 + cupo de campeón según haya 4, 5 o 6 ligas | `intlQualifiers` |
 | World Series | plantilla propia con 5 estrellas | `WS` |
 
-La fama se mueve en las ligas (`endSeason`: +8 campeón, +4 podio) y en Red Bull al jugarse; el Under y Monster Fu dan hype, no fama. Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel (`famaSinLiga`: si lo supera baja un 15 % de la distancia por año, al menos 1 punto; si está por debajo sube la mitad de la distancia). Sin esa regla el relevo de la fase 6 hundía la fama media del top 100 de 85 a 40 en 20 temporadas; con ella queda a ±1. Para que un novato suba por la escalera hace falta además que **ganar torneos dé fama** (ver 5.3).
+La fama se mueve en las ligas (`endSeason`: +8 campeón, +4 podio) y en los torneos al jugarse (5.3). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel (`famaSinLiga`: si lo supera baja un 15 % de la distancia por año, al menos 1 punto; si está por debajo sube la mitad de la distancia). Sin esa regla el relevo de la fase 6 hundía la fama media del top 100 de 85 a 40 en 20 temporadas; con ella queda a ±1. Para que un novato suba por la escalera, además, **ganar torneos da fama** (5.3).
 
 ## 2. Bucle de cada temporada
 
@@ -194,7 +194,7 @@ Constantes nuevas en el bloque del modelo: `ENTRENO_JOVEN = 1.5`, `ENTRENO_MADUR
 
 ### 5.3 Fama por torneos
 
-Hoy la fama solo cambia en las ligas. Para que la escalera funcione, en todos los modos los torneos dan fama al cerrar la temporada: Under +3 al campeón y +1 al finalista, Monster Fu +1 por batalla ganada, Red Bull nacional +6 / +3 / +2 al podio, Plazas +3, Red Bull Internacional +12 / +6 / +4, y cada batalla ganada en un cuadro +0,5. Es un cambio de reglas del juego base y se valida con `npm run simular`: el favorito en liga debe seguir ≤ 70 % y el informe de relevo debe seguir en verde.
+Antes solo las ligas y Red Bull (+5/+2/+1 al podio nacional, Plazas incluido, y +10/+4/+2 en la Internacional) movían la fama; el Under y Monster Fu daban solo hype. Para que la escalera funcione, en todos los modos los torneos dan fama **en el momento de jugarse** (así cuenta para los comodines de la Internacional y la elegibilidad del Under de ese mismo año), con las constantes `FAMA_*` del bloque del modelo: Under +3 al campeón y +1 al finalista, Monster Fu +1 por batalla ganada, Red Bull nacional +6 / +3 / +2 al podio, Plazas +3 al campeón, Red Bull Internacional +12 / +6 / +4, y cada batalla ganada en cualquier cuadro (Red Bull, Plazas, las dos Internacionales y el Under) +0,5; los medios puntos se acumulan en `famaResto` y la fama guardada sigue siendo entera. Las cifras de Red Bull sustituyen a las anteriores. Es un cambio de reglas del juego base y se valida con `npm run simular`: el favorito en liga debe seguir ≤ 70 %, el informe de relevo en verde, y la fama media del top 100 y el salario medio del top 60 a 20 años dentro de sus tolerancias (sección 1.1).
 
 ### 5.4 Escalera de acceso vista desde el jugador
 

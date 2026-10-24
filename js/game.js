@@ -350,6 +350,13 @@ const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
 const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
 const FAMA_SUBE = 0.5;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar)
+// Fama por torneos (fase C3a), en todos los modos y en el momento de jugarse: sustituye las cifras que Red Bull daba antes (5/2/1 y 10/4/2).
+const FAMA_UNDER = [3, 1];          // Under: campeón y finalista
+const FAMA_MFU_VICTORIA = 1;        // Monster Fu: por batalla ganada
+const FAMA_RB = [6, 3, 2];          // Red Bull nacional: podio
+const FAMA_PLAZAS = 3;              // Torneo de Plazas: campeón
+const FAMA_RB_INT = [12, 6, 4];     // Red Bull Internacional: podio
+const FAMA_CUADRO_VICTORIA = 0.5;   // cada batalla ganada en cualquier cuadro (Red Bull, Plazas, las dos Internacionales y el Under); los medios puntos se guardan en famaResto
 function famaSinLiga(f){ const gap=f.nivel-f.fama; const d = gap<0 ? -Math.ceil(-gap*FAMA_BAJA) : Math.round(gap*FAMA_SUBE); return Math.round(clamp(f.fama+d,5,99)); }
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
@@ -2351,7 +2358,7 @@ function runKnockout(ids, bonus, vmult, judges){
   }
   const third={a:semis[0], b:semis[1], result:null}; simulateKOBattle(third, bonus, judges);
   const fin=rounds[rounds.length-1][0];
-  rounds.flat().concat([third]).forEach(m=>{ m.views=battleViews(m, vmult||1); });
+  rounds.flat().concat([third]).forEach(m=>{ m.views=battleViews(m, vmult||1); addFamaDec(m.result.winner, FAMA_CUADRO_VICTORIA); });
   return {bracket:{rounds, third, judges:judges.slice()}, champion:fin.result.winner, runnerUp:fin.result.loser, third:third.result.winner, fourth:third.result.loser};
 }
 const RB_DECLINE={'Jaloner':1, 'Walls':0.9, 'Piezas':0.9, 'Wos':0.8, 'Trueno':0.8, 'Duki':0.8, 'Lit Killah':0.8, 'ChysteMC':0.8, 'Dani Ribba':0.8, 'Khan':0.8, 'Papo':0.7, 'Bnet':0.7, 'Acru':0.7, 'TiagoPZK':0.7};
@@ -2359,12 +2366,14 @@ function sedeBonus(sede){ return sede ? (id=> { const f=fby(id); if(!f) return 0
 function uqLocalismo(s, ids, sede, comp, d, champ){ const ac=state.freestylers.find(f=>f.name==='Aczino'); if(sede!=='México' || !ac || champ!==ac.id) return;
   uqPush(s, {day:d+1, type:'local', comp, fid:ac.id, ids:ids.slice()}); }
 function addFama(id, d){ const f=fby(id); if(f) f.fama=Math.round(clamp(f.fama+d,5,99)); }
+// Suma fama con decimales: la parte entera se aplica ya y el resto queda en famaResto hasta completar un punto (la fama guardada sigue siendo entera)
+function addFamaDec(id, d){ const f=fby(id); if(!f) return; const t=(f.famaResto||0)+d; const ent=Math.trunc(t); const resto=Math.round((t-ent)*100)/100; if(resto) f.famaResto=resto; else delete f.famaResto; if(ent) addFama(id, ent); }
 
 function runRBEvent(s, ev, d){
   if(!s.rb.drawn) rbDraw(s);
   const r=runKnockout(ev.order||shuffle(ev.participants), null, 0.8*0.8*(ev.key===RB_PLZ.key?1:1.1), tourneyJudges(rbdef(ev.key).countries));
   Object.assign(ev, r, {played:true});
-  addFama(r.champion,5); addFama(r.runnerUp,2); addFama(r.third,1);
+  if(ev.key===RB_PLZ.key) addFama(r.champion, FAMA_PLAZAS); else { addFama(r.champion, FAMA_RB[0]); addFama(r.runnerUp, FAMA_RB[1]); addFama(r.third, FAMA_RB[2]); }
   const hn=finalHype(r.champion, r.runnerUp, false);
   addLog(s, d, `🔴 <b>${fname(r.champion)}</b> gana la ${rbdef(ev.key).name} ante ${fname(r.runnerUp)} y va al Internacional.${hn}`, 'rb');
 }
@@ -2422,7 +2431,7 @@ function runRBInter(s, d){
   if(!I.voted) rbResolveVote(s, []);
   const r=runKnockout(I.order||shuffle(I.qualifiers), sedeBonus(I.sede), 2.2*0.4, pickJudges(null)); { const fin=r.bracket.rounds[r.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15); }
   Object.assign(I, r, {played:true}); uqViral(s, r.bracket, 'rb', d); uqLocalismo(s, I.qualifiers, I.sede, 'rb', d, r.champion);
-  addFama(r.champion,10); addFama(r.runnerUp,4); addFama(r.third,2);
+  addFama(r.champion, FAMA_RB_INT[0]); addFama(r.runnerUp, FAMA_RB_INT[1]); addFama(r.third, FAMA_RB_INT[2]);
   const hn=finalHype(r.champion, r.runnerUp, true);
   const loc=fby(r.champion).country===I.sede ? ' ¡Gana el local!' : '';
   addLog(s, d, `🏆 <b>${fname(r.champion)}</b> campeón de la ${RB_INT.name} en ${I.sede} ante ${fname(r.runnerUp)}.${loc}${hn}`, 'rb');
@@ -3295,14 +3304,14 @@ function runUnder(s, ev, d){
     if(must.length && !must.some(f=>ids.includes(f.id))){ const pickM=shuffle(must); const want=Math.random()<0.4 ? pickM : [pickM[0]];
       want.forEach(f=>{ const i=ids.findIndex(id=>!must.some(x=>x.id===id) && fby(id).country==='España'); if(i>=0) ids[i]=f.id; else ids.push(f.id); }); }
     const ord=shuffle(ids); ev.battles=[]; const mfuJudges=tourneyJudges(['España']); ev.judges=mfuJudges;
-    for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateKOBattle(m, null, mfuJudges); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); ev.battles.push(m); }
+    for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateKOBattle(m, null, mfuJudges); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); addFama(m.result.winner, FAMA_MFU_VICTORIA); ev.battles.push(m); }
     ev.played=true; underTutQueue(ev.key, ev.battles.map(m=>m.result.winner)); addLog(s, d, `🟢 ${def.name} #${ev.n}: ${ev.battles.map(m=>fname(m.result.winner)).join(', ')} ganan sus batallas.`, 'rb'); return;
   }
   const ids=ev.order && ev.order.length===16 ? ev.order.slice() : underDraw(ev);
   const r=runKnockout(ev.order||shuffle(ids), null, 0.15, tourneyJudges(udef(ev.key).countries));
   Object.assign(ev, r, {participants:ids, played:true});
-  addHype(r.champion, 5); underTutQueue(ev.key, [r.champion]);
-  addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype).`, 'rb');
+  addHype(r.champion, 5); addFama(r.champion, FAMA_UNDER[0]); addFama(r.runnerUp, FAMA_UNDER[1]); underTutQueue(ev.key, [r.champion]);
+  addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype, +${FAMA_UNDER[0]} de fama).`, 'rb');
 }
 function underDraw(ev){ const def=udef(ev.key); let ids;
   if(def.perCountry){ const by={}; activos().filter(f=>underEligible(f,def)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
