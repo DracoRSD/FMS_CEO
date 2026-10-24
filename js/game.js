@@ -332,6 +332,13 @@ const RET_PER_YEAR = 0.05;          // y sube esto por cada año más
 const RET_NIVEL_REF = 75, RET_NIVEL_SLOPE = 0.006;   // −0,6 % por cada punto de nivel sobre 75 (+0,6 % por cada punto por debajo)
 const RET_MAX = 0.6;                // tope de la probabilidad anual
 const RET_LEGEND_MULT = 0.5;        // las leyendas aguantan el doble
+// Nuevos talentos: tantos como retirados, dentro de este rango. Cada retirado deja su hueco en su país.
+const NOVATO_MIN = 4, NOVATO_MAX = 20;
+const NOVATO_EXP = [0, 2];          // años de carrera al debutar
+const NOVATO_NIVEL = [55, 75], NOVATO_NIVEL_MEDIA = 63, NOVATO_NIVEL_SD = 5;
+const NOVATO_FAMA = [15, 40];
+const NOVATO_PROMESA = 0.15;        // fracción con potencial alto
+const POT_PROMESA = [88, 97];       // potencial de las promesas (el resto usa POT_YOUNG sobre el nivel)
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
 // Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
@@ -413,6 +420,40 @@ function retirarFreestylers(s){
     if(f.retirado || f.custom || protegidos.has(f.id)) return;
     if(Math.random()<retiroProb(f)){ f.retirado=true; f.retiradoEn=s.year; out.push(f.id); }
   });
+  return out;
+}
+// Apodos ficticios para los novatos: prefijo + raíz + sufijo, nunca repetidos en el pool (retirados y propios incluidos)
+const APODO_PRE = ['Kid', 'MC', 'Lil', 'Big', 'El', 'Don', 'Young', 'Mr.', 'Baby', 'Rey', 'Mini', 'Dr.', 'Sr.'];
+const APODO_RAIZ = ['Tizón', 'Nébula', 'Kaos', 'Vórtice', 'Ónix', 'Lúmen', 'Trazo', 'Ébano', 'Zenit', 'Nómada', 'Cráter', 'Sismo', 'Bruma', 'Fénix', 'Kiro', 'Dasz', 'Nicko', 'Verso', 'Rimo', 'Ácido', 'Tinta', 'Ruido', 'Eco', 'Trueke', 'Zarko', 'Mamba', 'Lince', 'Cuervo', 'Búho', 'Sable', 'Tempo', 'Bloke', 'Píxel', 'Neón', 'Sombra', 'Grafo', 'Dardo', 'Flako', 'Gordo', 'Chino', 'Rubio', 'Moreno', 'Pelón', 'Kalo', 'Yeray', 'Nahuel', 'Iker', 'Ulises', 'Dante', 'Lautaro', 'Ciro', 'Bruno', 'Thiago', 'Nazareno', 'Joaco', 'Facu', 'Benja', 'Santi', 'Gael', 'Emi', 'Axel', 'Zaid', 'Ian', 'Noa', 'Kenia', 'Lola', 'Mara', 'Nerea', 'Aitana', 'Vega', 'Candela', 'Yami', 'Ámbar', 'Índigo', 'Grana', 'Cobalto', 'Ocre', 'Jade', 'Cuarzo', 'Basalto', 'Granito', 'Óxido', 'Grafito', 'Titanio', 'Plomo', 'Volt', 'Voltio', 'Amperio', 'Fuzz', 'Static', 'Glitch', 'Pulse', 'Drako', 'Nexo', 'Zeta', 'Delta', 'Omega', 'Sigma', 'Kappa', 'Lambda', 'Theta', 'Dosmil', 'Kilo', 'Mega', 'Tera', 'Siete', 'Nueve', 'Trece', 'Cien', 'Mil', 'Cero', 'Uno', 'Primo', 'Nieto', 'Padrino', 'Sobrino', 'Vecino', 'Alcalde', 'Capitán', 'Teniente', 'Sargento', 'Cadete', 'Monje', 'Fraile', 'Profeta', 'Oráculo', 'Augur', 'Hechizo', 'Conjuro', 'Talismán', 'Amuleto', 'Reliquia', 'Fósil', 'Meteoro', 'Cometa', 'Asteroide', 'Satélite', 'Órbita', 'Eclipse', 'Aurora', 'Crepúsculo', 'Alba', 'Ocaso', 'Marea', 'Oleaje', 'Resaca', 'Espuma', 'Salitre', 'Arena', 'Duna', 'Oasis', 'Espejismo', 'Tundra', 'Taiga', 'Selva', 'Manglar', 'Pantano', 'Ciénaga', 'Lodo', 'Barro', 'Arcilla', 'Yeso', 'Cal', 'Hormigón', 'Asfalto', 'Brea', 'Chapa', 'Hojalata', 'Cobre', 'Latón', 'Bronce', 'Zinc', 'Níquel', 'Cromo'];
+const APODO_SUF = ['', '', '', ' MC', ' Jr.', ' One', ' ZK', ' Flow', ' Kid', ' 23', ' 7', ' X'];
+function apodoLibre(){
+  const usados=new Set(state.freestylers.map(f=>f.name.toLowerCase()));
+  for(let i=0;i<500;i++){
+    const r=APODO_RAIZ[Math.floor(Math.random()*APODO_RAIZ.length)]; const u=Math.random();
+    const name = u<0.35 ? r : (u<0.65 ? APODO_PRE[Math.floor(Math.random()*APODO_PRE.length)]+' '+r : (u<0.85 ? r+APODO_SUF[Math.floor(Math.random()*APODO_SUF.length)] : APODO_PRE[Math.floor(Math.random()*APODO_PRE.length)]+' '+r+APODO_SUF[Math.floor(Math.random()*APODO_SUF.length)]));
+    if(!usados.has(name.trim().toLowerCase())) return name.trim();
+  }
+  let n=2; while(usados.has(('MC '+APODO_RAIZ[0]+' '+n).toLowerCase())) n++; return 'MC '+APODO_RAIZ[0]+' '+n;
+}
+// Crea un novato de un país: joven, nivel 55-75, fama baja, estilo al azar; unos pocos con potencial alto
+function nuevoNovato(country, year){
+  const nivel=Math.round(clamp(NOVATO_NIVEL_MEDIA+gauss()*NOVATO_NIVEL_SD, NOVATO_NIVEL[0], NOVATO_NIVEL[1]));
+  const exp=rint(NOVATO_EXP[0], NOVATO_EXP[1]);
+  const pot = Math.random()<NOVATO_PROMESA ? rint(POT_PROMESA[0], POT_PROMESA[1]) : Math.min(POT_MAX, nivel+rint(POT_YOUNG[0], POT_YOUNG[1]));
+  const fama=rint(NOVATO_FAMA[0], NOVATO_FAMA[1]); const keys=Object.keys(STYLES); const style=keys[Math.floor(Math.random()*keys.length)];
+  const name=apodoLibre();
+  const f={id:uid('f'), name, country, nivel, fama, hype:randHype(fama), style, legend:false, generado:true, debut:year, carrera:{exp, pot}};
+  f.attrs=attrsFromNivel(nivel, style, name); f.nivel=nivelFromAttrs(f.attrs);
+  return f;
+}
+// Nuevos talentos de la temporada: uno por retirado en su mismo país, entre NOVATO_MIN y NOVATO_MAX.
+// Si faltan países (pocos retiros) se reparten entre los países de las ligas según cuánta gente tienen. Devuelve los ids.
+function generarNovatos(s, retirados){
+  const n=clamp(retirados.length, NOVATO_MIN, NOVATO_MAX);
+  const paises=shuffle(retirados.map(id=>(fby(id)||{}).country).filter(Boolean)).slice(0, n);
+  if(paises.length<n){ const bolsa=[]; const liga=new Set(LEAGUES.flatMap(l=>l.countries||[])); activos().forEach(f=>{ if(liga.has(f.country)) bolsa.push(f.country); });
+    while(paises.length<n && bolsa.length) paises.push(bolsa[Math.floor(Math.random()*bolsa.length)]); }
+  const out=[]; paises.forEach(c=>{ const f=nuevoNovato(c, s.year); state.freestylers.push(f); out.push(f.id); });
   return out;
 }
 
@@ -1082,13 +1123,19 @@ function endSeason(s){
     st.forEach((id,i)=>{ const f=fby(id); const delta = i===0?8:(i<3?4:(i>=st.length-2 && !isWS(k)?-3:1)); f.fama=Math.round(clamp(f.fama+delta,5,99)); });
   });
   if(s.intl.champion){ const f=fby(s.intl.champion); f.fama=Math.round(clamp(f.fama+12,5,99)); }
+  // relevo generacional: retiros y nuevos talentos
+  const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
     bonus, avgHype:Math.round(avgH), starsBefore:before, starsAfter:state.company.stars,
     repDelta: state.company.reputation - s.repStart,
     income:s.fin.income, views:s.fin.views||0, sponsors:s.fin.sponsors||0, salaries:s.fin.salaries, production:s.fin.production,
     emptyMonths: 12 - monthsWithEvents(s).size,
-    evol: { up: evol.filter(x=>x.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,EVOL_TOP), down: evol.filter(x=>x.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,EVOL_TOP) }
+    evol: { up: evol.filter(x=>x.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,EVOL_TOP), down: evol.filter(x=>x.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,EVOL_TOP) },
+    relevo: { retirados, novatos }
   };
+  { const d=daysInYear(s.year)-1; const mios=retirados.filter(id=>signed.has(id));
+    if(retirados.length) addLog(s, d, `🎤 Se retiran: ${retirados.map(fnameH).join(', ')}.${mios.length?' De tu plantilla: <b>'+mios.map(fnameH).join(', ')+'</b>.':''}`, mios.length?'bad':'');
+    if(novatos.length) addLog(s, d, `🌱 Debutan en la escena: ${novatos.map(id=>{ const f=fby(id); return nameH(f)+' ('+esc(f.country)+')'; }).join(', ')}.`, 'gold'); }
   addLog(s, daysInYear(s.year)-1, `Fin de la temporada ${s.year}. ${state.company.stars>before?'Subes a '+state.company.stars+'★.':(state.company.stars<before?'Bajas a '+state.company.stars+'★.':'Te mantienes en '+state.company.stars+'★.')}`, 'gold');
 }
 function showTutorial(t){
