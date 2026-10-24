@@ -2323,12 +2323,17 @@ function rbDraw(s){
   // primero los podios de todas las nacionales
   const seedsBy={};
   RB_NATS.forEach(def=>{ const sd=prevPodium(def.key).filter(id=>id && fbyActivo(id) && !used.has(id) && elig(def,fby(id))); sd.forEach(id=>used.add(id)); seedsBy[def.key]=sd; });
+  // jugadores (modo carrera): fuera del sorteo; el inscrito tiene plaza fija en su nacional o en Plazas (salvo que ya entre por podio)
+  const fijosDe=key=>inscritosEn(s, key).filter(f=>!used.has(f.id)).map(f=>f.id);
+  const fijosPlazas=fijosDe(RB_PLZ.key); const fijosNat={}; RB_NATS.forEach(def=>{ fijosNat[def.key]=fijosDe(def.key).filter(id=>!fijosPlazas.includes(id)); });
+  jugadores().forEach(f=>used.add(f.id));
   // Torneo de Plazas (se sortea antes que las nacionales): un competidor por país, sin estrellas (como mucho 2 de +83 de fama).
   // El podio anterior entra directo y no cuenta para la regla de un país por edición.
   { const pev=rbEvent(s,RB_PLZ.key);
     const seeds=prevPodium(RB_PLZ.key).filter(id=>id && fbyActivo(id) && !used.has(id)); seeds.forEach(id=>used.add(id));
     const byCountry={}; activos().filter(f=>!used.has(f.id)).forEach(f=>{ (byCountry[f.country]=byCountry[f.country]||[]).push(f); });
-    const need=16-seeds.length; const countries=shuffle(Object.keys(byCountry)); let starsLeft=Math.floor(Math.random()*3); const picked=[];
+    const need=16-seeds.length; const picked=fijosPlazas.slice(); const paisesFijos=new Set(picked.map(id=>fby(id).country));
+    const countries=shuffle(Object.keys(byCountry)).filter(c=>!paisesFijos.has(c)); let starsLeft=Math.floor(Math.random()*3);
     for(const c of countries){ if(picked.length>=need) break;
       const list=byCountry[c].slice().sort((a,b)=>quality(b)-quality(a));
       const low=list.filter(f=>f.fama<=83), high=list.filter(f=>f.fama>83);
@@ -2345,12 +2350,12 @@ function rbDraw(s){
   const sh=shuffle(RB_NATS.filter(d=>shared.includes(d.key)));
   // las dos compartidas eligen alternándose, para que ninguna se quede con todos los buenos
   order.forEach(def=>{
-    const ev=rbEvent(s,def.key); const seeds=seedsBy[def.key];
+    const ev=rbEvent(s,def.key); const seeds=seedsBy[def.key]; const fijos=fijosNat[def.key];
     const pool=activos().filter(f=>elig(def,f) && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a));
-    const picked=probPick(pool, 16-seeds.length); picked.forEach(id=>used.add(id));
-    ev.seeds=seeds; ev.participants=[...seeds, ...picked];
+    const picked=probPick(pool, 16-seeds.length-fijos.length); picked.forEach(id=>used.add(id));
+    ev.seeds=seeds; ev.participants=[...seeds, ...fijos, ...picked];
   });
-  sh.forEach(def=>{ const ev=rbEvent(s,def.key); ev.seeds=seedsBy[def.key]; ev.participants=[...ev.seeds]; });
+  sh.forEach(def=>{ const ev=rbEvent(s,def.key); ev.seeds=seedsBy[def.key]; ev.participants=[...ev.seeds, ...fijosNat[def.key]]; });
   let guard=0;
   while(sh.some(def=>rbEvent(s,def.key).participants.length<16) && guard++<400){
     let progress=false;
@@ -3330,12 +3335,13 @@ function underPick(list, n){ const sorted=list.slice().sort((a,b)=>quality(b)-qu
 function runUnder(s, ev, d){
   const def=udef(ev.key);
   if(ev.key===MFU.key){
-    const es=activos().filter(f=>f.country==='España' && (f.fama<=83 || ['Sweet Pain','Zasko','Swit Eme'].includes(f.name) || UNDER_EXC.includes(f.name)) && f.name!=='Khan');
-    const intl=activos().filter(f=>f.country!=='España' && f.fama<=83);
-    const ni=rint(0,2); const ids=[...underPick(es, 10-ni), ...underPick(intl, ni)];
+    const es=activos().filter(f=>!f.jugador && f.country==='España' && (f.fama<=83 || ['Sweet Pain','Zasko','Swit Eme'].includes(f.name) || UNDER_EXC.includes(f.name)) && f.name!=='Khan');
+    const intl=activos().filter(f=>!f.jugador && f.country!=='España' && f.fama<=83);
+    const fijos=inscritosEn(s, MFU.key).filter((f,i)=>1+(i%3)===ev.n).map(f=>f.id);   // cada jugador inscrito juega una de las 3 fechas
+    const ni=rint(0,2); const ids=[...fijos, ...underPick(es, 10-ni-fijos.length), ...underPick(intl, ni)];
     const must=['Zasko','Sweet Pain'].map(n=>activos().find(f=>f.name===n)).filter(Boolean);
     if(must.length && !must.some(f=>ids.includes(f.id))){ const pickM=shuffle(must); const want=Math.random()<0.4 ? pickM : [pickM[0]];
-      want.forEach(f=>{ const i=ids.findIndex(id=>!must.some(x=>x.id===id) && fby(id).country==='España'); if(i>=0) ids[i]=f.id; else ids.push(f.id); }); }
+      want.forEach(f=>{ const i=ids.findIndex(id=>!must.some(x=>x.id===id) && fby(id).country==='España' && !fby(id).jugador); if(i>=0) ids[i]=f.id; else ids.push(f.id); }); }   // nunca quita la plaza fija del jugador
     const ord=shuffle(ids); ev.battles=[]; const mfuJudges=tourneyJudges(['España']); ev.judges=mfuJudges;
     for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateKOBattle(m, null, mfuJudges); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); addFama(m.result.winner, FAMA_MFU_VICTORIA); ev.battles.push(m); }
     ev.played=true; underTutQueue(ev.key, ev.battles.map(m=>m.result.winner)); addLog(s, d, `🟢 ${def.name} #${ev.n}: ${ev.battles.map(m=>fname(m.result.winner)).join(', ')} ganan sus batallas.`, 'rb'); return;
@@ -3346,12 +3352,29 @@ function runUnder(s, ev, d){
   addHype(r.champion, 5); addFama(r.champion, FAMA_UNDER[0]); addFama(r.runnerUp, FAMA_UNDER[1]); underTutQueue(ev.key, [r.champion]);
   addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype, +${FAMA_UNDER[0]} de fama).`, 'rb');
 }
-function underDraw(ev){ const def=udef(ev.key); let ids;
-  if(def.perCountry){ const by={}; activos().filter(f=>underEligible(f,def)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
-    ids=shuffle(Object.keys(by)).slice(0,16).map(c=>underPick(by[c],1)[0]);
-    if(ids.length<16){ const rest=activos().filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
-  else ids=underPick(activos().filter(f=>def.countries.includes(f.country) && underEligible(f,def)), 16);
-  if(ids.length<16){ ids.push(...underPick(activos().filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), 16-ids.length)); }
+// Inscripciones del jugador (fase C3b, docs/modo-carrera.md 5.4). La inscripción garantiza la plaza: el jugador no pasa por underPick ni probPick.
+// Con liga solo puede inscribirse en su Red Bull nacional y en Plazas; Plazas es para los que no juegan su nacional.
+const PLAZAS_FAMA_MAX = 83, MFU_FAMA_MAX = 83;
+function rbNacionalDe(f){ const d=RB_NATS.find(d=>d.countries.includes(f.country)); return d ? d.key : null; }
+function torneosDelJugador(s, f){
+  const p=planDe(f); const conLiga=!!p.liga || !!signedLeagueOf(s,f.id); const out=[];
+  const noLiga=conLiga ? 'no compatible con la liga' : null;
+  UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return;
+    out.push({key:d.key, name:d.name, apto:!conLiga && f.fama<=d.famaMax, motivo: noLiga || (f.fama>d.famaMax ? 'fama por encima de '+d.famaMax : null)}); });
+  if(f.country==='España') out.push({key:MFU.key, name:MFU.name, apto:!conLiga && f.fama<=MFU_FAMA_MAX, motivo: noLiga || (f.fama>MFU_FAMA_MAX ? 'fama por encima de '+MFU_FAMA_MAX : null)});
+  const rb=rbNacionalDe(f); if(rb) out.push({key:rb, name:rbdef(rb).name, apto:true, motivo:null});
+  const enNacional=rb && p.inscrito.includes(rb);
+  out.push({key:RB_PLZ.key, name:RB_PLZ.name, apto:!enNacional && f.fama<=PLAZAS_FAMA_MAX, motivo: enNacional ? 'ya juegas tu Red Bull nacional' : (f.fama>PLAZAS_FAMA_MAX ? 'fama por encima de '+PLAZAS_FAMA_MAX : null)});
+  return out;
+}
+// Jugadores inscritos y aptos hoy para un torneo (la elegibilidad por fama se mira en el sorteo)
+function inscritosEn(s, key){ return jugadores().filter(f=>planDe(f).inscrito.includes(key) && torneosDelJugador(s,f).some(t=>t.key===key && t.apto)); }
+function underDraw(ev){ const def=udef(ev.key); const s=cur(); const fijos=inscritosEn(s, ev.key).map(f=>f.id); const libres=activos().filter(f=>!f.jugador); let ids;   // el jugador inscrito tiene plaza fija; los jugadores no entran en el sorteo
+  if(def.perCountry){ const by={}; const paisesFijos=new Set(fijos.map(id=>fby(id).country)); libres.filter(f=>underEligible(f,def) && !paisesFijos.has(f.country)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
+    ids=[...fijos, ...shuffle(Object.keys(by)).slice(0,16-fijos.length).map(c=>underPick(by[c],1)[0])];
+    if(ids.length<16){ const rest=libres.filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
+  else ids=[...fijos, ...underPick(libres.filter(f=>def.countries.includes(f.country) && underEligible(f,def)), 16-fijos.length)];
+  if(ids.length<16){ ids.push(...underPick(libres.filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), 16-ids.length)); }
   ev.participants=ids; return ids;
 }
 function openMFU(day){
