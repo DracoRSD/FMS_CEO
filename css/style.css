@@ -547,6 +547,13 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .attr-arrow{display:inline-block; min-width:30px; font-size:11px; font-weight:700; text-align:left;}
 .attr-arrow.up{color:#4bd18f;} .attr-arrow.down{color:#ff6b6b;}
 .welcome{max-width:620px; margin:30px auto;}
+.partidas{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:8px;}
+.partida{display:flex; flex-direction:column; align-items:flex-start; gap:4px; text-align:left; background:var(--bg-alt); border:1px solid var(--line); border-radius:10px; padding:12px 14px; color:var(--text); cursor:pointer; font:inherit;}
+.partida:hover{border-color:var(--red-bright);}
+.partida .partida-tipo{font-family:var(--font-cond); font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--gray);}
+.partida b{font-size:18px;}
+.partida small{font-family:var(--font-cond); color:var(--gray);}
+.partida .btn{margin-top:6px; pointer-events:none;}
 
 @media(max-width:640px){
   .cal-cell{min-height:58px; padding:3px; border-radius:6px;}

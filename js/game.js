@@ -1320,9 +1320,23 @@ function renderView(){
 }
 
 /* ---------- bienvenida ---------- */
+function hayPartida(modo){ try{ return !!localStorage.getItem(storageKey(modo)); }catch(e){ return false; } }
+// Resumen de una partida guardada para la portada, sin cargarla en el estado
+function resumenPartida(modo){
+  try{ const d=JSON.parse(localStorage.getItem(storageKey(modo))||'null'); if(!d || !d.company) return null;
+    const s=(d.seasons||[]).slice(-1)[0]; const f=(modo==='carrera' && d.company.carrera) ? (d.freestylers||[]).find(x=>x.id===d.company.carrera.fid) : null;
+    return { titulo: modo==='carrera' ? (f ? f.name : 'Carrera') : d.company.name, sub: s ? `Temporada ${s.year}${s.phase==='pre'?' · pretemporada':(s.phase==='done'?' · cerrada':'')}` : 'Sin temporadas' };
+  }catch(e){ return null; } }
+function continuarPartida(modo){ state.company=null; state.seasons=[]; state.freestylers=[]; if(load(modo)) goto('dashboard'); else { toast('No se pudo cargar esa partida.'); render(); } }
+function cambiarPartida(){ if(state.company) save(); state.company=null; state.seasons=[]; state.freestylers=[]; closeModal(); goto('welcome'); }
+function partidasGuardadasHtml(){
+  const cards=['ceo','carrera'].map(m=>{ const r=resumenPartida(m); if(!r) return '';
+    return `<button class="partida" onclick="continuarPartida('${m}')"><span class="partida-tipo">${m==='carrera'?'🎤 Carrera':'🏢 CEO'}</span><b>${esc(r.titulo)}</b><small>${esc(r.sub)}</small><span class="btn small primary">Continuar</span></button>`; }).join('');
+  return cards ? `<div class="step" style="margin-top:16px;"><span class="field-label">Partidas guardadas</span><div class="partidas">${cards}</div></div>` : '';
+}
 function renderWelcome(){
   const imp=state.ui.importedPool;
-  return `<div class="welcome">
+  return `<div class="welcome">${partidasGuardadasHtml()}
     <div class="hero" style="display:block;">
       <h1>Eres el CEO de FMS</h1>
       <p>Empiezas con 0 estrellas, ${money(START_MONEY)} y una sola liga. Cada temporada que completas sumas 1 estrella y desbloqueas una liga más (con 3★ y 4 ligas, el Internacional). Ficha a los 10 freestylers, reparte las 9 jornadas por el año y haz crecer la empresa hasta las 5 estrellas.</p>
@@ -3785,7 +3799,10 @@ function fmContinue(){
 /* ---------- init ---------- */
 function init(){
   state.ui.devStats=false;
-  if(load()) state.view={name:'dashboard',params:{}}; else state.view={name:'welcome',params:{}};
+  const ceo=hayPartida('ceo'), car=hayPartida('carrera');
+  if(ceo && car) state.view={name:'welcome',params:{}};                                            // dos partidas: la portada elige
+  else if((ceo && load('ceo')) || (car && load('carrera'))) state.view={name:'dashboard',params:{}};  // una sola: entra directo, como siempre
+  else state.view={name:'welcome',params:{}};
   render();
   window.addEventListener('pagehide', ()=>{ if(state.company) save(); });
 }
@@ -5181,6 +5198,7 @@ function openSettings(){
   openModal(`<h3>⚙️ Ajustes</h3>
     <div class="set-list">
       <button class="set-item" onclick="openAddFS()"><span class="set-ic">➕</span><span><b>Añadir competidor</b><small>Crea un freestyler nuevo con su nacionalidad, foto y estilo</small></span></button>
+      <button class="set-item" onclick="cambiarPartida()"><span class="set-ic">🔀</span><span><b>Cambiar de partida</b><small>Guarda esta y vuelve a la portada para abrir la otra partida o crear una</small></span></button>
       <button class="set-item danger" onclick="confirmRestart()"><span class="set-ic">🔄</span><span><b>Reiniciar juego</b><small>Borra la partida actual y empieza de cero</small></span></button>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
