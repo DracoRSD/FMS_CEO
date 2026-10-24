@@ -44,6 +44,7 @@ npm install
 npm start           # abre el juego en una ventana
 npm run build:win   # genera dist/FMS_CEO.exe
 npm run build:single # genera dist/index.html con todo incrustado, para publicar
+npm run simular      # simula 1.000 temporadas con el motor del juego (--semilla N, --formato long)
 ```
 > Compílalo desde Windows. En Linux/Mac, `electron-builder` necesita Wine para poner el icono al ejecutable.
 
@@ -56,6 +57,7 @@ npm run build:single # genera dist/index.html con todo incrustado, para publicar
 | `css/style.css` | Estilos y fuentes |
 | `assets/` | Imágenes y fuentes (woff2) |
 | `tools/build-single.js` | Genera el `index.html` único con todo incrustado |
+| `tools/simular.js` | Simulación de temporadas para calibrar el motor de batallas |
 | `main.js` | Ventana de escritorio (Electron) |
 | `package.json` | Configuración para compilar el `.exe` |
 | `build/` | Icono del juego |
