@@ -1080,7 +1080,7 @@ function simulateDay(auto, soloFid){
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
   if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
   // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
-  if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } }
+  if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } redesEventosDia(s, fid); }
   s.day++;
   if(s.day>=diy) endSeason(s);
   return ev||rev||null;
@@ -1166,7 +1166,9 @@ function endSeason(s){
   // modo carrera: una entrada por temporada cerrada en company.carrera.temporadas (nivel y fama ya evolucionados)
   if(modoCarrera() && state.company.carrera){ const c=state.company.carrera; const f=fby(c.fid); if(f){ const p=planDe(f); const lk=signedLeagueOf(s,f.id); const st=lk ? s.leagues[lk].finalStandings : [];
     if(!Array.isArray(c.temporadas)) c.temporadas=[];
-    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)}); } }
+    const prevT=(c.temporadas||[]).slice(-1)[0]; const nivelPrev = prevT ? prevT.nivel : (c.nivelInicio!=null ? c.nivelInicio : null);
+    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
+    redesCierreAno(s, f, nivelPrev); } }
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1540,7 +1542,7 @@ var TWK={
     sorpresa:['{n} acaba de ganar a {o}, no me lo creo','SORPRESA: {n} tumba a {o} en {comp}','{n} le gana a {o}, ojo a este chaval','{n} contra {o} {ptb}, la batalla del año','nadie apostaba por {n} contra {o} y ha ganado','{n} se lleva el {n} vs {o} y la gente flipando','campanada de {n} ante {o}','apuntad el nombre: {n} acaba de ganar a {o}'],
     batacazo:['{n} perdiendo con {o} es para hacérselo mirar','¿en serio {n} ha perdido con {o}?','batacazo de {n} ante {o}, {ptb}','{n} cae con {o} y se le caen las caretas','lo de {n} contra {o} es inexplicable','{o} le gana a {n}, nadie lo esperaba','mal, muy mal lo de {n} hoy contra {o}','{n} se deja la batalla contra {o}'],
     mediaWin:['{n} vence a {o} en {comp} ({ptb}) y suma su victoria número {v} de la temporada','{comp}: {n} se impone a {o}','RESULTADO · {n} {ptb} {o} en {comp}','{n} encadena {r} victorias tras superar a {o}','{n} sigue adelante en {comp}: {ptb} ante {o}'],
-    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptb} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptb}'],
+    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptbo} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptbo}'],
     react:['reaccionando AHORA al {n} vs {o}, pasaos por el directo','la batalla de {n} contra {o} la vemos esta noche en el canal','{n} vs {o}, reacción en 10 minutos','hemos parado el directo tres veces en el {n} vs {o}','{n} contra {o} va a la reacción de la semana, obligatorio'],
   },
   la:{
@@ -1554,7 +1556,7 @@ var TWK={
     sorpresa:['{n} acaba de ganarle a {o}, no lo puedo creer','SORPRESA: {n} tumba a {o} en {comp}','{n} le gana a {o}, ojo con este pibe','{n} contra {o} {ptb}, la batalla del año','nadie apostaba por {n} contra {o} y ganó','{n} se lleva el {n} vs {o} y la gente no lo cree','campanada de {n} ante {o}','anoten el nombre: {n} acaba de ganarle a {o}'],
     batacazo:['{n} perdiendo con {o} es para hacérselo mirar','¿en serio {n} perdió con {o}?','batacazo de {n} ante {o}, {ptb}','{n} cae con {o} y se le caen las caretas','lo de {n} contra {o} es inexplicable','{o} le gana a {n}, nadie lo esperaba','mal, muy mal lo de {n} hoy contra {o}','{n} se deja la batalla contra {o}'],
     mediaWin:['{n} vence a {o} en {comp} ({ptb}) y suma su victoria número {v} de la temporada','{comp}: {n} se impone a {o}','RESULTADO · {n} {ptb} {o} en {comp}','{n} encadena {r} victorias tras superar a {o}','{n} sigue adelante en {comp}: {ptb} ante {o}'],
-    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptb} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptb}'],
+    mediaLoss:['{n} cae ante {o} en {comp} ({ptb})','{comp}: {o} supera a {n}','RESULTADO · {o} {ptbo} {n} en {comp}','{n} se queda sin la victoria ante {o} en {comp}','Derrota de {n} en {comp}: {o} gana {ptbo}'],
     react:['reaccionando AHORA al {n} vs {o}, pásense por el directo','la batalla de {n} contra {o} la vemos esta noche en el canal','{n} vs {o}, reacción en 10 minutos','paramos el directo tres veces en el {n} vs {o}','{n} contra {o} va a la reacción de la semana, obligatorio'],
   },
 };
@@ -1579,7 +1581,8 @@ function twCarreraBatalla(s, b, fid){
   const comp = etiquetaBatalla(b).split(' · ')[0]; const dn=(o?o.nivel:f.nivel)-f.nivel;
   const sorpresa = gane && dn>=REDES_SORPRESA, batacazo = !gane && dn<=-REDES_BATACAZO;
   const victorias = batallasDe(s, fid).filter(x=>x.w===fid).length;
-  const datos={n:f.name, o:o?o.name:'su rival', ptb, comp, r:r.racha, v:victorias, liga: signedLeagueOf(s,fid) ? ldef(signedLeagueOf(s,fid)).name : ''};
+  const ptbo = votos ? `${votos.filter(x=>x!==yo && x!=='R').length}-${votos.filter(x=>x===yo).length}` : ptb;
+  const datos={n:f.name, o:o?o.name:'su rival', ptb, ptbo, comp, r:r.racha, v:victorias, liga: signedLeagueOf(s,fid) ? ldef(signedLeagueOf(s,fid)).name : ''};
   // fans y haters que nacen de esta batalla
   const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country), todos=TWITTEROS.filter(t=>!t.special);
   const suma=(lista, cuantos, max)=>{ for(let i=0;i<cuantos && lista.length<max;i++){ const pool=(Math.random()<0.7?mios:todos).filter(t=>!r.fans.includes(t.handle) && !r.haters.includes(t.handle)); if(!pool.length) break; lista.push(pick(pool).handle); } };
@@ -1590,7 +1593,7 @@ function twCarreraBatalla(s, b, fid){
   const libre=pool=>{ const c=pool.filter(a=>!usados.has(a.handle)); const a=c.length?pick(c):null; if(a) usados.add(a.handle); return a; };
   const dia=twDia(f.country);
   const say=(acc, cat, sent)=>{ if(!acc) return; out.push(redesPush(s, acc, redesFrase(s, cat, acc, datos), sent, ref)); };
-  if(f.fama<30 && !r.fans.length && !sorpresa){ for(let i=0;i<n;i++) say(libre(mios.length?mios.map(twAcc):todos.map(twAcc)), 'duda', 0); return out; }
+  if(f.fama<30 && !r.fans.length && !sorpresa){ for(let i=0;i<n;i++) say(libre(mios.length?mios.map(twAcc):todos.map(twAcc)), 'duda', 0); if(!r.hitos.debut) twCarreraEvento(s, 'debut'); if(gane && !r.hitos.primeraVictoria) twCarreraEvento(s, 'primeraVictoria'); return out; }
   if(sorpresa) for(let i=0;i<Math.ceil(n*0.3);i++) say(libre(todos.map(twAcc)), 'sorpresa', 1);
   if(batacazo) for(let i=0;i<Math.ceil(n*0.3);i++) say(libre(todos.map(twAcc)), 'batacazo', -1);
   const fans=r.fans.map(redesCuenta).filter(Boolean), haters=r.haters.map(redesCuenta).filter(Boolean);
@@ -1600,8 +1603,75 @@ function twCarreraBatalla(s, b, fid){
   while(out.length<n){ const a=libre((Math.random()<0.6?mios:todos).map(twAcc)); if(!a) break; say(a, gane?'neuWin':'neuLoss', gane?1:0); }
   if(f.fama>=50 || sorpresa || batacazo){ const med=MEDIOS_PAIS[dia]||MEDIOS_PAIS.neu; say(Object.assign({verified:true}, pick(med)), gane?'mediaWin':'mediaLoss', 0); }
   if(f.fama>=60 || sorpresa){ const rc=REACCIONADORES.filter(x=>twDia(x.country)===dia); say(Object.assign({verified:true}, pick(rc.length?rc:REACCIONADORES)), 'react', 1); }
+  if(!r.hitos.debut) twCarreraEvento(s, 'debut'); if(gane && !r.hitos.primeraVictoria) twCarreraEvento(s, 'primeraVictoria');
   return out;
 }
+// Eventos fuera de la batalla e hitos de una sola vez. {n} jugador · {liga} · {t} título · {d} puntos de nivel · {pos} puesto en su país · {pais}
+var TWE={
+  es:{
+    oferta:['{liga} le ha hecho oferta a {n}, ya era hora','{n} a {liga}, ojo a este fichaje','se habla de {n} para {liga}, y tiene sentido','{liga} llama a la puerta de {n}','{n} tiene oferta de {liga}, a ver si acepta','buen movimiento de {liga} con {n}'],
+    noRenueva:['{liga} no renueva a {n}, qué palo','{n} fuera de {liga}, no me lo esperaba','se acabó {liga} para {n}, a volver por el Under','{n} se queda sin {liga}, duro','{liga} deja fuera a {n}, hay gente peor dentro','adiós de {n} a {liga}, tocará remontar'],
+    intl:['{n} se mete en la Internacional, qué locura','{n} clasificado para la Internacional, se lo ha ganado','ojo que {n} va a la Internacional','{n} en la Internacional, a ver hasta dónde llega','la Internacional con {n} dentro, me la veo entera','{n} entre los dieciséis de la Internacional, enorme'],
+    titulo:['{n} campeón de {t}, qué pasada','{t} para {n}, merecidísimo','{n} se lleva {t} y no es casualidad','título de {t} para {n}, temporadón','{n} gana {t}, apuntadlo bien','{t} es de {n}, se veía venir'],
+    nivelSube:['{n} ha subido {d} puntos este año, se nota el trabajo','el salto de nivel de {n} es evidente, {d} más','{n} cada vez mejor, otro año de crecimiento','a {n} se le ve otra cosa, ha subido {d}','ojo al crecimiento de {n} esta temporada','{n} ya no es el mismo de hace un año, para bien'],
+    nivelBaja:['{n} ha bajado {d} puntos, mal año','a {n} se le ha visto peor que el año pasado','bajón de nivel de {n}, a ver si lo arregla','{n} pierde {d} de nivel, preocupante','no fue el año de {n}, se le ha notado','{n} va para abajo, ojalá sea pasajero'],
+    debut:['debuta {n}, de {pais}, a ver qué nos trae','primer paso de {n} en esto, suerte','{n} se estrena, bienvenido a la jungla','nuevo nombre: {n}, {pais}','{n} empieza hoy, veremos si dura','debut de {n}, el tiempo dirá'],
+    primeraVictoria:['primera victoria de {n}, por algo se empieza','{n} ya sabe lo que es ganar','la primera de {n}, que vengan más','{n} estrena casillero de victorias','ya ganó {n}, a seguir','primera de muchas para {n}, ojalá'],
+    primeraLiga:['{n} llega a {liga}, del Under a la liga en nada','{n} ya es de liga, bienvenido a {liga}','del barrio a {liga}: {n}','{n} debuta en {liga}, qué historia','{liga} ficha a {n}, por fin','{n} en {liga}, la escalera funciona'],
+    primerTitulo:['PRIMER TÍTULO DE {n}: {t}','{n} ya tiene su primer título, {t}','{t} y el primer trofeo de {n}, histórico','{n} rompe el hielo con {t}','el primero de {n}, {t}, nunca se olvida','{n} campeón por primera vez, {t}'],
+    primeraIntl:['{n} se clasifica por primera vez para la Internacional','primera Internacional de {n}, qué momento','{n} entre los grandes del mundo por primera vez','la primera Internacional de {n}, de locos','{n} llega a su primera Internacional, se lo ha currado','de desconocido a la Internacional: {n}'],
+    top10:['{n} ya está entre los 10 mejores de {pais}','top 10 de {pais} para {n}, quién lo diría','{n} entra en el top 10 de {pais} por nivel','{n} es top 10 en {pais}, ya es de los grandes','los 10 mejores de {pais} tienen un nombre nuevo: {n}','{n} se mete en la élite de {pais}'],
+    top1:['{n} es el número 1 de {pais}, se acabó la discusión','{pais} tiene nuevo rey: {n}','{n} en lo más alto de {pais}, qué carrera','el mejor de {pais} es {n}, y por nivel','{n} número 1 de {pais}, histórico','nadie en {pais} está por encima de {n}'],
+  },
+  la:{
+    oferta:['{liga} le hizo oferta a {n}, ya era hora','{n} a {liga}, ojo con este fichaje','se habla de {n} para {liga}, y tiene sentido','{liga} golpea la puerta de {n}','{n} tiene oferta de {liga}, a ver si acepta','buen movimiento de {liga} con {n}'],
+    noRenueva:['{liga} no renueva a {n}, qué golpe','{n} afuera de {liga}, no me lo esperaba','se terminó {liga} para {n}, a volver por el Under','{n} se queda sin {liga}, duro','{liga} deja afuera a {n}, hay gente peor adentro','chau {liga} para {n}, tocará remontar'],
+    intl:['{n} se mete en la Internacional, qué locura','{n} clasificado para la Internacional, se lo ganó','ojo que {n} va a la Internacional','{n} en la Internacional, a ver hasta dónde llega','la Internacional con {n} adentro, me la veo entera','{n} entre los dieciséis de la Internacional, enorme'],
+    titulo:['{n} campeón de {t}, qué locura','{t} para {n}, merecidísimo','{n} se lleva {t} y no es casualidad','título de {t} para {n}, temporadón','{n} gana {t}, anótenlo bien','{t} es de {n}, se veía venir'],
+    nivelSube:['{n} subió {d} puntos este año, se nota el trabajo','el salto de nivel de {n} es evidente, {d} más','{n} cada vez mejor, otro año de crecimiento','a {n} se le ve otra cosa, subió {d}','ojo al crecimiento de {n} esta temporada','{n} ya no es el mismo de hace un año, para bien'],
+    nivelBaja:['{n} bajó {d} puntos, mal año','a {n} se lo vio peor que el año pasado','bajón de nivel de {n}, a ver si lo arregla','{n} pierde {d} de nivel, preocupante','no fue el año de {n}, se notó','{n} va para abajo, ojalá sea pasajero'],
+    debut:['debuta {n}, de {pais}, a ver qué nos trae','primer paso de {n} en esto, suerte','{n} se estrena, bienvenido a la jungla','nuevo nombre: {n}, {pais}','{n} empieza hoy, veremos si dura','debut de {n}, el tiempo dirá'],
+    primeraVictoria:['primera victoria de {n}, por algo se empieza','{n} ya sabe lo que es ganar','la primera de {n}, que vengan más','{n} estrena casillero de victorias','ya ganó {n}, a seguir','primera de muchas para {n}, ojalá'],
+    primeraLiga:['{n} llega a {liga}, del Under a la liga en nada','{n} ya es de liga, bienvenido a {liga}','del barrio a {liga}: {n}','{n} debuta en {liga}, qué historia','{liga} ficha a {n}, por fin','{n} en {liga}, la escalera funciona'],
+    primerTitulo:['PRIMER TÍTULO DE {n}: {t}','{n} ya tiene su primer título, {t}','{t} y el primer trofeo de {n}, histórico','{n} rompe el hielo con {t}','el primero de {n}, {t}, nunca se olvida','{n} campeón por primera vez, {t}'],
+    primeraIntl:['{n} se clasifica por primera vez para la Internacional','primera Internacional de {n}, qué momento','{n} entre los grandes del mundo por primera vez','la primera Internacional de {n}, de locos','{n} llega a su primera Internacional, se lo ganó','de desconocido a la Internacional: {n}'],
+    top10:['{n} ya está entre los 10 mejores de {pais}','top 10 de {pais} para {n}, quién lo diría','{n} entra en el top 10 de {pais} por nivel','{n} es top 10 en {pais}, ya es de los grandes','los 10 mejores de {pais} tienen un nombre nuevo: {n}','{n} se mete en la élite de {pais}'],
+    top1:['{n} es el número 1 de {pais}, se terminó la discusión','{pais} tiene nuevo rey: {n}','{n} en lo más alto de {pais}, qué carrera','el mejor de {pais} es {n}, y por nivel','{n} número 1 de {pais}, histórico','nadie en {pais} está arriba de {n}'],
+  },
+};
+const HITOS = ['debut','primeraVictoria','primeraLiga','primerTitulo','primeraIntl','top10','top1'];   // una sola vez por carrera, con reacciones más grandes
+// Reacciones a un evento o hito del jugador. tipo: clave de TWE; datos: {liga, t, d, pos}; los hitos se marcan en redes.hitos y no se repiten.
+function twCarreraEvento(s, tipo, datos){
+  const r=redesDe(); const f=r && fby(state.company.carrera.fid); if(!r || !f) return []; const hito=HITOS.includes(tipo); if(hito){ if(r.hitos[tipo]) return []; r.hitos[tipo]=s.year; }
+  const d=Object.assign({n:f.name, pais:f.country, liga:'', t:'', d:'', pos:''}, datos||{});
+  const n=redesVolumen(f.fama, hito ? 2 : (tipo==='titulo' ? 1.5 : 1)); const ref='ev:'+tipo+':'+s.year; const out=[]; const usados=new Set();
+  const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country).map(twAcc), todos=TWITTEROS.filter(t=>!t.special).map(twAcc);
+  const libre=pool=>{ const c=pool.filter(a=>!usados.has(a.handle)); const a=c.length?pick(c):null; if(a) usados.add(a.handle); return a; };
+  const dia=twDia(f.country); const sent = /noRenueva|nivelBaja/.test(tipo) ? -1 : 1;
+  const frase=acc=>{ const grupo=twDia(acc.country)==='es'?'es':'la'; const core=twElige(s, TWE[grupo][tipo]||TWE[grupo].oferta); const pre = Math.random()<0.35 ? twElige(s, TWX_PRE[twDia(acc.country)]||TWX_PRE.neu) : '';
+    let t = pre ? pre+' '+core : core.charAt(0).toUpperCase()+core.slice(1); if(hito && Math.random()<0.5) t+=' 🔥'; t=t.replace(/\{(\w+)\}/g,(m,x)=>d[x]!=null?d[x]:m); return twUnico(s, t, acc.country); };
+  const fans=r.fans.map(redesCuenta).filter(Boolean); const nf=Math.min(fans.length, Math.round(n*0.4));
+  for(let i=0;i<nf;i++){ const a=libre(fans); if(a) out.push(redesPush(s, a, frase(a), sent, ref)); }
+  while(out.length<n){ const a=libre((Math.random()<0.7?mios:todos)); if(!a) break; out.push(redesPush(s, a, frase(a), sent, ref)); }
+  if(hito || tipo==='titulo' || tipo==='intl' || f.fama>=50){ const med=MEDIOS_PAIS[dia]||MEDIOS_PAIS.neu; const a=Object.assign({verified:true}, pick(med)); out.push(redesPush(s, a, frase(a), 0, ref)); }
+  if(hito && f.fama>=40){ const rc=REACCIONADORES.filter(x=>twDia(x.country)===dia); const a=Object.assign({verified:true}, pick(rc.length?rc:REACCIONADORES)); out.push(redesPush(s, a, frase(a), 1, ref)); }
+  return out;
+}
+// Comprobaciones diarias de eventos e hitos (se llama desde simulateDay en carrera, tras jugar el día)
+function redesEventosDia(s, fid){
+  const r=redesDe(); const f=fby(fid); if(!r || !f) return;
+  if(!r.hitos.primeraLiga && signedLeagueOf(s, fid)) twCarreraEvento(s, 'primeraLiga', {liga: ldef(signedLeagueOf(s, fid)).name});
+  if(s.intl && s.intl.lu && !s.intlTw && (s.intl.lu.order||[]).includes(fid)){ s.intlTw=true; if(!r.hitos.primeraIntl) twCarreraEvento(s, 'primeraIntl'); else twCarreraEvento(s, 'intl'); }
+  const tit=titlesOf(fid); if(tit.length>(r.titulos||0)){ tit.slice(r.titulos||0).forEach(t=>{ const nombre=t.slice(0,-5); if(!r.hitos.primerTitulo) twCarreraEvento(s, 'primerTitulo', {t:nombre}); else twCarreraEvento(s, 'titulo', {t:nombre}); }); r.titulos=tit.length; }
+}
+// Al cerrar el año: subida o bajada de nivel y puesto en su país
+function redesCierreAno(s, f, nivelPrev){
+  const r=redesDe(); if(!r) return; const d=f.nivel-(nivelPrev==null?f.nivel:nivelPrev);
+  if(d>=2) twCarreraEvento(s, 'nivelSube', {d}); else if(d<=-2) twCarreraEvento(s, 'nivelBaja', {d:-d});
+  const lk=ligasDelPais(f)[0]; const pos = lk ? puestoEnPais(s, f, lk) : 0;
+  if(pos && pos<=10 && !r.hitos.top10) twCarreraEvento(s, 'top10', {pos}); if(pos===1 && !r.hitos.top1) twCarreraEvento(s, 'top1', {pos});
+}
+function redesDelAno(year){ const r=redesDe(); return r ? r.feed.filter(t=>t.y===year && /^ev:/.test(t.ref||'')) : []; }
 // Tuits del feed que hablan de una batalla concreta (por su clave de showBattle)
 function redesDeBatalla(key, j, mi){ const r=redesDe(); if(!r) return []; const ref=key+'|'+j+'|'+mi; return r.feed.filter(t=>t.ref===ref); }
 function redesFeedHtml(list, vacio){ return `<div class="lu-x redes-x"><div class="lu-feed">${list.length ? list.map(t=>luTweetHtml(t)).join('') : `<p class="step-note" style="padding:12px">${vacio||'Nadie ha dicho nada todavía.'}</p>`}</div></div>`; }
@@ -1712,7 +1782,7 @@ function nuevaCarrera(){
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
   const f=crearJugadorCarrera(d);
   state.seasons=[]; state.seasons.push(newSeason(null));
-  f.debut=cur().year; state.company.carrera={fid:f.id, inicio:cur().year, temporadas:[]};
+  f.debut=cur().year; state.company.carrera={fid:f.id, inicio:cur().year, nivelInicio:f.nivel, temporadas:[]};
   asegurarOfertas(cur());
   state.ui.cc=null; state.ui.importedPool=null;
   goto('carrera');
@@ -1864,7 +1934,8 @@ function showResumenCarrera(){
     ${entreno ? `<div class="sum-row"><span>Entrenaste</span><b>${esc(entreno)}</b></div>` : ''}
     ${attrBars(f)}
     <div class="sum-sec">Torneos y ligas</div>${torneos}`;
-  const tabs=[['Tu año', izq], ['El mundo', `<div class="sum-sec">Campeones</div>${champRows(s)}${sumRight(s)}`]];
+  const redesAno=redesDelAno(s.year);
+  const tabs=[['Tu año', izq+(redesAno.length ? `<div class="sum-sec">Las redes este año</div>${redesFeedHtml(redesAno)}` : '')], ['El mundo', `<div class="sum-sec">Campeones</div>${champRows(s)}${sumRight(s)}`]];
   state.ui.rcTab = state.ui.rcTab||0;
   const paint=()=>{ const t=state.ui.rcTab; return `<h3>Temporada ${s.year} · ${nameH(f)}</h3>
     <div class="sum-tabs">${tabs.map((x,i)=>`<button class="seg ${i===t?'on':''}" onclick="state.ui.rcTab=${i}; showResumenCarrera()">${x[0]}</button>`).join('')}</div>
@@ -2417,6 +2488,7 @@ function asegurarOfertas(s){
       else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true}); });
     if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva={key:antes, puesto:puestoEnPais(s,f,antes)};
     p.liga = p.ofertas.some(o=>o.key===antes) ? antes : (p.ofertas[0] ? p.ofertas[0].key : null);
+    if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.noRenueva) twCarreraEvento(s, 'noRenueva', {liga: ldef(p.noRenueva.key).name}); else if(p.ofertas.length && !p.ofertas.some(o=>o.key===antes)) twCarreraEvento(s, 'oferta', {liga: ldef(p.ofertas[0].key).name}); }
     // valores por defecto de la temporada: entrenar el atributo más bajo e inscribirse en todo lo que se pueda
     p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0];
     p.inscrito=torneosDelJugador(s,f).filter(t=>t.apto).map(t=>t.key); if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
