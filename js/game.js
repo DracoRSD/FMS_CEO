@@ -1170,6 +1170,7 @@ function nextSeason(){
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>(L.rounds||[]).flat().forEach(m=>{ if(m.d) delete m.d.s; })); });
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; });   // los tuits de temporadas pasadas no se guardan
   state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
+  aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
   { const ns=cur(); ns.activeKeys.forEach(k=>preselectRoster(ns,k)); if(ns.activeKeys.includes(WS.key)){ const c=spState(); if(c.wsPool.length<3) sponsorOffers(state.company.stars||5, 3-c.wsPool.length, false, true); } }
   Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB_|exQ_|draft_)/.test(x)).forEach(x=>delete state.ui[x]);
   { const c=state.company; if(!c.tut) c.tut={};
@@ -2807,6 +2808,7 @@ const MISMATCH_EXEMPT=['Trueno','Wos','TiagoPZK','Azuky','Walls'];
 const LOW_VIEW_EXEMPT=['El Menor','Kaiser','Teorema','Nitro','Metalingüística','Ricto','Aczino','Azuky'];
 const NO_FATIGUE=['El Menor','Teorema'];
 function seasonPairs(s){
+  if(s.ligera) return new Set(s.pares||[]);   // temporada ligera: los pares se guardaron al podar
   if(s.phase==='done' && PAIR_CACHE[s.number]) return PAIR_CACHE[s.number];
   const set=new Set(); const add=m=>{ if(m&&m.a&&m.b) set.add(pairKey(m.a,m.b)); };
   Object.values(s.leagues||{}).forEach(L=>{ (L.rounds||[]).flat().forEach(m=>{ if(m.result) add(m); }); Object.values(L.exhib||{}).forEach(x=>add(x.m)); });
@@ -2849,21 +2851,62 @@ function jornadaOrder(round){ return round.map((m,i)=>[i, hypeOf(m.a)+hypeOf(m.b
 
 /* ---------- top 10 de visitas de la temporada ---------- */
 function seasonTopBattles(s, n){
+  if(s.ligera){ const top=(s.summary && s.summary.top && s.summary.top.batallas)||[];   // temporada ligera: las 10 guardadas al podar
+    return top.slice(0,n||10).map(x=>({m:{a:x.a, b:x.b, result:{winner:x.w, tiebreak:x.t}, views:x.v, lb:x.lb||''}, logo: x.k==='rb' ? RB_LOGO : LOGOS[x.k], comp:x.comp, k:x.k})); }
   const out=[]; const KO=['Octavos','Cuartos','Semifinal','Final'];
-  const push=(m, logo, comp)=>{ if(m && m.result && m.views) out.push({m, logo, comp}); };
-  s.activeKeys.forEach(k=>{ const L=s.leagues[k]; (L.rounds||[]).forEach((r,ri)=> r.forEach(m=>push(m, LOGOS[k], `${ldef(k).name} · J${ri+1}`))); });
-  if(s.intl && s.intl.bracket){ s.intl.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, LOGOS.fms_internacional, `${INTL.name} · ${KO[ri]}`))); push(s.intl.bracket.third, LOGOS.fms_internacional, `${INTL.name} · 3er puesto`); }
+  const push=(m, logo, comp, k)=>{ if(m && m.result && m.views) out.push({m, logo, comp, k}); };
+  s.activeKeys.forEach(k=>{ const L=s.leagues[k]; (L.rounds||[]).forEach((r,ri)=> r.forEach(m=>push(m, LOGOS[k], `${ldef(k).name} · J${ri+1}`, k))); });
+  if(s.intl && s.intl.bracket){ s.intl.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, LOGOS.fms_internacional, `${INTL.name} · ${KO[ri]}`, INTL.key))); push(s.intl.bracket.third, LOGOS.fms_internacional, `${INTL.name} · 3er puesto`, INTL.key); }
   if(rbOn(s)){ [...s.rb.events, s.rb.inter].forEach(ev=>{ if(!ev.bracket) return; const nm=ev===s.rb.inter?RB_INT.name:rbdef(ev.key).name;
-    ev.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, RB_LOGO, `${nm} · ${KO[ri]}`))); push(ev.bracket.third, RB_LOGO, `${nm} · 3er puesto`); }); }
+    ev.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, RB_LOGO, `${nm} · ${KO[ri]}`, 'rb'))); push(ev.bracket.third, RB_LOGO, `${nm} · 3er puesto`, 'rb'); }); }
   return out.sort((a,b)=>b.m.views-a.m.views).slice(0,n||10);
 }
 function seasonTopFreestylers(s, n){
+  if(s.ligera) return ((s.summary && s.summary.top && s.summary.top.freestylers)||[]).slice(0,n||10);   // temporada ligera
   const T={}; const add=(m,k)=>{ if(!m||!m.result||!m.views) return; [m.a,m.b].forEach(id=>{ if(!id) return; (T[id]=T[id]||{id, views:0, n:0, keys:[]}); T[id].views+=m.views; T[id].n++; if(k && !T[id].keys.includes(k)) T[id].keys.push(k); }); };
   s.activeKeys.forEach(k=>{ const L=s.leagues[k]; (L.rounds||[]).flat().forEach(m=>add(m,k)); Object.values(L.exhib||{}).forEach(x=>add(x.m,k)); Object.values(L.fexhib||{}).forEach(x=>add(x.m,k)); });
   if(s.intl && s.intl.bracket){ s.intl.bracket.rounds.flat().forEach(m=>add(m,INTL.key)); add(s.intl.bracket.third,INTL.key); }
   const ord=[...s.activeKeys, INTL.key]; Object.values(T).forEach(t=>t.keys.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b)));
   return Object.values(T).sort((a,b)=>b.views-a.views).slice(0,n||10);
 }
+/* ---- temporada ligera (fase G) ----
+   Con más de LIGERA_TRAS temporadas cerradas por delante, una temporada se queda solo con lo que consultan el historial, los
+   títulos, la fatiga de carteles y Twitter: competidores y clasificación de cada liga, campeones y podios de Internacional,
+   Red Bull y Under, el resumen con sus dos top 10 ya calculados y los pares que se enfrentaron. En modo carrera conserva además
+   las batallas del jugador. Fuera cruces, notas por ronda, registros, directos, eventos únicos, line ups y tuits. */
+const LIGERA_TRAS = 2;   // temporadas cerradas que se guardan completas
+const LIGERA_LIGA = ['key','competitors','finalStandings','relegated','hype','finished'];
+const LIGERA_INTL = ['date','sede','played','qualifiers','champion','runnerUp','third','fourth','note'];
+// Batallas de un freestyler en una temporada, con competición y etiqueta (para la historia del jugador en modo carrera)
+function batallasDe(s, fid){
+  const out=[]; const KO=['Octavos','Cuartos','Semifinal','Final'];
+  const add=(m,comp)=>{ if(m && m.result && (m.a===fid||m.b===fid)) out.push({a:m.a, b:m.b, w:m.result.winner, t:!!m.result.tiebreak, v:m.views||0, lb:m.lb||'', comp}); };
+  const ko=(b,nm)=>{ if(!b || !b.rounds) return; b.rounds.forEach((r,ri)=>r.forEach(m=>add(m, `${nm} · ${KO[ri]||'Ronda '+(ri+1)}`))); add(b.third, `${nm} · 3er puesto`); };
+  (s.activeKeys||[]).forEach(k=>{ const L=s.leagues[k]; if(!L) return; const nm=ldef(k).name;
+    (L.rounds||[]).forEach((r,ri)=>r.forEach(m=>add(m, `${nm} · J${ri+1}`)));
+    Object.values(L.exhib||{}).forEach(x=>add(x.m, `${nm} · Exhibición`)); Object.values(L.fexhib||{}).forEach(x=>add(x.m, `${nm} · Exhibición`)); });
+  if(s.intl) ko(s.intl.bracket, INTL.name);
+  if(rbOn(s)){ (s.rb.events||[]).forEach(e=>ko(e.bracket, rbdef(e.key).name)); if(s.rb.inter) ko(s.rb.inter.bracket, RB_INT.name); }
+  (s.under||[]).forEach(e=>{ const d=udef(e.key); if(!d) return; if(e.key===MFU.key) (e.battles||[]).forEach(m=>add(m, `${d.name} #${e.n||1}`)); else ko(e.bracket, d.name); });
+  return out;
+}
+function aligerarTemporada(s){
+  if(!s || s.phase!=='done' || s.ligera) return false;
+  if(!s.summary) s.summary={};
+  s.summary.top={ batallas: seasonTopBattles(s,10).map(t=>({a:t.m.a, b:t.m.b, w:t.m.result.winner, t:!!t.m.result.tiebreak, v:t.m.views||0, lb:t.m.lb||'', comp:t.comp, k:t.k})), freestylers: seasonTopFreestylers(s,10) };
+  s.pares=[...seasonPairs(s)];
+  if(modoCarrera() && state.company.carrera && state.company.carrera.fid){ const fid=state.company.carrera.fid; s.jugador={fid, batallas:batallasDe(s, fid)}; }
+  Object.values(s.leagues||{}).forEach(L=>Object.keys(L).forEach(k=>{ if(!LIGERA_LIGA.includes(k)) delete L[k]; }));
+  if(s.intl) Object.keys(s.intl).forEach(k=>{ if(!LIGERA_INTL.includes(k)) delete s.intl[k]; });
+  if(s.rb && !s.rb.off){ const I=s.rb.inter||{};
+    s.rb={ off:false, inter:{day:I.day, sede:I.sede, played:I.played, champion:I.champion, runnerUp:I.runnerUp, third:I.third, qualifiers:I.qualifiers||[]},
+      events:(s.rb.events||[]).map(e=>({key:e.key, day:e.day, played:e.played, champion:e.champion, runnerUp:e.runnerUp, third:e.third})) }; }
+  s.under=(s.under||[]).map(e=>({key:e.key, day:e.day, played:e.played, n:e.n, champion:e.champion, runnerUp:e.runnerUp}));
+  s.log=[]; delete s.streams; delete s.uq; delete s.exEvents;
+  s.ligera=true; return true;
+}
+// Aligera todas las temporadas cerradas salvo las LIGERA_TRAS más recientes. Devuelve cuántas aligeró.
+function aligerarAntiguas(){ const cerradas=state.seasons.filter(s=>s.phase==='done'); let n=0; cerradas.slice(0, Math.max(0, cerradas.length-LIGERA_TRAS)).forEach(s=>{ if(aligerarTemporada(s)) n++; }); return n; }
 function topFreestylersHtml(s){
   const top=seasonTopFreestylers(s,10); if(!top.length) return '';
   return `<div class="section-title" style="margin-top:18px"><h2 style="font-size:22px">Top 10 freestylers con más visitas</h2></div>
