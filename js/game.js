@@ -261,7 +261,17 @@ function attrsFromNivel(nivel, style, seed){
     const up=nivelFromAttrs(at)<nivel; const k=ATTR_KEYS.slice().sort((a,b)=>up? at[a]-at[b] : at[b]-at[a])[0]; at[k]=clamp(at[k]+(up?1:-1),1,ATTR_MAX); }
   return at;
 }
-function ensureAttrs(f){ if(!f) return f; if(!f.attrs || ATTR_KEYS.some(k=>typeof f.attrs[k]!=='number')) f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); f.nivel=nivelFromAttrs(f.attrs); return f; }
+function ensureAttrs(f){ if(!f) return f; if(!f.attrs || ATTR_KEYS.some(k=>typeof f.attrs[k]!=='number')) f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); if(nivelFromAttrs(f.attrs)!==f.nivel) setNivel(f, f.nivel); return f; }
+// Cambia el nivel de un freestyler desplazando sus cinco atributos por igual (conservan su forma) hasta que la media sea exactamente n
+function setNivel(f, n){
+  n=clamp(Math.round(n),1,99);
+  if(!f.attrs || ATTR_KEYS.some(k=>typeof f.attrs[k]!=='number')){ f.attrs=attrsFromNivel(n, styleOf(f), f.name); f.nivel=n; return f; }
+  const mean=ATTR_KEYS.reduce((s,k)=>s+f.attrs[k],0)/ATTR_KEYS.length; const d=n-mean;
+  ATTR_KEYS.forEach(k=>f.attrs[k]=clamp(Math.round(f.attrs[k]+d),1,ATTR_MAX));
+  for(let guard=0; guard<40 && nivelFromAttrs(f.attrs)!==n; guard++){   // el redondeo o el tope pueden desviar la media: se corrige
+    const up=nivelFromAttrs(f.attrs)<n; const k=ATTR_KEYS.slice().sort((a,b)=>up? f.attrs[a]-f.attrs[b] : f.attrs[b]-f.attrs[a])[0]; f.attrs[k]=clamp(f.attrs[k]+(up?1:-1),1,ATTR_MAX); }
+  f.nivel=n; return f;
+}
 function attrOf(f,k){ return (f && f.attrs && typeof f.attrs[k]==='number') ? f.attrs[k] : (f ? f.nivel : 50); }
 function attrShown(f,k){ return Math.min(ATTR_SHOWN_MAX, Math.round(attrOf(f,k))); }   // para la interfaz: nunca por encima de 99
 // Base de rendimiento en una ronda: media ponderada de los atributos según el tipo de ronda
@@ -942,7 +952,7 @@ function endSeason(s){
   // evolución de freestylers
   const signed=new Set(s.activeKeys.flatMap(k=>s.leagues[k].competitors));
   state.freestylers.forEach(f=>{
-    f.nivel = Math.round(clamp(f.nivel + rnd(-3,4), 35, 97));
+    setNivel(f, clamp(f.nivel + rnd(-3,4), 35, 97));
     if(!signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99));
   });
   s.activeKeys.forEach(k=>{
@@ -1612,7 +1622,7 @@ function devSaveStats(id){
   const n=parseInt(document.getElementById('dev_nivel').value,10), fa=parseInt(document.getElementById('dev_fama').value,10);
   if(isNaN(n)||isNaN(fa)){ toast('Pon números entre 1 y 99.'); return; }
   const hy=parseInt(document.getElementById('dev_hype').value,10); if(!isNaN(hy)) f.hype=clamp(hy,1,99);
-  f.nivel=clamp(n,1,99); f.fama=clamp(fa,1,99); f.legend=document.getElementById('dev_legend').checked; const se=document.getElementById('dev_style'); if(se) f.style=se.value;
+  setNivel(f, clamp(n,1,99)); f.fama=clamp(fa,1,99); f.legend=document.getElementById('dev_legend').checked; const se=document.getElementById('dev_style'); if(se) f.style=se.value;
   toast(`${f.name}: nivel ${f.nivel}, fama ${f.fama}, hype ${Math.round(f.hype)}. Su salario pasa a ${money(salaryOf(f))} (los contratos ya firmados no cambian).`);
   render(); showFreestyler(id);
 }
