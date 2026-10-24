@@ -10,6 +10,10 @@ Decisiones ya tomadas por el autor del juego:
 - Empieza abajo, en el Under.
 - Cada temporada elige qué atributo entrena y a qué torneos se presenta, y recibe ofertas de patrocinadores y de ligas.
 - Termina al retirarse, por decisión propia o por edad, con un Salón de la fama.
+- World Series queda apagada en la primera versión.
+- La inscripción en un torneo garantiza la plaza (no se entra por el sorteo de los reales).
+- El potencial del jugador es fijo y oculto: 92.
+- Las ofertas de liga se miden por país, con las 7 ligas por separado, porque el décimo mejor tiene nivel 84 en España y 74 en México.
 
 ## 1. Qué dice el código hoy
 
@@ -86,7 +90,7 @@ El modo se distingue por `state.company.modo`. Para no tocar los cientos de lect
 state.company = {
   modo: 'carrera',               // ausente o 'ceo' en las partidas de siempre
   name: 'Mundo',                 // no se muestra
-  stars: 5, infinite: true,      // 7 ligas, Internacional y World Series desde el año 1
+  stars: 5, infinite: true,      // 7 ligas e Internacional desde el año 1 (World Series apagada)
   money: 0, reputation: 0,       // no se usan; el auto-fichaje de carrera no mira el dinero
   dbv: 8,
   carrera: { ... }               // sección 3.2
@@ -170,7 +174,7 @@ No se guarda en `fms_ceo_custom_fs`: es de esta partida. `jugador:true` lo exclu
 
 - Puntos a repartir: **300** entre los cinco atributos (media 60), mínimo 45 y máximo 75 por atributo. Nivel inicial = media = 60. El estilo elegido no añade sesgo: el jugador ya lo expresa con el reparto.
 - Experiencia 0. Fama 20 (apto para todo el Under). Hype con `randHype(20)`.
-- Potencial `POT_CARRERA = 92`, oculto. Es alto a propósito: la historia debe poder llegar arriba, y el ritmo lo ponen el entrenamiento y la actividad.
+- Potencial `POT_CARRERA = 92`, fijo y oculto para todos (decidido). Es alto a propósito: la historia debe poder llegar arriba, y el ritmo lo ponen el entrenamiento y la actividad.
 
 ### 5.2 Entrenamiento
 
@@ -201,10 +205,21 @@ Hoy la fama solo cambia en las ligas. Para que la escalera funcione, en todos lo
 | Red Bull nacional de su país | siempre | plaza fija entre los 16 |
 | Torneo de Plazas | fama ≤ 83 | plaza fija si su país no la ocupa ya |
 | Red Bull Internacional | ganar la nacional, podio anterior o estar entre los 3 de más fama | automático |
-| Liga FMS | oferta: estar entre los 10 de mayor nivel del país de una liga en pretemporada, o entre los 14 con un 50 % de probabilidad («apuesta de la liga») | plaza en la plantilla si acepta |
+| Liga FMS | oferta relativa al país (5.5) | plaza en la plantilla si acepta |
 | FMS Internacional | clasificación de liga | automático |
 
-Un jugador libre (sin liga) puede inscribirse en todo lo demás a la vez; con liga, solo en Red Bull nacional y Plazas, como hacen los reales.
+La inscripción garantiza la plaza (decidido): el jugador no pasa por `underPick` ni por `probPick`, ocupa un cupo fijo y el sorteo reparte los 15 restantes. Un jugador libre (sin liga) puede inscribirse en todo lo demás a la vez; con liga, solo en Red Bull nacional y Plazas, como hacen los reales.
+
+### 5.5 Regla de oferta de liga, relativa al país
+
+El auto-fichaje elige por nivel dentro del país de cada liga, así que el listón de entrada no es un número fijo: el décimo mejor de España tiene nivel 84 y el de México 74. Una regla absoluta («nivel ≥ 80») haría imposible España y regalaría México. Por eso la oferta es **relativa al país**:
+
+- En cada pretemporada, para cada una de las 7 ligas, se ordena a los activos del país de la liga por nivel (el mismo orden que usa el auto-fichaje). Sea `p` el puesto del jugador en esa lista.
+- Oferta segura si `p ≤ 10`: el auto-fichaje lo ficharía de todos modos.
+- «Apuesta de la liga» si `11 ≤ p ≤ 14`: la liga ofrece con probabilidad 50 %, y el jugador ocupa la plaza del décimo.
+- Solo las ligas de **su país** ofrecen; una liga ficha extranjeros únicamente cuando le faltan locales, y en carrera eso no pasa. Caribe agrupa varios países pequeños, así que el jugador caribeño compite por puesto con todos ellos.
+
+Consecuencia: el tiempo hasta la primera oferta depende del país. Con los niveles del pool actual, entrar a España exige unos 84 puntos y a México unos 74; con el crecimiento joven (+3 por atributo y año más el entrenamiento) un jugador de México recibe oferta hacia la temporada 4-5 y uno de España hacia la 7-8. Esa diferencia es deseable (España es la liga más dura), pero los criterios de la fase C3 se miden por país para que ninguna quede fuera del rango.
 
 ## 6. Final y Salón de la fama
 
@@ -253,7 +268,7 @@ Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits p
 ### Fase C3 · Escalera, inscripciones y entrenamiento
 
 - Commits: fama por torneos (todos los modos); plaza fija del jugador en Under, Monster Fu, Red Bull y Plazas; ofertas de liga en pretemporada; entrenamiento en `endSeason`; medición en `--carrera`.
-- Criterios: el jugador pasivo recibe su primera oferta de liga entre la temporada 4 y la 8 en al menos el 80 % de las carreras, y nunca antes de la 3; el activo entre la 3 y la 6 en al menos el 80 %; mediana de nivel del activo a los 10 años entre 84 y 90; el favorito en liga ≤ 70 % y el relevo en verde con la fama por torneos.
+- Criterios, medidos **por país** con las 7 ligas por separado (España, Argentina, México, Chile, Perú, Colombia y Caribe), 50 carreras por país y semilla: el jugador pasivo recibe su primera oferta de liga entre la temporada 4 y la 8 en al menos el 80 % de las carreras de cada país, y nunca antes de la 3 en ninguno; el activo entre la 3 y la 6 en al menos el 80 % de cada país; la diferencia entre la mediana del país más duro (España) y el más blando no supera las 3 temporadas, y si la supera se ajusta la apuesta de la liga (`11 ≤ p ≤ 14`, 50 %) antes que el entrenamiento; mediana de nivel del activo a los 10 años entre 84 y 90 en todos los países; el favorito en liga ≤ 70 % y el relevo en verde con la fama por torneos. El simulador imprime una fila por país: mediana y percentiles 10 y 90 de la temporada de la primera oferta, pasivo y activo.
 
 ### Fase C4 · Interfaz de temporada
 
@@ -268,10 +283,14 @@ Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits p
 ### Fase C6 · Retiro y Salón de la fama
 
 - Commits: retiro propio y por edad con aviso de última temporada; pantalla del Salón con rango y curva; galería `fms_ceo_salon`; partida en solo lectura.
-- Criterios: en 50 carreras pasivas la edad de retiro queda entre 14 y 20 años de experiencia, mediana 16 a 18; el rango del pasivo es Promesa o Figura en al menos el 80 % y el del activo Figura o Referente en al menos el 60 %; una carrera cerrada se reabre desde la galería sin errores.
+- Criterios: en 50 carreras pasivas la edad de retiro queda entre 14 y 20 años de experiencia. La mediana objetivo (16 a 18) es provisional: `RET_JUGADOR_MULT` y el umbral de nivel se calibran en C6 con el simulador, porque la fase 6 ya mostró que estas probabilidades por año se desvían del cálculo a mano cuando se encadenan con el declive. El rango del pasivo es Promesa o Figura en al menos el 80 % y el del activo Figura o Referente en al menos el 60 %; una carrera cerrada se reabre desde la galería sin errores.
 
-## 9. Preguntas abiertas
+## 9. Decisiones cerradas
 
-1. **World Series en la carrera**: ¿la dejamos apagada en la primera versión o la jugamos también en automático, con alineación y parejas por defecto, para que el jugador pueda recibir su oferta?
-2. **Plaza fija al inscribirse**: ¿te vale que la inscripción garantice la plaza en Under y Red Bull nacional, o prefieres que el jugador entre por el mismo sorteo que los reales con una ventaja (por ejemplo, el doble de probabilidad)?
-3. **Potencial del jugador**: ¿fijo y oculto (92) para todos, o elegido en la creación con un intercambio, por ejemplo más puntos iniciales a cambio de menos techo?
+Las tres preguntas abiertas de la primera versión ya están respondidas y recogidas al principio del documento:
+
+1. World Series apagada en la primera versión; se revisa cuando el modo esté jugable.
+2. La inscripción garantiza la plaza en Under, Monster Fu, Red Bull nacional y Plazas.
+3. Potencial fijo y oculto en 92 para todos.
+
+Queda por calibrar con el simulador, no por decidir: la apuesta de la liga (5.5) si algún país se sale del rango de C3, y la mediana del retiro por edad en C6.
