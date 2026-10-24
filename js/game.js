@@ -1201,7 +1201,7 @@ function showTutorial(t){
 function nextSeason(){
   const prev=cur(); if(prev.phase!=='done') return;
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>(L.rounds||[]).flat().forEach(m=>{ if(m.d) delete m.d.s; })); });
-  state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; });   // los tuits de temporadas pasadas no se guardan
+  state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; delete o.twUsados; });   // los tuits de temporadas pasadas no se guardan
   state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
   aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
   asegurarOfertas(cur());   // modo carrera: ofertas de liga del año nuevo
@@ -3154,7 +3154,7 @@ function aligerarTemporada(s){
     s.rb={ off:false, inter:{day:I.day, sede:I.sede, played:I.played, champion:I.champion, runnerUp:I.runnerUp, third:I.third, qualifiers:I.qualifiers||[]},
       events:(s.rb.events||[]).map(e=>({key:e.key, day:e.day, played:e.played, champion:e.champion, runnerUp:e.runnerUp, third:e.third})) }; }
   s.under=(s.under||[]).map(e=>({key:e.key, day:e.day, played:e.played, n:e.n, champion:e.champion, runnerUp:e.runnerUp}));
-  s.log=[]; delete s.streams; delete s.uq; delete s.exEvents;
+  s.log=[]; delete s.streams; delete s.uq; delete s.exEvents; delete s.twUsados;
   s.ligera=true; return true;
 }
 // Aligera todas las temporadas cerradas salvo las LIGERA_TRAS más recientes. Devuelve cuántas aligeró.
@@ -4449,6 +4449,10 @@ var TWITTEROS = [
   {"handle": "Batallas_Mc", "name": "BatallasMc", "country": null, "verified": false, "img": "tw_batallas_mc", "fav": ["Teorema", "Visionario", "Klan"], "hate": ["Kian", "Dybbuk", "Rapder"]}
 ];
 /* ---- habla de cada país: los tuiteros escriben con sus palabras ---- */
+// ---- Anti-repetición de tuits (fase T): registro por temporada de las plantillas usadas (s.twUsados, se borra con los tuits al cambiar de año) ----
+// Elige siempre entre las plantillas menos usadas de la lista en esta temporada, así ninguna sale una cuarta vez mientras queden otras.
+const TW_TOPE = 3;
+function twElige(s, list){ if(!list || !list.length) return ''; if(!s.twUsados) s.twUsados={}; const u=s.twUsados; let min=Infinity; list.forEach(t=>{ const n=u[t]||0; if(n<min) min=n; }); const t=pick(list.filter(x=>(u[x]||0)===min)); u[t]=(u[t]||0)+1; return t; }
 function twDia(c){ if(!c) return 'neu'; if(c==='España') return 'es'; if(c==='Argentina'||c==='Uruguay') return 'ar'; if(c==='México'||c==='EEUU') return 'mx';
   if(c==='Chile') return 'cl'; if(c==='Perú'||c==='Ecuador'||c==='Bolivia') return 'pe'; if(c==='Colombia') return 'co'; return 'car'; }
 var TWD={
@@ -4835,7 +4839,7 @@ function luGenerate(s, k){
   const tw=[]; const add=(acc, text, sent, a, extra)=>{ tw.push(Object.assign({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:a, likes:Math.round(Math.pow(Math.random(),2)*4000)+rint(3,60), rts:rint(0,400), cm:rint(0,90)}, extra||{})); return tw[tw.length-1]; };
   const asComp=id=>{ const f=fby(id); return {handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}; };
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
-  const usedT=new Set(); const pk=list=>{ const f=list.filter(x=>!usedT.has(x)); const t=pick(f.length?f:list); usedT.add(t); return t; };
+  const pk=list=>twElige(s, list);
   const D=(a,cat)=>{ const d=TWD[twDia(a.country)]||TWD.neu; return pk(d[cat]||TWD.neu[cat]); };
   const G=(a,cat)=>pk(TWG[twDia(a&&a.country)==='es'?'es':'la'][cat]);
   const fans={}; real.forEach(a=>(a.fav||[]).forEach(n=>{ const id=inLU[nrm(n)]; if(id) fans[id]=(fans[id]||0)+1; }));
@@ -4882,7 +4886,7 @@ function luGenerate(s, k){
   { const Q=TWITTEROS.find(t=>t.special==='quesada');
     if(Q){ const q=twAcc(Q); const crew=ids.filter(id=>RQ_CREW.some(n=>nrm(n)===nrm(fname(id))));
       crew.forEach(id=>add(q, fill(pk(PATRON_TX.quesadaLU),{n:fname(id),liga}), 1, at(id), {fid:id}));
-      if(sv.n>=6 && !sv.rep.length) add(q, fill(pick(['Esto es un cartel variado 🔥','Variedad de estilos en {liga}. Así sí 🔥','Hay de todo en este line up. Me gusta 🔥🔥']),{liga}), 1, END); } }
+      if(sv.n>=6 && !sv.rep.length) add(q, fill(pk(['Esto es un cartel variado 🔥','Variedad de estilos en {liga}. Así sí 🔥','Hay de todo en este line up. Me gusta 🔥🔥']),{liga}), 1, END); } }
   // Gazir anima a los suyos
   { const gz=activos().find(f=>f.name==='Gazir'); if(gz){ const ga={handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)};
       ids.filter(id=>GZ_CREW.some(n=>nrm(n)===nrm(fname(id)))).forEach(id=>add(ga, fill(pk(PATRON_TX.gazirLU),{h:twHandle(fname(id)), liga}), 1, at(id), {fid:id})); } }
@@ -4891,7 +4895,7 @@ function luGenerate(s, k){
     const moved=shuffle(ids.map(id=>({id, p:luPrevLeague(s,id,k)})).filter(x=>x.p));
     moved.slice(0,2).forEach(mv=>{ const f=fby(mv.id); const pk=mv.p.k, prev=ldef(pk).name; const acc=leagueAcc(pk); const es=twDia(acc.country)==='es';
       const o=state.seasons[state.seasons.length-2]; const champ=o && o.leagues[pk] && (o.leagues[pk].finalStandings||[])[0]===mv.id;
-      add(acc, fill(pick(TW_OFFICIAL[(es?'es':'la')+(champ?'C':'')]),{liga, prev, n:f.name, h:twHandle(f.name)}), champ?1:0, at(mv.id)); });
+      add(acc, fill(pk(TW_OFFICIAL[(es?'es':'la')+(champ?'C':'')]),{liga, prev, n:f.name, h:twHandle(f.name)}), champ?1:0, at(mv.id)); });
     if(moved.length){ const mv=moved[0]; const f=fby(mv.id); const prev=ldef(mv.p.k).name;
       const mates=shuffle(mv.p.mates.filter(x=>fby(x) && !isRival(x,mv.id))).map(x=>({id:x, nw:false}));
       const now=shuffle(ids.filter(x=>x!==mv.id && !isRival(x,mv.id))).map(x=>({id:x, nw:true}));
@@ -5258,17 +5262,17 @@ function icGenerate(s){
   const I=s.intl; const id=I.champion; if(!id || !I.bracket) return; const f=fby(id); const fem=isWoman(id); const sd=I.sede||''; const local=f.country===sd;
   let n=0; state.seasons.forEach(o=>{ if(o.intl && o.intl.champion===id) n++; }); const cw=champWord(n, fem);
   const real=TWITTEROS.filter(t=>!t.special).map(twAcc); const accs=shuffle(real);
-  const usedT=new Set(); const pk=list=>{ const f2=list.filter(x=>!usedT.has(x)); const t=pick(f2.length?f2:list); usedT.add(t); return t; };
+  const pk=list=>twElige(s, list);
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m); const T=a=>TWI[twDia(a&&a.country)==='es'?'es':'la'];
   const o={n:fname(id), sede:sd, cw};
   const tw=[]; const add=(acc, text, sent)=>tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*8000)+rint(20,150), rts:rint(10,900), cm:rint(10,200)});
   const like=a=>(a.fav||[]).some(x=>nrm(x)===nrm(f.name)), dis=a=>(a.hate||[]).some(x=>nrm(x)===nrm(f.name)); const used=new Set();
-  add(leagueAcc(INTL.key), fill(pick(['🏆 {n}, campeón de la FMS Internacional {y}','Tenemos campeón del mundo: {n} 🏆','{n} se corona en {sede}. ¡Campeón de la FMS Internacional {y}! 🏆']),{...o, y:s.year}), 1);
+  add(leagueAcc(INTL.key), fill(pk(['🏆 {n}, campeón de la FMS Internacional {y}','Tenemos campeón del mundo: {n} 🏆','{n} se corona en {sede}. ¡Campeón de la FMS Internacional {y}! 🏆']),{...o, y:s.year}), 1);
   accs.filter(like).slice(0,4).forEach(a=>{ used.add(a.handle); add(a, fill(pk(T(a).fan),o), 1); });
   accs.filter(a=>dis(a)).slice(0, local?3:1).forEach(a=>{ used.add(a.handle); add(a, fill(pk(local ? T(a).champLocalHate : T(a).hateSoft),o), local?-1:0); });
   accs.filter(a=>!used.has(a.handle) && !dis(a)).slice(0,rint(2,3)).forEach(a=>{ used.add(a.handle); add(a, fill(pk(T(a).neu),o), 1); });
   const fin=I.bracket.rounds[I.bracket.rounds.length-1][0]; const opp=fin ? (fin.a===id?fin.b:fin.a) : I.runnerUp;
-  if(opp && !isRival(opp,id)){ const of=fby(opp); add({handle:twHandle(of.name), name:of.name, country:of.country, verified:true, img:null}, fill(pick(TWC_COMP[twDia(of.country)==='es'?'es':'la']),{h:twHandle(f.name)}), 1); }
+  if(opp && !isRival(opp,id)){ const of=fby(opp); add({handle:twHandle(of.name), name:of.name, country:of.country, verified:true, img:null}, fill(pk(TWC_COMP[twDia(of.country)==='es'?'es':'la']),{h:twHandle(f.name)}), 1); }
   const sf=flagOf(sd), cf=flagOf(f.country); const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:null}; let text;
   if(nw.special==='mcn') text=`${cf} ${f.name.toUpperCase()} - ${cw.toUpperCase()} FMS INTERNACIONAL ${s.year} 🌎\n\n${f.name} vence a ${fname(opp)} en la final y gana la FMS Internacional ${s.year} en ${sd} ${sf}!!!${n>1?` (${n}º título)`:''}`;
   else text=`¡${fem?'La CAMPEONA':'El CAMPEÓN'} de la FMS INTERNACIONAL 🌎! 🏆\n\n${nrm(f.name).toUpperCase()} ${cf} se convirtió en ${fem?'la':'el'} ${cw} de la FMS Internacional ${s.year} tras vencer a ${fname(opp)} en la final disputada en ${sd} ${sf}. 🔥\n\n#FMSInternacional 🏆`;
@@ -5283,7 +5287,7 @@ function pvGenerate(s, k, j){
   round.slice().sort((x,y)=>(hypeOf(x.a)+hypeOf(x.b||x.a))-(hypeOf(y.a)+hypeOf(y.b||y.a))).forEach(m=>{ if(m.a && m.b) items.push({a:m.a, b:m.b, ep:!!m.ep}); });
   const real=TWITTEROS.filter(t=>!t.special).map(twAcc); const accs=shuffle(real);
   const lc = isWS(k) ? null : ldef(k).countries; const isLocal=a=> !lc || (a.country && lc.includes(a.country));
-  const usedT=new Set(); const pk=list=>{ const f=list.filter(x=>!usedT.has(x)); const t=pick(f.length?f:list); usedT.add(t); return t; };
+  const pk=list=>twElige(s, list);
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
   const P=(a,cat)=>{ const d=twDia(a&&a.country); let list=((TWP_DIA[d]||{})[cat]||[]).concat(d==='es'?TWP_BASE[cat]:TWP_BASE[cat].map(t=>t.replace('Aquí hay','Acá hay')));
     if(d!=='es') list=list.filter(t=>!/¡Preparad|Cambiad|aquí estaré/.test(t)); return pk(list); };
@@ -5348,7 +5352,7 @@ function pvGenerate(s, k, j){
       items.forEach((it,i)=>{ if(it.ex || !top.has(it.a) || !top.has(it.b)) return; for(let q=0;q<rint(1,2);q++){ const a=free(); add(a, fill(pk(TWT[twDia(a.country)==='es'?'es':'la'][last?'titleLast':'title']),{a:fname(it.a), b:fname(it.b), liga}), 1, i); } }); } }
   // uno o dos competidores calientan su batalla (nunca entre rivales con mala sangre)
   shuffle(items.filter(it=>!it.ex && !isRival(it.a,it.b))).slice(0,rint(1,2)).forEach(it=>{ const me=Math.random()<0.5?it.a:it.b, other=me===it.a?it.b:it.a; const f=fby(me);
-    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pick(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
+    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pk(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
   // resumen oficial: Info Freestyle o McNoticias (50/50)
   { const jn=j+1, last=jn===nJ(k), lf=leagueFlag(k); const nat=id=> !isWS(k) && lc.includes(fby(id).country); const order=items.filter(x=>!x.ex).concat(items.filter(x=>x.ex));
     const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; let text;
@@ -5425,13 +5429,13 @@ function chGenerate(s, k){
   const T=leagueTitles(k,id); const cw=champWord(T.n, fem); const campeon=fem?'campeona':'campeón';
   const real=TWITTEROS.filter(t=>!t.special).map(twAcc); const accs=shuffle(real);
   const lc = isWS(k) ? null : ldef(k).countries; const isLocal=a=> !lc || (a.country && lc.includes(a.country));
-  const usedT=new Set(); const pk=list=>{ const f=list.filter(x=>!usedT.has(x)); const t=pick(f.length?f:list); usedT.add(t); return t; };
+  const pk=list=>twElige(s, list);
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
   const C=(a,cat)=>{ const d=twDia(a&&a.country); return pk(((TWC_DIA[d]||{})[cat]||[]).concat(TWC[d==='es'?'es':'la'][cat])); };
   const o={n:fname(id), liga, cw, CW:cw.toUpperCase(), t:T.n, k:T.streak, y:s.year, campeon};
   const tw=[]; const add=(acc, text, sent)=>tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*5000)+rint(10,90), rts:rint(5,600), cm:rint(5,120)});
   const used=new Set(); const like=a=>(a.fav||[]).some(n=>nrm(n)===nrm(fname(id))), dis=a=>(a.hate||[]).some(n=>nrm(n)===nrm(fname(id)));
-  const off=leagueAcc(k); add(off, fill(pick(TWC_OFF[twDia(off.country)==='es'?'es':'la']), o), 1);
+  const off=leagueAcc(k); add(off, fill(pk(TWC_OFF[twDia(off.country)==='es'?'es':'la']), o), 1);
   accs.filter(like).slice(0,4).forEach(a=>{ used.add(a.handle); add(a, fill(C(a,'fan'),o), 1); });
   const repN = T.n>=3 ? (T.streak>=3 ? 3 : (T.streak>=2 ? 2 : 1)) : 0;
   accs.filter(a=>dis(a) && !used.has(a.handle)).slice(0, T.n>=3?2:1).forEach(a=>{ used.add(a.handle); add(a, fill(C(a, T.n>=3 ? (T.streak>=2?'streak':'rep') : 'hateSoft'),o), T.n>=3?-1:0); });
@@ -5439,7 +5443,7 @@ function chGenerate(s, k){
   accs.filter(a=>!used.has(a.handle) && !dis(a) && (isLocal(a) || Math.random()<0.15)).slice(0,rint(2,3)).forEach(a=>{ used.add(a.handle); add(a, fill(C(a,'neu'),o), 1); });
   // compañeros de liga felicitan (el subcampeón incluido), nunca un rival
   [L.finalStandings[1], ...shuffle(L.finalStandings.slice(2))].filter(x=>x && !isRival(x,id)).slice(0,rint(1,2)).forEach(x=>{ const f=fby(x);
-    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pick(TWC_COMP[twDia(f.country)==='es'?'es':'la']),{h:twHandle(fname(id))}), 1); });
+    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pk(TWC_COMP[twDia(f.country)==='es'?'es':'la']),{h:twHandle(fname(id))}), 1); });
   if(GZ_CREW.some(n=>nrm(n)===nrm(fname(id)))){ const gz=activos().find(f=>f.name==='Gazir'); if(gz && gz.id!==id) add({handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)}, fill(pick(PATRON_TX.gazirCH),{h:twHandle(fname(id)), cw, liga}), 1); }
   // última jornada: contra quién jugó
   const lastR=L.rounds[L.rounds.length-1]||[]; const fm=lastR.find(m=>m.a===id||m.b===id); const opp=fm ? (fm.a===id?fm.b:fm.a) : null; const won=fm && fm.result && fm.result.winner===id;
