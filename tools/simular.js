@@ -42,6 +42,31 @@ w.addEventListener('load', () => setTimeout(() => {
   const g = n => w.eval(n);
   const pool = g('generatePool()');
   g('state').freestylers = pool;
+
+  // Prueba previa: la evolución de fin de temporada (misma fórmula que endSeason) aplicada 10 veces seguidas
+  // debe dejar la media de atributos igual al nivel en todos, también tras guardar y recargar la partida.
+  {
+    const poolTest = g('generatePool()');   // pool aparte: la prueba no debe alterar el de la simulación
+    g('state').freestylers = poolTest;
+    const setNivel = g('setNivel'), rnd = g('rnd'), clamp = g('clamp'), nf = g('nivelFromAttrs'), KEYS = g('ATTR_KEYS');
+    const desajustados = () => g('state').freestylers.filter(f => !f.attrs || nf(f.attrs) !== f.nivel || KEYS.some(k => f.attrs[k] < 1 || f.attrs[k] > g('ATTR_MAX'))).length;
+    const forma0 = Object.fromEntries(poolTest.map(f => [f.id, KEYS.map(k => f.attrs[k] - f.attrs.punchline)]));
+    for (let i = 0; i < 10; i++) poolTest.forEach(f => setNivel(f, clamp(f.nivel + rnd(-3, 4), 35, 97)));
+    const malEvol = desajustados();
+    const cambiaForma = poolTest.filter(f => KEYS.some(k => Math.abs(f.attrs[k] - f.attrs.punchline - forma0[f.id][KEYS.indexOf(k)]) > 2 && f.attrs[k] < g('ATTR_MAX') - 3)).length;
+    g('state').company = { name: 'simulación', stars: 0, reputation: 0, money: 0, dbv: g('state').company ? g('state').company.dbv : 5 };
+    g('state').seasons = [];
+    g('save')();
+    const niveles = Object.fromEntries(poolTest.map(f => [f.name, f.nivel]));
+    g('state').freestylers = []; g('state').company = null;
+    const cargada = g('load')();
+    const malCarga = desajustados();
+    const nivelCambia = g('state').freestylers.filter(f => niveles[f.name] != null && niveles[f.name] !== f.nivel).length;
+    const ok = cargada && malEvol === 0 && malCarga === 0 && nivelCambia === 0 && cambiaForma === 0;
+    console.log((ok ? 'OK   ' : 'FAIL ') + 'evolución ×10: media de atributos = nivel en todos (desajustados ' + malEvol + '), forma conservada (cambios ' + cambiaForma + '), tras guardar y recargar (desajustados ' + malCarga + ', niveles cambiados ' + nivelCambia + ')');
+    if (!ok) { w.close(); process.exit(1); }
+    g('state').freestylers = pool;   // la simulación de temporadas usa el pool original
+  }
   g('state').seasons = [{ format: FORMATO }];
   w.eval('WS_SHORT=false');
   const LEAGUES = g('LEAGUES'), sim = g('simulateFMSBattle'), pickJudges = g('pickJudges'), standings = g('computeStandings'), fby = g('fby');
