@@ -971,6 +971,13 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .bt-res b{color:var(--white);}
 .bt-table{margin-top:4px;}
 .bt-table .fm-judges td{font-size:14px; height:26px;}
+.jname{cursor:help; border-bottom:1px dotted var(--gray-dim); outline:none;}
+.jname:hover, .jname:focus{color:var(--white); border-bottom-color:var(--red-bright);}
+.jtip{position:fixed; display:none; z-index:450; width:230px; max-width:calc(100vw - 16px); padding:9px 11px; background:var(--card); border:1px solid #3a3a48; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.5); font-family:var(--font-cond); font-size:12.5px; color:var(--gray); text-align:left; pointer-events:none;}
+.jtip-name{font-weight:800; font-size:14px; color:var(--white);}
+.jtip-sub{font-size:11.5px; color:var(--gray-dim); margin-bottom:5px;}
+.jtip-row{margin-top:3px; color:var(--white);}
+.jtip-row span{display:inline-block; min-width:62px; color:var(--gray); text-transform:uppercase; letter-spacing:0.08em; font-size:10.5px; font-weight:700;}
 .fm-judges th.jh{white-space:nowrap; max-width:96px; overflow:hidden; text-overflow:ellipsis;}
 .ex-h{font-family:var(--font-cond); font-weight:700; text-transform:uppercase; letter-spacing:.05em; font-size:13px; color:#ffcf5a; margin-bottom:6px;}
 .ex-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:700; margin-bottom:4px;}

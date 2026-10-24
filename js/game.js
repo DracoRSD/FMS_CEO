@@ -1094,7 +1094,7 @@ function toast(msg){
   clearTimeout(_toastTimer); _toastTimer=setTimeout(()=>{ el.style.display='none'; }, 3200);
 }
 function openModal(html, wide){ const mr=document.getElementById('modalRoot'); ['--red','--red-bright','--red-dark'].forEach(v=>mr.style.removeProperty(v)); mr.innerHTML=`<div class="modal-bg" onclick="if(event.target===this) closeModal()"><div class="modal ${wide===true?'wide':(wide||'')}">${html}</div></div>`; }
-function closeModal(){ document.getElementById('modalRoot').innerHTML=''; document.body.classList.remove('noscroll'); }
+function closeModal(){ if(typeof hideJudgeTip==='function') hideJudgeTip(); document.getElementById('modalRoot').innerHTML=''; document.body.classList.remove('noscroll'); }
 function starsHtml(n){ let h=''; for(let i=0;i<5;i++) h+= i<n? '★' : '<span class="off">★</span>'; return `<span class="stars" aria-label="${n} de 5 estrellas">${h}</span>`; }
 function leagueDot(key, size){
   const d=ldef(key); const logo=LOGOS[key];
@@ -1548,12 +1548,38 @@ function renameFreestyler(id){
 }
 function removePhoto(id){ fby(id).photo=null; render(); showFreestyler(id); }
 
+/* ---------- perfil del juez al pasar el cursor ---------- */
+function judgeSeverityTxt(j){ const sv=j.severidad||0; return sv<=-0.2 ? 'Severo: puntúa bajo a los dos' : (sv>=0.2 ? 'Generoso: puntúa alto a los dos' : 'Ni severo ni generoso'); }
+function judgeConsistencyTxt(j){ const c=j.consistencia==null?0.5:j.consistencia; return c>=0.8 ? 'Muy regular de ronda en ronda' : (c>=0.6 ? 'Bastante regular' : 'Imprevisible: sus notas bailan'); }
+function judgeProfileHtml(id){
+  const j=JUDGE_BY_ID[id]; if(!j) return '';
+  const g=Object.entries(j.gustos||{}).filter(([k])=>ATTR_LABELS[k]);
+  const likes=g.filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).map(([k])=>esc(ATTR_LABELS[k].toLowerCase()));
+  const dislikes=g.filter(([,v])=>v<0).sort((a,b)=>a[1]-b[1]).map(([k])=>esc(ATTR_LABELS[k].toLowerCase()));
+  return `<div class="jtip-name">${esc(j.name)}</div><div class="jtip-sub">${esc(j.country)}</div>
+    ${likes.length?`<div class="jtip-row"><span>Le gusta</span>${likes.join(', ')}</div>`:''}
+    ${dislikes.length?`<div class="jtip-row"><span>Le pesa</span>${dislikes.join(', ')}</div>`:''}
+    <div class="jtip-row">${esc(judgeSeverityTxt(j))}</div><div class="jtip-row">${esc(judgeConsistencyTxt(j))}</div>`;
+}
+let _jtipEl=null;
+function showJudgeTip(el, id){
+  const html=judgeProfileHtml(id); if(!html) return;
+  if(!_jtipEl){ _jtipEl=document.createElement('div'); _jtipEl.className='jtip'; _jtipEl.setAttribute('role','tooltip'); document.body.appendChild(_jtipEl); }
+  _jtipEl.innerHTML=html; _jtipEl.style.display='block';
+  const r=el.getBoundingClientRect(); const tw=_jtipEl.offsetWidth||220, th=_jtipEl.offsetHeight||90;
+  let x=r.left+r.width/2-tw/2, y=r.bottom+8;
+  x=Math.max(8, Math.min(x, window.innerWidth-tw-8)); if(y+th>window.innerHeight-8) y=r.top-th-8;
+  _jtipEl.style.left=x+'px'; _jtipEl.style.top=y+'px';
+}
+function hideJudgeTip(){ if(_jtipEl) _jtipEl.style.display='none'; }
+function toggleJudgeTip(el, id){ if(_jtipEl && _jtipEl.style.display==='block' && _jtipEl.dataset.id===id){ hideJudgeTip(); return; } showJudgeTip(el, id); _jtipEl.dataset.id=id; }
+
 /* ---------- detalle de una batalla jugada ---------- */
 // Nombre corto del juez para cabeceras (primera palabra; "El Sordo Ruiz" → "El Sordo")
 function judgeShort(id){ const j=JUDGE_BY_ID[id]; if(!j) return 'Juez'; const p=j.name.split(' '); return /^(el|la|los|las)$/i.test(p[0]) && p.length>1 ? p[0]+' '+p[1] : p[0]; }
 // Celdas <th> con los jueces de una batalla. Sin m.d.j (batallas anteriores a la fase 1) → "Juez 1" a "Juez 5"
 function judgeHeads(m){ const ids=(m && m.d && Array.isArray(m.d.j) && m.d.j.length===5) ? m.d.j : null;
-  return [0,1,2,3,4].map(j=> ids && JUDGE_BY_ID[ids[j]] ? `<th class="jh">${esc(judgeShort(ids[j]))}</th>` : `<th>Juez ${j+1}</th>`).join(''); }
+  return [0,1,2,3,4].map(j=> ids && JUDGE_BY_ID[ids[j]] ? `<th class="jh"><span class="jname" tabindex="0" onmouseenter="showJudgeTip(this,'${ids[j]}')" onmouseleave="hideJudgeTip()" onfocus="showJudgeTip(this,'${ids[j]}')" onblur="hideJudgeTip()" onclick="toggleJudgeTip(this,'${ids[j]}')">${esc(judgeShort(ids[j]))}</span></th>` : `<th>Juez ${j+1}</th>`).join(''); }
 // Localiza la batalla: mi numérico = cruce de la jornada j; 'ex' = exhibición; 'fex' = exhibición obligada
 function battleAt(key, j, mi){ const s=cur(); const L=s && s.leagues && s.leagues[key]; if(!L) return null;
   if(mi==='ex') return L.exhib && L.exhib[j] && L.exhib[j].m || null;
