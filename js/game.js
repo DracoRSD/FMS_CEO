@@ -1201,7 +1201,7 @@ function showTutorial(t){
 function nextSeason(){
   const prev=cur(); if(prev.phase!=='done') return;
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>(L.rounds||[]).flat().forEach(m=>{ if(m.d) delete m.d.s; })); });
-  state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; delete o.twUsados; });   // los tuits de temporadas pasadas no se guardan
+  state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; delete o.twUsados; delete o.twTextos; });   // los tuits de temporadas pasadas no se guardan
   state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
   aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
   asegurarOfertas(cur());   // modo carrera: ofertas de liga del año nuevo
@@ -3154,7 +3154,7 @@ function aligerarTemporada(s){
     s.rb={ off:false, inter:{day:I.day, sede:I.sede, played:I.played, champion:I.champion, runnerUp:I.runnerUp, third:I.third, qualifiers:I.qualifiers||[]},
       events:(s.rb.events||[]).map(e=>({key:e.key, day:e.day, played:e.played, champion:e.champion, runnerUp:e.runnerUp, third:e.third})) }; }
   s.under=(s.under||[]).map(e=>({key:e.key, day:e.day, played:e.played, n:e.n, champion:e.champion, runnerUp:e.runnerUp}));
-  s.log=[]; delete s.streams; delete s.uq; delete s.exEvents; delete s.twUsados;
+  s.log=[]; delete s.streams; delete s.uq; delete s.exEvents; delete s.twUsados; delete s.twTextos;
   s.ligera=true; return true;
 }
 // Aligera todas las temporadas cerradas salvo las LIGERA_TRAS más recientes. Devuelve cuántas aligeró.
@@ -4453,6 +4453,10 @@ var TWITTEROS = [
 // Elige siempre entre las plantillas menos usadas de la lista en esta temporada, así ninguna sale una cuarta vez mientras queden otras.
 const TW_TOPE = 3;
 function twElige(s, list){ if(!list || !list.length) return ''; if(!s.twUsados) s.twUsados={}; const u=s.twUsados; let min=Infinity; list.forEach(t=>{ const n=u[t]||0; if(n<min) min=n; }); const t=pick(list.filter(x=>(u[x]||0)===min)); u[t]=(u[t]||0)+1; return t; }
+// Tope de texto exacto por temporada: si el mismo texto ya salió TW_TOPE veces, se le añade un remate del país que aún no se haya usado con él
+function twUnico(s, text, country){ if(!text || /\n/.test(text)) return text; if(!s.twTextos) s.twTextos={}; const T=s.twTextos; let t=text;
+  if((T[t]||0)>=TW_TOPE){ const posts=(TWX_POST[twDia(country)]||TWX_POST.neu).filter(p=>(T[t+', '+p]||0)<TW_TOPE); if(posts.length) t=t.replace(/\s*🔥$/,'')+', '+pick(posts); }
+  T[t]=(T[t]||0)+1; return t; }
 function twDia(c){ if(!c) return 'neu'; if(c==='España') return 'es'; if(c==='Argentina'||c==='Uruguay') return 'ar'; if(c==='México'||c==='EEUU') return 'mx';
   if(c==='Chile') return 'cl'; if(c==='Perú'||c==='Ecuador'||c==='Bolivia') return 'pe'; if(c==='Colombia') return 'co'; return 'car'; }
 var TWD={
@@ -4782,7 +4786,7 @@ var RQ_CREW=[...RQ_TRUE,'Chuty','Mr. Ego','Arkano','Bnet','MP','HDR','Mowlihawk'
 var GZ_CREW=['Dani VK','JM Serna','Dima'];   // el Elegido de Gazir
 var PATRON_TX={
   quesadaLU:['Mucho éxito a {n} en {liga}. Orgullo 🔥','{n} dentro de {liga}. A por todas 🔥','Qué alegría ver a {n} en el cartel. Va a dar guerra 🔥','{n}, a romperla en {liga} 🔥','Vamos {n}, este año es el tuyo 🔥','Toda la fuerza para {n} esta temporada 🔥'],
-  quesadaJ:['Vamos {n}, a por {o} 🔥','Fuerza {n}. Esta jornada es tuya 🔥','{n} contra {o}. Todo mi apoyo 🔥','A muerte con {n} 🔥','Confío en ti, {n}. A por la victoria 🔥'],
+  quesadaJ:['Vamos {n}, a por {o} 🔥','Fuerza {n}. Esta jornada es tuya 🔥','{n} contra {o}. Todo mi apoyo 🔥','A muerte con {n} 🔥','Confío en ti, {n}. A por la victoria 🔥','{n}, sal a disfrutar y a ganar 🔥','Hoy {n} se come a {o}. Lo he visto entrenar 🔥','Orgullo ver a {n} subir contra {o}. A por ello 🔥','{n} no necesita suerte contra {o}, necesita que le pongan el micro 🔥','Semana dura de preparación para {n}. Contra {o} se va a notar 🔥','{n}, tú ya sabes lo que hay que hacer con {o} 🔥','Toda la RQ con {n} esta jornada 🔥'],
   gazirLU:['Orgulloso de ti, @{h}. A comerte {liga}','@{h} en {liga}. Lo que te has currado para llegar aquí. A por todas','Vamos @{h}. Este año es tuyo','@{h}, a demostrar lo que vales. Te quiero ver arriba'],
   gazirJ:['A por todas, @{h}. Contra {o} toca ganar','Vamos @{h}, hoy toca darlo todo','Confío en ti, @{h}. A por {o}','@{h}, sal a disfrutar y a ganar'],
   quesadaBoth:['Batalla de RQs 🔥','Batalla de RQs 🔥 {a} vs {b}, gane quien gane, gano yo','{a} vs {b}. Batalla de RQs 🔥🔥','Hoy hay batalla de RQs: {a} contra {b} 🔥'],
@@ -4836,7 +4840,7 @@ function luGenerate(s, k){
   const accs=shuffle(real); const inLU={}; ids.forEach(id=>inLU[nrm(fname(id))]=id);
   const lc = (isI || isWS(k)) ? null : ldef(k).countries;
   const isLocal=a=> !lc || (a.country && lc.includes(a.country));
-  const tw=[]; const add=(acc, text, sent, a, extra)=>{ tw.push(Object.assign({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:a, likes:Math.round(Math.pow(Math.random(),2)*4000)+rint(3,60), rts:rint(0,400), cm:rint(0,90)}, extra||{})); return tw[tw.length-1]; };
+  const tw=[]; const add=(acc, text, sent, a, extra)=>{ text=twUnico(s, text, acc.country); tw.push(Object.assign({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:a, likes:Math.round(Math.pow(Math.random(),2)*4000)+rint(3,60), rts:rint(0,400), cm:rint(0,90)}, extra||{})); return tw[tw.length-1]; };
   const asComp=id=>{ const f=fby(id); return {handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}; };
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
   const pk=list=>twElige(s, list);
@@ -5184,6 +5188,64 @@ var TWP_DIA={
   neu:{ both:['{a} vs {b}. La veré varias veces','Excelente cruce, {a} contra {b}'], hateBoth:['{a} vs {b}… esa batalla no la veré'], vs:['Todo el apoyo para {a} frente a {b}'],
         fav:['Muchas ganas del {a} vs {b}','{a} contra {b}, ya lo tengo anotado'], rep:['Deberían cambiar los cruces: {a} vs {b} ya van {k} años seguidos'], rival:['{a} vs {b}, se viene algo grande'], ex:['Interesante la exhibición {a} vs {b}'], gen:['{a} vs {b}, veremos qué sale'] },
 };
+// ---- Composición de tuits (fase T): arranque + frase + remate, con la voz de cada país en el arranque y el remate ----
+// Las frases van sin signo final; el arranque y el remate son opcionales. Así cada categoría tiene cientos de textos posibles sin perder el dialecto.
+var TWX_PRE={
+  es:['Tío,','Madre mía,','Ojo,','Bueno,','A ver,','Venga,','Jo,','Lo digo ya:'],
+  ar:['Loco,','Posta,','Ojo,','Che,','Mirá,','Bueno,','Dale,','Lo digo ya:'],
+  mx:['No manches,','Neta,','Órale,','Oigan,','A ver,','Bueno,','Ya ven,','Lo digo ya:'],
+  cl:['Oye,','Ya po,','Weón,','Mira,','Bueno,','A ver,','Cachai,','Lo digo altiro:'],
+  pe:['Asu,','Oe,','Causa,','Mira,','Bueno,','A ver,','Ya pues,','Lo digo ya:'],
+  co:['Uff,','Parce,','Oiga,','Mire,','Bueno,','A ver,','Hágame caso,','Lo digo ya:'],
+  car:['Diablo,','Pana,','Mira,','Bueno,','A ver,','Oye,','Te digo,','Lo digo ya:'],
+  neu:['Bueno,','Vaya,','A ver,','Mira,','Lo digo ya:'],
+};
+var TWX_POST={
+  es:['qué pasada','me flipa','de verdad','ya lo veréis','eh','en serio','sin más','ojalá'],
+  ar:['re manija','posta','eh','de una','en serio','mal','ojalá','te lo firmo'],
+  mx:['está cañón','la neta','ya verán','wey','en serio','de plano','ojalá','va'],
+  cl:['la raja','cachai','altiro','po','en serio','de verdad','ojalá','weón'],
+  pe:['pe','de una, causa','chévere','en serio','ya pues','ojalá','de verdad','asu'],
+  co:['qué chimba','bacano','parce','en serio','de una','ojalá','de verdad','hágame el favor'],
+  car:['brutal','qué nota','pana','en serio','de una','ojalá','de verdad','diablo'],
+  neu:['sin duda','veremos','en serio','ojalá','de verdad'],
+};
+var TWX_CORE={
+  es:{
+    fav:['tengo ganas de ver a {a} contra {b}','con {a} en el cruce ya tengo batalla favorita','{a} vs {b} es la que no me pierdo','confío en que {a} se luzca contra {b}','a {a} le veo ganando a {b}, pero costará','por {a} me trago la jornada entera','que llegue ya el {a} vs {b}','{a} contra {b} es mi batalla de la semana','ojalá {a} salga enchufado contra {b}','{a} tiene una batalla buena contra {b}'],
+    vs:['ojalá {a} se lleve el {a} vs {b}','todo mi apoyo a {a} contra {b}','tengo fe en {a} contra {b}','{a} tiene que ganarle a {b} sí o sí','voy con {a} contra {b}, sin dudarlo','si {a} hace su batalla, {b} no tiene nada que hacer','a {b} se le gana, y {a} lo sabe','{a} contra {b} y yo con {a} hasta el final','esta la tiene que sacar {a}','que {a} le cierre la boca a {b}'],
+    both:['{a} vs {b} es la batalla que llevaba tiempo esperando','{a} contra {b} es batallón asegurado','no me importa quién gane el {a} vs {b}','dos de mis favoritos cara a cara: {a} vs {b}','si {a} y {b} están inspirados esto es historia','gane quien gane el {a} vs {b}, ganamos todos','me pido primera fila para el {a} vs {b}','{a} vs {b} me lo veo dos veces','con {a} y {b} en la misma batalla ya está hecha la jornada','{a} vs {b} es puro arte'],
+    hateBoth:['{a} vs {b} me la salto','ni {a} ni {b}, ese cruce no lo veo','{a} contra {b} es momento de ir a por algo de comer','con {a} vs {b} paso','{a} vs {b} no me dice nada','de toda la jornada, {a} vs {b} es la que menos me apetece','el {a} vs {b} lo pongo de fondo','{a} vs {b} es la pausa para el baño'],
+    gen:['{a} vs {b} puede dar mucho que hablar','curioso el cruce {a} vs {b}','para mí {a} vs {b} es la batalla de la jornada','ni idea de quién gana el {a} vs {b}','{a} vs {b} me parece la más igualada','ojo al {a} vs {b}, que puede haber sorpresa','{a} contra {b} son estilos muy distintos','{a} vs {b} huele a réplica','no sé qué esperar del {a} vs {b}','{a} contra {b} es la batalla trampa de la jornada'],
+    rival:['{a} vs {b} tiene pique del bueno','se viene {a} contra {b} y ya sabemos cómo acaban estos dos','{a} vs {b} va a ser personal','cuando se cruzan {a} y {b} siempre pasa algo','hay cuentas pendientes entre {a} y {b}','{a} contra {b} tiene el morbo servido','{a} y {b} no se pueden ni ver, menuda batalla','el {a} vs {b} se va a calentar seguro'],
+    ex:['buena exhibición la de {a} vs {b}','tengo ganas de la exhibición {a} vs {b}','{a} vs {b} de exhibición puede ser la mejor de la jornada','la exhibición {a} vs {b} tiene buena pinta','sin puntos en juego, {a} vs {b} va a ser libre y bonita','{a} contra {b} de exhibición, regalo de jornada'],
+    rep:['¿{a} vs {b} otra vez? {k} temporadas seguidas con lo mismo','{a} contra {b} de nuevo, ya me sé esta batalla de memoria','otra edición del {a} vs {b}, un poco de variedad','{k} años seguidos con {a} vs {b}, ya está bien','{a} vs {b} parte {k}, ya cansa','me sé el {a} vs {b} hasta en sueños','el {a} vs {b} de cada año, puntual como siempre','van {k} con el {a} vs {b}, que roten algo'],
+    title:['{a} vs {b} decide el título','final adelantada: {a} contra {b}','el que gane el {a} vs {b} se pone a tiro del título','los de arriba cara a cara: {a} vs {b}','{a} contra {b} es batalla por el campeonato','esto huele a final: {a} vs {b}','{a} vs {b} vale una liga','quien pierda el {a} vs {b} se despide del título'],
+    comp:['nos vemos en la tarima, @{h}','respeto máximo a @{h}, pero esta jornada es mía','llevo semanas preparando el {a} vs {b}','contra @{h} hay que dar el 200 %','preparado para el {a} vs {b}','@{h}, que gane el mejor','ya tengo ganas de subir contra @{h}','esta jornada toca sufrir contra @{h}, y me gusta','@{h}, nos vemos en el minuto','a por el {a} vs {b} con todo'],
+  },
+  la:{
+    fav:['tengo ganas de ver a {a} contra {b}','con {a} en el cruce ya tengo batalla favorita','{a} vs {b} es la que no me pierdo','confío en que {a} se luzca contra {b}','a {a} lo veo ganándole a {b}, pero va a costar','por {a} me veo la fecha entera','que llegue ya el {a} vs {b}','{a} contra {b} es mi batalla de la semana','ojalá {a} salga enchufado contra {b}','{a} tiene una batalla linda contra {b}'],
+    vs:['ojalá {a} se lleve el {a} vs {b}','todo mi apoyo a {a} contra {b}','tengo fe en {a} contra {b}','{a} tiene que ganarle a {b} sí o sí','voy con {a} contra {b}, sin dudarlo','si {a} hace su batalla, {b} no tiene nada que hacer','a {b} se le gana, y {a} lo sabe','{a} contra {b} y yo con {a} hasta el final','esta la tiene que sacar {a}','que {a} le cierre la boca a {b}'],
+    both:['{a} vs {b} es la batalla que esperaba hace tiempo','{a} contra {b} es batallón asegurado','no me importa quién gane el {a} vs {b}','dos de mis favoritos cara a cara: {a} vs {b}','si {a} y {b} están inspirados esto es historia','gane quien gane el {a} vs {b}, ganamos todos','me pido primera fila para el {a} vs {b}','{a} vs {b} me lo veo dos veces','con {a} y {b} en la misma batalla ya está hecha la fecha','{a} vs {b} es puro arte'],
+    hateBoth:['{a} vs {b} me la salto','ni {a} ni {b}, ese cruce no lo veo','{a} contra {b} es momento de ir por algo de comer','con {a} vs {b} paso','{a} vs {b} no me dice nada','de toda la fecha, {a} vs {b} es la que menos me provoca','el {a} vs {b} lo pongo de fondo','{a} vs {b} es la pausa para el baño'],
+    gen:['{a} vs {b} puede dar mucho que hablar','curioso el cruce {a} vs {b}','para mí {a} vs {b} es la batalla de la fecha','ni idea de quién gana el {a} vs {b}','{a} vs {b} me parece la más pareja','ojo al {a} vs {b}, que puede haber sorpresa','{a} contra {b} son estilos muy distintos','{a} vs {b} tiene olor a réplica','no sé qué esperar del {a} vs {b}','{a} contra {b} es la batalla trampa de la fecha'],
+    rival:['{a} vs {b} tiene pica de la buena','se viene {a} contra {b} y ya sabemos cómo terminan estos dos','{a} vs {b} va a ser personal','cuando se cruzan {a} y {b} siempre pasa algo','hay cuentas pendientes entre {a} y {b}','{a} contra {b} tiene el morbo servido','{a} y {b} no se pueden ni ver, qué batalla','el {a} vs {b} se va a calentar seguro'],
+    ex:['buena exhibición la de {a} vs {b}','tengo ganas de la exhibición {a} vs {b}','{a} vs {b} de exhibición puede ser la mejor de la fecha','la exhibición {a} vs {b} tiene buena pinta','sin puntos en juego, {a} vs {b} va a ser libre y linda','{a} contra {b} de exhibición, regalo de fecha'],
+    rep:['¿{a} vs {b} otra vez? {k} temporadas seguidas con lo mismo','{a} contra {b} de nuevo, ya me sé esta batalla de memoria','otra edición del {a} vs {b}, un poco de variedad','{k} años seguidos con {a} vs {b}, ya está bien','{a} vs {b} parte {k}, ya cansa','me sé el {a} vs {b} hasta en sueños','el {a} vs {b} de cada año, puntual como siempre','van {k} con el {a} vs {b}, que roten algo'],
+    title:['{a} vs {b} define el título','final adelantada: {a} contra {b}','el que gane el {a} vs {b} queda a tiro del título','los de arriba cara a cara: {a} vs {b}','{a} contra {b} es batalla por el campeonato','esto tiene olor a final: {a} vs {b}','{a} vs {b} vale una liga','quien pierda el {a} vs {b} se despide del título'],
+    comp:['nos vemos en la tarima, @{h}','respeto total a @{h}, pero esta fecha es mía','hace semanas que preparo el {a} vs {b}','contra @{h} hay que dejar todo','listo para el {a} vs {b}','@{h}, que gane el mejor','ya tengo ganas de subir contra @{h}','esta fecha toca sufrir contra @{h}, y me gusta','@{h}, nos vemos en el minuto','a por el {a} vs {b} con todo'],
+  },
+};
+// Compone un tuit de la categoría cat con la voz del país del autor. Devuelve la plantilla (con {a}, {b}, {h}) ya registrada en s.twUsados.
+function twCompone(s, cat, dia){
+  const grupo = dia==='es' ? 'es' : 'la'; const cores=(TWX_CORE[grupo]||{})[cat]; if(!cores) return null;
+  const core=twElige(s, cores); const pre = Math.random()<0.4 ? twElige(s, TWX_PRE[dia]||TWX_PRE.neu) : ''; let post = Math.random()<0.5 ? twElige(s, TWX_POST[dia]||TWX_POST.neu) : '';
+  if(post && pre && pre.toLowerCase().replace(/[,:]/g,'')===post.toLowerCase()) post='';   // nunca la misma muletilla dos veces
+  let t = pre ? pre+' '+core : core.charAt(0).toUpperCase()+core.slice(1);
+  if(post) t += (post.endsWith('?')||post.endsWith('!') ? ' ' : ', ') + post;
+  if(!/[.!?…🔥]$/.test(t)) t += Math.random()<0.25 ? ' 🔥' : '';
+  return t;
+}
 var TWP_COMP={
   es:['Nos vemos en la tarima, @{h}. Que gane el mejor','Preparado para el {a} vs {b}. Va a ser bonito','Respeto máximo a @{h}, pero esta jornada es mía','Llevo semanas preparando esta. Nos vemos, @{h}','Contra @{h} siempre hay que dar el 200%. Allí estaré'],
   ar:['Nos vemos en la tarima, @{h}. Que gane el mejor','Listo para el {a} vs {b}. Va a estar buenísimo','Respeto total a @{h}, pero esta fecha es mía','Vengo preparando esta hace semanas. Nos vemos, @{h}','Con @{h} siempre hay que dejar todo. Ahí voy a estar'],
@@ -5265,7 +5327,7 @@ function icGenerate(s){
   const pk=list=>twElige(s, list);
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m); const T=a=>TWI[twDia(a&&a.country)==='es'?'es':'la'];
   const o={n:fname(id), sede:sd, cw};
-  const tw=[]; const add=(acc, text, sent)=>tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*8000)+rint(20,150), rts:rint(10,900), cm:rint(10,200)});
+  const tw=[]; const add=(acc, text, sent)=>{ text=twUnico(s, text, acc.country); tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*8000)+rint(20,150), rts:rint(10,900), cm:rint(10,200)}); };
   const like=a=>(a.fav||[]).some(x=>nrm(x)===nrm(f.name)), dis=a=>(a.hate||[]).some(x=>nrm(x)===nrm(f.name)); const used=new Set();
   add(leagueAcc(INTL.key), fill(pk(['🏆 {n}, campeón de la FMS Internacional {y}','Tenemos campeón del mundo: {n} 🏆','{n} se corona en {sede}. ¡Campeón de la FMS Internacional {y}! 🏆']),{...o, y:s.year}), 1);
   accs.filter(like).slice(0,4).forEach(a=>{ used.add(a.handle); add(a, fill(pk(T(a).fan),o), 1); });
@@ -5289,9 +5351,10 @@ function pvGenerate(s, k, j){
   const lc = isWS(k) ? null : ldef(k).countries; const isLocal=a=> !lc || (a.country && lc.includes(a.country));
   const pk=list=>twElige(s, list);
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
-  const P=(a,cat)=>{ const d=twDia(a&&a.country); let list=((TWP_DIA[d]||{})[cat]||[]).concat(d==='es'?TWP_BASE[cat]:TWP_BASE[cat].map(t=>t.replace('Aquí hay','Acá hay')));
+  const P=(a,cat)=>{ const d=twDia(a&&a.country); if(TWX_CORE.es[cat] && Math.random()<0.8){ const c=twCompone(s, cat, d); if(c) return c; }
+    let list=((TWP_DIA[d]||{})[cat]||[]).concat(d==='es'?TWP_BASE[cat]:TWP_BASE[cat].map(t=>t.replace('Aquí hay','Acá hay')));
     if(d!=='es') list=list.filter(t=>!/¡Preparad|Cambiad|aquí estaré/.test(t)); return pk(list); };
-  const tw=[]; const add=(acc, text, sent, at)=>{ tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at, likes:Math.round(Math.pow(Math.random(),2)*3000)+rint(3,60), rts:rint(0,300), cm:rint(0,70)}); };
+  const tw=[]; const add=(acc, text, sent, at)=>{ text=twUnico(s, text, acc.country); tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at, likes:Math.round(Math.pow(Math.random(),2)*3000)+rint(3,60), rts:rint(0,300), cm:rint(0,70)}); };
   const used=new Set(); const free=()=>{ const pool=accs.filter(x=>!used.has(x.handle)); const loc=pool.filter(isLocal); const a=(loc.length && Math.random()<0.8 ? pick(loc) : pick(pool.length?pool:accs)); used.add(a.handle); return a; };
   const like=(a,id)=>(a.fav||[]).some(n=>nrm(n)===nrm(fname(id))), dis=(a,id)=>(a.hate||[]).some(n=>nrm(n)===nrm(fname(id)));
   items.forEach((it,i)=>{ const A=fname(it.a), B=fname(it.b); let nb=0; const lovers=new Set();
@@ -5305,7 +5368,7 @@ function pvGenerate(s, k, j){
       else return;
       used.add(a.handle); add(a, fill(P(a,cat),o), sent, i); nb++; });
     const st=it.ex? 0 : pairStreak(it.a,it.b);
-    if(st>=3){ const a=accs.find(x=>!used.has(x.handle) && isLocal(x) && !lovers.has(x.handle) && !(like(x,it.a)&&like(x,it.b))) || free(); used.add(a.handle); add(a, fill(P(a,'rep'),{a:A,b:B,k:st}), -1, i); }
+    if(st>=3 && Math.random()<0.35){ const a=accs.find(x=>!used.has(x.handle) && isLocal(x) && !lovers.has(x.handle) && !(like(x,it.a)&&like(x,it.b))) || free(); used.add(a.handle); add(a, fill(P(a,'rep'),{a:A,b:B,k:st}), -1, i); }
     if(isRival(it.a,it.b)){ const a=free(); add(a, fill(P(a,'rival'),{a:A,b:B}), 1, i); }
     else if(it.ex){ const fx=accs.filter(a=>!used.has(a.handle) && (like(a,it.a)||like(a,it.b)||dis(a,it.a)||dis(a,it.b)));
       if(fx.length && Math.random()<0.8){ const a=fx[0]; used.add(a.handle); const la=like(a,it.a), lb=like(a,it.b);
@@ -5326,7 +5389,7 @@ function pvGenerate(s, k, j){
     const one=(list, exclude, bothList)=>{ const ix=items.map((it,i)=>({it,i})).filter(x=>!x.it.ex && x.it.a!==exclude && x.it.b!==exclude); const bl=bothList||list;
       const both=shuffle(ix.filter(x=>inC(bl,x.it.a)&&inC(bl,x.it.b))); if(both.length) return {...both[0], both:true};
       const single=shuffle(ix.filter(x=>inC(list,x.it.a)||inC(list,x.it.b))); return single.length ? {...single[0], both:false} : null; };
-    if(q){ const x=one(RQ_CREW, null, RQ_TRUE); if(x){ if(x.both) add(q, fill(pk(PATRON_TX.quesadaBoth),{a:fname(x.it.a), b:fname(x.it.b)}), 1, x.i);
+    if(q && Math.random()<0.5){ const x=one(RQ_CREW, null, RQ_TRUE); if(x){ if(x.both) add(q, fill(pk(PATRON_TX.quesadaBoth),{a:fname(x.it.a), b:fname(x.it.b)}), 1, x.i);
         else { const me=inC(RQ_CREW,x.it.a)?x.it.a:x.it.b, o=me===x.it.a?x.it.b:x.it.a; add(q, fill(pk(PATRON_TX.quesadaJ),{n:fname(me), o:fname(o)}), 1, x.i); } } }
     if(gz){ const x=one(GZ_CREW, gz.id); if(x && Math.random()<(x.both?0.85:0.45)){ const ga={handle:'gazir', name:'Gazir', country:gz.country, verified:true, img:photoOf(gz)};
         if(x.both) add(ga, fill(pk(PATRON_TX.gazirBoth),{a:twHandle(fname(x.it.a)), b:twHandle(fname(x.it.b))}), 1, x.i);
@@ -5349,10 +5412,10 @@ function pvGenerate(s, k, j){
   { const st=computeStandings(L); const left=nJ(k)-j; const decided = j>0 && st.length>1 && (st[0].pts-st[1].pts) > 3*left;
     if(decided && j >= nJ(k)-2){ for(let q=0;q<rint(1,2);q++){ const a=free(); add(a, fill(pk(TWT[twDia(a.country)==='es'?'es':'la'].decided),{n:fname(st[0].id), liga}), -1, items.length); } }
     else if(j>=2){ const top=new Set(st.slice(0,3).map(r=>r.id)); const last=j===nJ(k)-1;
-      items.forEach((it,i)=>{ if(it.ex || !top.has(it.a) || !top.has(it.b)) return; for(let q=0;q<rint(1,2);q++){ const a=free(); add(a, fill(pk(TWT[twDia(a.country)==='es'?'es':'la'][last?'titleLast':'title']),{a:fname(it.a), b:fname(it.b), liga}), 1, i); } }); } }
+      items.forEach((it,i)=>{ if(it.ex || !top.has(it.a) || !top.has(it.b)) return; for(let q=0;q<rint(1,2);q++){ const a=free(); const d=twDia(a.country); add(a, fill(!last && Math.random()<0.6 ? twCompone(s,'title',d) : pk(TWT[d==='es'?'es':'la'][last?'titleLast':'title']),{a:fname(it.a), b:fname(it.b), liga}), 1, i); } }); } }
   // uno o dos competidores calientan su batalla (nunca entre rivales con mala sangre)
   shuffle(items.filter(it=>!it.ex && !isRival(it.a,it.b))).slice(0,rint(1,2)).forEach(it=>{ const me=Math.random()<0.5?it.a:it.b, other=me===it.a?it.b:it.a; const f=fby(me);
-    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(pk(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
+    add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(Math.random()<0.6 ? twCompone(s,'comp',twDia(f.country)) : pk(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
   // resumen oficial: Info Freestyle o McNoticias (50/50)
   { const jn=j+1, last=jn===nJ(k), lf=leagueFlag(k); const nat=id=> !isWS(k) && lc.includes(fby(id).country); const order=items.filter(x=>!x.ex).concat(items.filter(x=>x.ex));
     const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; let text;
@@ -5433,7 +5496,7 @@ function chGenerate(s, k){
   const fill=(t,o)=>t.replace(/\{(\w+)\}/g,(m,x)=>o[x]!=null?o[x]:m);
   const C=(a,cat)=>{ const d=twDia(a&&a.country); return pk(((TWC_DIA[d]||{})[cat]||[]).concat(TWC[d==='es'?'es':'la'][cat])); };
   const o={n:fname(id), liga, cw, CW:cw.toUpperCase(), t:T.n, k:T.streak, y:s.year, campeon};
-  const tw=[]; const add=(acc, text, sent)=>tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*5000)+rint(10,90), rts:rint(5,600), cm:rint(5,120)});
+  const tw=[]; const add=(acc, text, sent)=>{ text=twUnico(s, text, acc.country); tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at:0, likes:Math.round(Math.pow(Math.random(),2)*5000)+rint(10,90), rts:rint(5,600), cm:rint(5,120)}); };
   const used=new Set(); const like=a=>(a.fav||[]).some(n=>nrm(n)===nrm(fname(id))), dis=a=>(a.hate||[]).some(n=>nrm(n)===nrm(fname(id)));
   const off=leagueAcc(k); add(off, fill(pk(TWC_OFF[twDia(off.country)==='es'?'es':'la']), o), 1);
   accs.filter(like).slice(0,4).forEach(a=>{ used.add(a.handle); add(a, fill(C(a,'fan'),o), 1); });
