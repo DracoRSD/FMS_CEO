@@ -683,7 +683,7 @@ function runLeagueJornada(s, L, d){
   const zk=uqZaskoRoll(s, L);
   if(isWS(L.key) && L.wsSede && L.wsSede[L.played]){ const sd=L.wsSede[L.played]; round.forEach(m=>[m.a,m.b].forEach(id=>{ const f=fby(id); if(f && f.country===sd) UQ_PERF[id]=(UQ_PERF[id]||0)+LOCAL_BONUS; })); }   // Zasko: buen o mal día (se sabe al día siguiente)
   ord.forEach(([i])=>{ const m=round[i]; if(m.postponed || !m.b) return;
-    const r=simulateFMSBattle(m, fxVal(L.key,'nivel')+spkLv(L.key));
+    const r=simulateFMSBattle(m, fxVal(L.key,'nivel')+spkLv(L.key), judgesOf(L));
     if(r.tiebreak) replicas++;
     if(r.upset){ upsets++; if(!highlight) highlight=`sorpresa: ${r.W.name} tumba a ${r.Lo.name}`; }
   });
@@ -696,11 +696,11 @@ function runLeagueJornada(s, L, d){
   SPK_BH=spkVal(L.key,'bhype'); RIVAL_DEFER=true; round.forEach(m=>{ m.views = (m.postponed||!m.b) ? 0 : Math.round(battleViews(m, vm)*uqViewMult(s,L,m,zk)); }); RIVAL_DEFER=false;
   round.forEach((m,mi)=>{ if(m.views && isRival(m.a,m.b) && Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', key:L.key, j:L.played, mi, a:m.a, b:m.b, w:m.result&&m.result.winner, v:rint(0,13)}); });
   const fx = L.fexhib && L.fexhib[L.played];
-  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); }
+  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); }
   const ex = L.exhib && L.exhib[L.played];
   if(ex && fby(ex.a) && fby(ex.b)){
     const m=ex.m={id:uid('x'), a:ex.a, b:ex.b, result:null, ex:true};
-    simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m));
+    simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m));
     const all=round.filter(r=>r.result).flatMap(r=>ptbOf(r)); const avg=all.reduce((a,x)=>a+x,0)/Math.max(1,all.length); const p=ptbOf(m);
     ex.good=[p[0]>=avg*0.97 || (m.result.winner===m.a && p[0]>=avg*0.9), p[1]>=avg*0.97 || (m.result.winner===m.b && p[1]>=avg*0.9)];
     if(!s.exEvents) s.exEvents=[];
@@ -2261,15 +2261,18 @@ function fmsLabel(m){
   const w=aW?nA:nB, l=aW?nB:nA;
   return `${w}-${l}${nR?` (${nR} réplica${nR>1?'s':''})`:''}`;
 }
-function simulateFMSBattle(m, lvB){
+// judges: los 5 ids de juez de la liga (judgesOf(L)). Sin ellos, los 5 internacionales.
+function simulateFMSBattle(m, lvB, judges){
   const A=fby(m.a), B=fby(m.b); lvB=lvB||0;
-  const fa=gauss()*7, fb=gauss()*7;     // forma del día: no siempre se rinde al nivel
+  if(!Array.isArray(judges) || judges.length!==5) judges=judgesByGroup('Internacional').slice(0,5).map(j=>j.id);
+  const JJ=judges.map(id=>JUDGE_BY_ID[id]||null);
+  const fa=gauss()*7*mentalFactor(A), fb=gauss()*7*mentalFactor(B);     // forma del día: no siempre se rinde al nivel; la mentalidad la estabiliza
   const fmt=WS_SHORT ? 'short' : seasonFormat(cur()); const RS=ROUND_SETS[fmt];
   const SA=STYLES[styleOf(A)], SB=STYLES[styleOf(B)];
   const perf=(F,S,form,rt)=>{
     if(F.name==='Khan') return 47.5 + form*0.4 + gauss()*4;    // PTB muy bajo (60-120 en formato largo)
     if(F.name==='Navas') return 57 + form*0.4 + gauss()*4;     // bajo (110-170 en formato largo)
-    let p=F.nivel+lvB+form+gauss()*8*S.v+(S.m[rt]||0)+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0);
+    let p=roundBase(F,rt)+lvB+form+gauss()*8*S.v*mentalFactor(F)+(S.m[rt]||0)*STYLE_ROUND_MOD+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0);
     if(S.spike && Math.random()<0.12) p+=11; return p; };
   let s='';
   const tA=[0,0,0,0,0], tB=[0,0,0,0,0];
@@ -2283,7 +2286,8 @@ function simulateFMSBattle(m, lvB){
       return v; };
     const ra=[], rb=[];
     for(let j=0;j<5;j++){
-      let sa=sc(ba+gauss()*0.5), sb=sc(bb+gauss()*0.5);
+      const J=JJ[j], sev=J?J.severidad:0, nz=judgeNoise(J);
+      let sa=sc(ba+judgeTaste(J,A)+sev+gauss()*nz), sb=sc(bb+judgeTaste(J,B)+sev+gauss()*nz);
       if(Math.abs(ba-bb)<1.5 && Math.random()<tieP){ const x=sc((ba+bb)/2+gauss()*0.5); sa=sb=x; }
       ra.push(sa); rb.push(sb); tA[j]+=sa; tB[j]+=sb;
     }
@@ -2296,13 +2300,13 @@ function simulateFMSBattle(m, lvB){
   let aWins, h=null, tiebreak=false;
   if(nA<3 && nB<3){   // sin 3 votos para nadie → réplica (p. ej. 2-2-1 o 2 votos + 2 réplicas + 1)
     tiebreak=true;
-    const p=1/(1+Math.pow(10,((B.nivel+fb)-(A.nivel+fa))/18));
+    const p=1/(1+Math.pow(10,((B.nivel+fb)-(A.nivel+fa)+MENTAL_REPLICA*(attrOf(B,'mentalidad')-attrOf(A,'mentalidad')))/18));
     let ha=0; for(let j=0;j<5;j++) if(Math.random()<p) ha++;
     aWins=ha>=3; h=aWins?[ha,5-ha]:[5-ha,ha];
   } else aWins=nA>nB;
   if(A.name==='Khan' && B.name!=='Khan') aWins=false; else if(B.name==='Khan' && A.name!=='Khan') aWins=true;
   const W=aWins?A:B, Lo=aWins?B:A;
-  m.d={s, v, h, e:2}; if(fmt==='long') m.d.f='L';
+  m.d={s, v, h, e:2, j:judges.slice()}; if(fmt==='long') m.d.f='L';
   m.result={winner:W.id, loser:Lo.id, tiebreak};
   battleHype(W, Lo);
   m.lb=fmsLabel(m);
@@ -3029,7 +3033,7 @@ function uqApply(s, ev){
     ev.done=true; ev.show=true; addLog(s, ev.day, `🌐 Chuty y Aczino rompen internet: su batalla no para de sumar visitas.`, 'gold'); }
   else if(ev.type==='unavail'){ const m=L.rounds[ev.j][ev.mi]; m.postponed=true; ev.rival = m.a===ev.fid ? m.b : m.a;
     addLog(s, ev.day, `${fname(ev.fid)} no estará en la J${ev.j+1} de ${ldef(ev.key).short}: ${ev.why||UQ_UNAV[fby(ev.fid).name].why}.`, 'bad'); }
-  else if(ev.type==='recup'){ const m=L.rounds[ev.j][ev.mi]; const r=simulateFMSBattle(m, leagueHasFx(L.key,'nivel')?2:0); m.recup=true; m.postponed=false;
+  else if(ev.type==='recup'){ const m=L.rounds[ev.j][ev.mi]; const r=simulateFMSBattle(m, leagueHasFx(L.key,'nivel')?2:0, judgesOf(L)); m.recup=true; m.postponed=false;
     m.views=Math.round(battleViews(m, 0.8*(1+0.08*state.company.stars))*0.5); m.views=Math.min(m.views, (fby(m.a).fama>=90||fby(m.b).fama>=90)?400000:100000); const inc=Math.round(m.views*VIEW_RATE);
     state.company.money+=inc; s.fin.income+=inc; s.fin.views=(s.fin.views||0)+inc; L.income+=inc; ev.done=true; ev.show=true;
     addLog(s, ev.day, `Batalla recuperativa de ${ldef(ev.key).short}: ${fname(r.W.id)} gana a ${fname(r.Lo.id)} (${m.lb}).`, 'good'); }
