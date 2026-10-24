@@ -1408,14 +1408,14 @@ function renderLeague(key){
   <div class="jornada-nav"><button class="btn small" ${j===0?'disabled':''} onclick="state.ui['${navKey}']=${j-1}; render()">‹</button>
   <div class="jornada-nav-label">Jornada ${j+1} · ${fmtDay(s.year,L.dates[j])}${isWS(key)&&L.wsSede&&L.wsSede[j]?' · '+esc(L.wsSede[j]):''} ${j<L.played?'<span class="jdone">· jugada</span>':(L.manual && !L.confirmed[j]?'<span class="jprov">· provisional</span>':(L.manual?'<span class="jdone">· elegida</span>':''))}</div>
   <button class="btn small" ${j===nJ(key)-1?'disabled':''} onclick="state.ui['${navKey}']=${j+1}; render()">›</button></div>
-  <div class="matches-grid">${round.map(m=>{ const r=m.result; const wa=r&&r.winner===m.a, wb=r&&r.winner===m.b;
-    return `<div class="match" style="min-height:0;"><div class="match-head">
+  <div class="matches-grid">${round.map((m,mi)=>{ const r=m.result; const wa=r&&r.winner===m.a, wb=r&&r.winner===m.b;
+    return `<div class="match${r?' clickable':''}" style="min-height:0;"${r?` onclick="showBattle('${key}',${j},${mi})"`:''}><div class="match-head">
       <div class="match-side left ${wa?'win':''}">${miniAvatar(m.a,22)}<span class="side-name">${fnameH(m.a)}</span></div><div class="vs">vs</div>
       <div class="match-side right ${wb?'win':''}"><span class="side-name">${m.ep&&!m.b?'<i class="step-note">Extraplayer</i>':fnameH(m.b)}${m.ep&&m.b?' <span class="tag-mini ep">EP</span>':''}</span>${miniAvatar(m.b,22)}</div></div>
       <div class="match-result"><span>${r? `Gana ${fnameH(r.winner)}${r.tiebreak?' <span class="rtag">réplica</span>':''}${m.recup?' <span class="rtag">recuperativa</span>':''}` : (m.postponed?`Aplazada${m.recupDay!=null?' · recuperativa el '+fmtDay(s.year,m.recupDay):''}`:'Pendiente')}</span><span>${(()=>{ const p=ptbOf(m); return p? 'PTB '+fpt(p[0])+'–'+fpt(p[1]) : fby(m.a).nivel+' · '+(fby(m.b)?fby(m.b).nivel:'—'); })()}</span></div>
       ${r&&(m.lb||m.views)?`<div class="match-result" style="margin-top:2px"><span>${esc(m.lb||'')}</span><span>${m.views?'▶ '+fmtViews(m.views):''}</span></div>`:''}</div>`; }).join('')}</div>
   ${renderExhib(s,L,key,j)}${(()=>{ const fx=L.fexhib&&L.fexhib[j]; if(!fx) return ''; const m=fx.m;
-    return `<div class="ex-box done"><div class="ex-h">🎤 Exhibición obligada</div><div class="ex-row">${miniAvatar(fx.a,22)} ${fnameH(fx.a)} <span class="vs">vs</span> ${fnameH(fx.b)} ${miniAvatar(fx.b,22)}</div>
+    return `<div class="ex-box done clickable" onclick="showBattle('${key}',${j},'fex')"><div class="ex-h">🎤 Exhibición obligada</div><div class="ex-row">${miniAvatar(fx.a,22)} ${fnameH(fx.a)} <span class="vs">vs</span> ${fnameH(fx.b)} ${miniAvatar(fx.b,22)}</div>
       <div class="step-note">${m&&m.result?`Gana ${fnameH(m.result.winner)} · PTB ${fpt(ptbOf(m)[0])}–${fpt(ptbOf(m)[1])}`:`Sustituye a la batalla aplazada de ${fnameH(fx.missing)}`}</div></div>`; })()}
   ${j<L.played && L.mvps && L.mvps[j]?`<div class="jornada-foot"><span>⭐ MVP: <b>${fnameH(L.mvps[j].id)}</b> · ${fpt(L.mvps[j].pts)} pts</span>${round[0]&&round[0].d&&round[0].d.s?`<button class="btn small" onclick="openFMSShow('${key}',${j})">▶ Ver jornada</button>`:''}</div>`:''}`;
   return h;
@@ -1547,6 +1547,42 @@ function renameFreestyler(id){
   fby(id).name=v; toast('Nombre guardado.'); render(); showFreestyler(id);
 }
 function removePhoto(id){ fby(id).photo=null; render(); showFreestyler(id); }
+
+/* ---------- detalle de una batalla jugada ---------- */
+// Nombre corto del juez para cabeceras (primera palabra; "El Sordo Ruiz" → "El Sordo")
+function judgeShort(id){ const j=JUDGE_BY_ID[id]; if(!j) return 'Juez'; const p=j.name.split(' '); return /^(el|la|los|las)$/i.test(p[0]) && p.length>1 ? p[0]+' '+p[1] : p[0]; }
+// Celdas <th> con los jueces de una batalla. Sin m.d.j (batallas anteriores a la fase 1) → "Juez 1" a "Juez 5"
+function judgeHeads(m){ const ids=(m && m.d && Array.isArray(m.d.j) && m.d.j.length===5) ? m.d.j : null;
+  return [0,1,2,3,4].map(j=> ids && JUDGE_BY_ID[ids[j]] ? `<th class="jh">${esc(judgeShort(ids[j]))}</th>` : `<th>Juez ${j+1}</th>`).join(''); }
+// Localiza la batalla: mi numérico = cruce de la jornada j; 'ex' = exhibición; 'fex' = exhibición obligada
+function battleAt(key, j, mi){ const s=cur(); const L=s && s.leagues && s.leagues[key]; if(!L) return null;
+  if(mi==='ex') return L.exhib && L.exhib[j] && L.exhib[j].m || null;
+  if(mi==='fex') return L.fexhib && L.fexhib[j] && L.fexhib[j].m || null;
+  return (L.rounds[j]||[])[mi] || null; }
+function showBattle(key, j, mi){
+  const m=battleAt(key, j, mi); if(!m || !m.result) return;
+  const A=fby(m.a), B=fby(m.b); if(!A || !B) return;
+  const wa=m.result.winner===m.a;
+  const head=`<div class="bt-head"><div class="bt-side ${wa?'won':''}">${miniAvatar(m.a,36)}<div><div class="bt-name">${nameH(A)}</div>${styleTag(A)}</div></div>
+    <div class="bt-vs">VS</div>
+    <div class="bt-side r ${wa?'':'won'}"><div><div class="bt-name">${nameH(B)}</div>${styleTag(B)}</div>${miniAvatar(m.b,36)}</div></div>`;
+  const label=`Gana <b>${fnameH(m.result.winner)}</b>${m.result.tiebreak?' <span class="rtag">réplica</span>':''}${m.recup?' <span class="rtag">recuperativa</span>':''}${m.ex?' <span class="rtag">exhibición</span>':''}`;
+  // Sin notas por juez (eliminatorias, Under o batallas sin m.d): solo el resultado
+  if(!m.d || !m.d.s){
+    openModal(`<h3 style="margin-bottom:10px">Batalla</h3>${head}<p class="bt-res">${label}${m.lb?' · '+esc(m.lb):''}</p>
+      <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button></div>`); return; }
+  const RS=roundsOf(m), longF=RS===ROUND_SETS.long, p=ptbOf(m), [tA,tB]=judgeTotals(m), cjA=countedJudges(m,0), cjB=countedJudges(m,1);
+  const cell=(a,b)=>`<span class="${a>b?'hi':''}">${fpt(a)}</span><i>-</i><span class="${b>a?'hi':''}">${fpt(b)}</span>`;
+  const rows=RS.map((R,r)=>`<tr><td class="fm-rn">${esc(R.n)}${longF?` <small>/${R.max}</small>`:''}</td>${[0,1,2,3,4].map(j=>`<td>${cell(dScore(m,r,0,j), dScore(m,r,1,j))}</td>`).join('')}</tr>`).join('');
+  const nc='title="No cuenta para el PTB (nota más alta o más baja)"';
+  const tot=`<tr class="fm-tot"><td class="fm-rn">Total</td>${[0,1,2,3,4].map(j=>`<td><span class="${tA[j]>tB[j]?'hi':''} ${cjA.has(j)?'':'nc'}" ${cjA.has(j)?'':nc}>${fpt(tA[j])}</span><i>-</i><span class="${tB[j]>tA[j]?'hi':''} ${cjB.has(j)?'':'nc'}" ${cjB.has(j)?'':nc}>${fpt(tB[j])}</span></td>`).join('')}</tr>`;
+  const votes=`<tr class="fm-votes"><td class="fm-rn">Voto</td>${[0,1,2,3,4].map(j=>{ const v=m.d.v[j]; return `<td>${v==='R'?'<span class="fm-vr">Réplica</span>':`<span class="fm-vw">${fnameH(v==='A'?m.a:m.b)}</span>`}</td>`; }).join('')}</tr>`;
+  const hand=m.d.h?`<p class="bt-res">Réplica · mano alzada ${m.d.h[0]}-${m.d.h[1]}</p>`:'';
+  openModal(`<h3 style="margin-bottom:10px">Batalla${longF?' · formato largo':''}</h3>${head}
+    <p class="bt-res">${label}${m.lb?' · '+esc(m.lb):''} · PTB <b>${fpt(p[0])}</b>–<b>${fpt(p[1])}</b>${m.views?' · ▶ '+fmtViews(m.views):''}</p>${hand}
+    <div class="fm-table-wrap bt-table"><table class="fm-judges"><thead><tr><th>Ronda</th>${judgeHeads(m)}</tr></thead><tbody>${rows}${tot}${votes}</tbody></table></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button></div>`, 'wide');
+}
 // Barras de los cinco atributos (valor mostrado con tope 99). Solo lectura.
 function attrBars(f){ return `<div class="attr-bars"><span class="attr-title">Atributos</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${v}</b></div>`; }).join('')}</div>`; }
 
@@ -2521,7 +2557,7 @@ async function fmBattle(tok, n){
     <div class="fm-mid"><div class="fm-bn">${m.ex?'Exhibición':`Batalla ${n+1}/${ord.length}`}</div><div class="fm-round" id="fmRound">&nbsp;</div><div class="fm-vs">VS</div></div>
     <div class="fm-side" id="fmSB">${fmFace(m.b,'lg')}<div class="fm-name">${fnameH(m.b)}</div>${styleTag(fby(m.b))}${m.ep?'<span class="tag-mini ep">EXTRAPLAYER</span>':''}<div class="fm-ptbrow"><div class="fm-ptb" id="fmPB">0</div><span class="fm-plus" id="fmXB"></span></div><div class="fm-ptbl">PTB</div></div>
   </div>
-  <div class="fm-table-wrap"><table class="fm-judges"><thead><tr><th>Ronda</th>${[1,2,3,4,5].map(j=>`<th>J${j}</th>`).join('')}</tr></thead><tbody>
+  <div class="fm-table-wrap"><table class="fm-judges"><thead><tr><th>Ronda</th>${judgeHeads(m)}</tr></thead><tbody>
     ${roundsOf(m).map((R,r)=>`<tr id="fmR${r}"><td class="fm-rn">${R.n}${roundsOf(m)===ROUND_SETS.long?` <small>/${R.max}</small>`:''}</td>${[0,1,2,3,4].map(j=>`<td id="fmC${r}_${j}"></td>`).join('')}</tr>`).join('')}
     <tr class="fm-tot"><td class="fm-rn">Total</td>${[0,1,2,3,4].map(j=>`<td id="fmT${j}"></td>`).join('')}</tr>
     <tr class="fm-votes"><td class="fm-rn">Voto</td>${[0,1,2,3,4].map(j=>`<td id="fmV${j}"></td>`).join('')}</tr>
@@ -3182,7 +3218,8 @@ function showUQ(ev){
     acts=`<button class="btn primary" ${G&&D!=null?'':'disabled'} onclick="uqSetUnavail('${ev.id}', state.ui.uqGuest, state.ui.uqDay)">Confirmar</button>`; }
   else if(ev.type==='recup'){ const m=L.rounds[ev.j][ev.mi]; const p=ptbOf(m); kick='🎤 Recuperativa'; title=`Batalla recuperativa · J${ev.j+1} de ${ldef(ev.key).short}`;
     body=`<div class="ex-row" style="justify-content:center; font-size:18px">${miniAvatar(m.a,28)} ${fnameH(m.a)} <span class="vs">vs</span> ${fnameH(m.b)} ${miniAvatar(m.b,28)}</div>
-      <p style="text-align:center">Gana <b>${fnameH(m.result.winner)}</b> ${esc(m.lb||'')} · PTB ${fpt(p[0])}–${fpt(p[1])} · ▶ ${fmtViews(m.views)}</p>`; }
+      <p style="text-align:center">Gana <b>${fnameH(m.result.winner)}</b> ${esc(m.lb||'')} · PTB ${fpt(p[0])}–${fpt(p[1])} · ▶ ${fmtViews(m.views)}</p>`;
+    acts=`<button class="btn" onclick="showBattle('${ev.key}',${ev.j},${ev.mi})">Ver notas</button>`+acts; }
   openModal(`<div class="uq">${['prep','driu','zasko','refuse','papo','unavail','sweet','reggae','khan','local'].includes(ev.type)&&f?`<div class="uq-face">${uqFace(f.id)}</div>`:''}<div class="st-kicker">${kick} · ${fmtDay(s.year,ev.day)}</div><h3 style="margin:4px 0 10px">${title}</h3>${body}</div>
     <div class="modal-actions">${acts}</div>`, ev.type==='unavail' ? 'uqwide' : undefined);
   themeEl(document.getElementById('modalRoot'), ev.key);
@@ -3227,7 +3264,7 @@ function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&
 function renderExhib(s, L, key, j){
   const ex=L.exhib && L.exhib[j];
   if(ex && ex.m && ex.m.result){ const m=ex.m, r=m.result, p=ptbOf(m);
-    return `<div class="ex-box done"><div class="ex-h">🎤 Exhibición</div><div class="ex-row">${miniAvatar(m.a,22)} ${fnameH(m.a)} <span class="vs">vs</span> ${fnameH(m.b)} ${miniAvatar(m.b,22)}</div>
+    return `<div class="ex-box done clickable" onclick="showBattle('${key}',${j},'ex')"><div class="ex-h">🎤 Exhibición</div><div class="ex-row">${miniAvatar(m.a,22)} ${fnameH(m.a)} <span class="vs">vs</span> ${fnameH(m.b)} ${miniAvatar(m.b,22)}</div>
       <div class="step-note">Gana ${fnameH(r.winner)}${r.tiebreak?' en réplica':''} · PTB ${fpt(p[0])}–${fpt(p[1])}${m.views?' · ▶ '+fmtViews(m.views):''}</div></div>`; }
   if(s.phase!=='live' || L.finished || j!==L.played) return '';
   if(ex){ return `<div class="ex-box"><div class="ex-h">🎤 Exhibición en esta jornada</div><div class="ex-row">${miniAvatar(ex.a,22)} ${fnameH(ex.a)} <span class="vs">vs</span> ${fnameH(ex.b)} ${miniAvatar(ex.b,22)}</div>
