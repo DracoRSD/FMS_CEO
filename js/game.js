@@ -325,6 +325,13 @@ const INACTIVE_PENALTY = 0.3;       // no compitió en nada esa temporada
 const BOOST_CHAMPION = 0.8, BOOST_RUNNERUP = 0.5, BOOST_INTL = 0.8;   // empujones de fin de temporada (menores que el declive máximo: no lo anulan)
 const BOOST_OVER_POT = 2;           // los empujones pueden superar el potencial como mucho en esto
 const EVOL_TOP = 5;                 // cuántos salen en el resumen (los que más suben y más bajan)
+// Retiros de fin de temporada (fase 6). Probabilidad anual = RET_BASE + RET_PER_YEAR·(exp − RET_EXP_MIN) − RET_NIVEL_SLOPE·(nivel − RET_NIVEL_REF)
+const RET_EXP_MIN = 9;              // nadie se retira con menos años de carrera
+const RET_BASE = 0.05;              // probabilidad al cumplir RET_EXP_MIN
+const RET_PER_YEAR = 0.05;          // y sube esto por cada año más
+const RET_NIVEL_REF = 75, RET_NIVEL_SLOPE = 0.006;   // −0,6 % por cada punto de nivel sobre 75 (+0,6 % por cada punto por debajo)
+const RET_MAX = 0.6;                // tope de la probabilidad anual
+const RET_LEGEND_MULT = 0.5;        // las leyendas aguantan el doble
 
 function rangeSeeded(rnd, [a, b]){ return a + Math.floor(rnd() * (b - a + 1)); }
 // Estima la carrera de un freestyler a partir de nivel, fama y leyenda (misma semilla que los atributos)
@@ -359,6 +366,7 @@ function evolveFreestylers(s){
   if(s.intl && s.intl.champion) bump(s.intl.champion, BOOST_INTL);
   const out=[];
   state.freestylers.forEach(f=>{
+    if(f.retirado) return;
     ensureAttrs(f); ensureCarrera(f);
     const before=f.nivel; f.attrsPrev={...f.attrs};
     const etapa=etapaOf(f); const exp=f.carrera.exp; const pot=f.carrera.pot;
@@ -387,6 +395,26 @@ function evolveFreestylers(s){
   });
   return out;
 }
+// Probabilidad de que un freestyler se retire al cerrar la temporada (crece con la experiencia, baja con el nivel)
+function retiroProb(f){
+  const e=f.carrera ? f.carrera.exp : 0; if(e<RET_EXP_MIN) return 0;
+  let p=RET_BASE + RET_PER_YEAR*(e-RET_EXP_MIN) - RET_NIVEL_SLOPE*(f.nivel-RET_NIVEL_REF);
+  if(f.legend) p*=RET_LEGEND_MULT;
+  return clamp(p, 0, RET_MAX);
+}
+// Retiros de fin de temporada. El retirado se queda en el pool con retirado=true (historiales y cuadros lo referencian).
+// No se retiran los competidores propios ni los campeones de ese año (ligas e Internacional). Devuelve los ids retirados.
+function retirarFreestylers(s){
+  const protegidos=new Set();
+  (s.activeKeys||[]).forEach(k=>{ const st=(s.leagues[k]&&s.leagues[k].finalStandings)||[]; if(st[0]) protegidos.add(st[0]); });
+  if(s.intl && s.intl.champion) protegidos.add(s.intl.champion);
+  const out=[];
+  state.freestylers.forEach(f=>{
+    if(f.retirado || f.custom || protegidos.has(f.id)) return;
+    if(Math.random()<retiroProb(f)){ f.retirado=true; f.retiradoEn=s.year; out.push(f.id); }
+  });
+  return out;
+}
 
 function styleTag(f){ const st=styleOf(f); return `<span class="style-tag st-${st.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}" title="${esc(STYLES[st].txt)}">${st}</span>`; }
 const FOREIGN_MULT = 1.25; // un extranjero cuesta un 25% más por viajes
@@ -410,6 +438,8 @@ let state = { company:null, freestylers:[], seasons:[], logos:{}, _counter:1, vi
 let _skipScrollRestore = false;
 function uid(p){ return p + (state._counter++); }
 function fby(id){ return state.freestylers.find(f=>f.id===id); }
+function activos(){ return state.freestylers.filter(f=>!f.retirado); }                     // los que siguen en activo: todo lo que elige gente usa esto
+function fbyActivo(id){ const f=fby(id); return f && !f.retirado ? f : null; }            // fby sigue encontrando a los retirados (historiales, cuadros)
 function fname(id){ const f=fby(id); return f? f.name : '—'; }
 function nameH(f){ return f ? esc(f.name) : '—'; }
 function fnameH(id){ return nameH(fby(id)); }
@@ -898,7 +928,7 @@ function runIntl(s, d){
 function monthEnd(s, m){
   // leyendas que llevan mucho sin batallar: la gente las echa de menos
   const now=s.year*366+dateToDay(s.year,m+1,0);
-  state.freestylers.forEach(f=>{ if(!f.legend) return; if(f.lastB==null) f.lastB=now-30; const idle=now-f.lastB; if(idle>=90) addHype(f.id, idle>=180?2:1); });
+  state.freestylers.forEach(f=>{ if(!f.legend || f.retirado) return; if(f.lastB==null) f.lastB=now-30; const idle=now-f.lastB; if(idle>=90) addHype(f.id, idle>=180?2:1); });
   const months=monthsWithEvents(s);
   if(!months.has(m)){
     const pen = 8 + 2*state.company.stars;
@@ -1046,7 +1076,7 @@ function endSeason(s){
   // evolución de freestylers: progresión por atributo según experiencia, potencial y actividad
   const signed=new Set(s.activeKeys.flatMap(k=>s.leagues[k].competitors));
   const evol=evolveFreestylers(s);
-  state.freestylers.forEach(f=>{ if(!signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99)); });
+  state.freestylers.forEach(f=>{ if(!f.retirado && !signed.has(f.id)) f.fama = Math.round(clamp(f.fama - 1, 5, 99)); });
   s.activeKeys.forEach(k=>{
     const st=s.leagues[k].finalStandings;
     st.forEach((id,i)=>{ const f=fby(id); const delta = i===0?8:(i<3?4:(i>=st.length-2 && !isWS(k)?-3:1)); f.fama=Math.round(clamp(f.fama+delta,5,99)); });
@@ -1097,7 +1127,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:6}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:7}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1932,6 +1962,8 @@ function syncRealPool(){
   if(state.company && (state.company.dbv||0)<6){   // v6: experiencia y potencial por freestyler (no toca atributos ni niveles)
     state.freestylers.forEach(ensureCarrera);
     state.company.dbv=6; }
+  if(state.company && (state.company.dbv||0)<7){   // v7: relevo generacional. Campos opcionales (retirado, retiradoEn, generado, debut): nada que convertir
+    state.company.dbv=7; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }
