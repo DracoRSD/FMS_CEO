@@ -1544,6 +1544,7 @@ function batallasDelDia(s, d, fid){
   const out=[]; const add=(m,key,j,mi)=>{ if(m && m.result && (m.a===fid||m.b===fid)) out.push({key, j, mi, m}); };
   const ko=(b,key)=>{ if(!b||!b.rounds) return; b.rounds.forEach((r,ri)=>r.forEach((m,mi)=>add(m,key,ri,mi))); add(b.third,key,'third',0); };
   natKeys(s).forEach(k=>{ const L=s.leagues[k]; const j=L.dates.indexOf(d); if(j>=0) (L.rounds[j]||[]).forEach((m,mi)=>add(m,k,j,mi)); });
+  (s.uq||[]).forEach(x=>{ if(x.type==='recup' && x.day===d && x.done){ const L=s.leagues[x.key]; const m=L && L.rounds[x.j] && L.rounds[x.j][x.mi]; if(m && m.recup) add(m, x.key, x.j, x.mi); } });   // recuperativas: se juegan otro día
   if(s.intl && s.intl.date===d) ko(s.intl.bracket, 'intl');
   const rb=rbByDay(s)[d]; if(rb){ const e=rbEvent(s, rb.key); ko(e.bracket, rb.key===RB_INT.key ? 'rbinter' : 'rb:'+rb.key); }
   const u=underByDay(s)[d]; if(u){ if(u.key===MFU.key) (u.battles||[]).forEach((m,i)=>add(m,'under:'+u.key+':'+u.day,'b',i)); else ko(u.bracket, 'under:'+u.key+':'+u.day); }

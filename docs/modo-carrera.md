@@ -272,8 +272,8 @@ Cada fase termina con `npm run simular` en verde (incluido lo nuevo) y commits p
 
 ### Fase C4 · Interfaz de temporada
 
-- Commits: panel «Mi carrera» en el inicio (ficha, próximo compromiso, récord, ofertas); pretemporada de carrera (liga, entrenamiento, inscripciones); pausas «Tu batalla» y «Tu torneo» con opción de saltar; resumen personal al cerrar el año; registro filtrable «solo lo mío».
-- Criterios: una temporada completa se juega con como mucho 4 decisiones y N pausas opcionales; con «saltar todo» marcado, cero pausas; sin textos de empresa en el registro de una carrera (comprobación en el simulador).
+- Commits: `simulateDay(auto, soloFid)` separa decisiones de CEO (se resuelven solas en carrera) y presentaciones (line up, cruces, shows), con `pasoCarrera(modo)` y los botones «Siguiente fecha», «Hasta mi próxima batalla» y «Saltar el resto del año»; pausa «Tu batalla» con `showBattle` tal cual (o «Tu torneo» con varias el mismo día); registro sin textos de empresa y resumen personal al cerrar; próximo compromiso y rivales con récord a partir de los datos; calendario con la marca «Tú» y el panel de torneos (inscrito, sin inscribir o por qué no entras); comprobación en el simulador.
+- Criterios: con «Saltar el resto del año» cero pausas; 20 temporadas seguidas sin errores en los dos recorridos; en «Hasta mi próxima batalla» cada parada concierne al jugador y cada batalla suya tiene su pausa «Tu batalla» (el simulador cuenta `s.pausasJugador` contra `batallasDe`); ninguna entrada del registro de una carrera habla de taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla. Las decisiones del jugador siguen siendo las de la pretemporada (liga, entrenamiento, torneos); el patrocinador llega en C5.
 
 ### Fase C5 · Patrocinadores
 

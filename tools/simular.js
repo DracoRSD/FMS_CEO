@@ -31,6 +31,11 @@ const CARRERA = parseInt(arg('carrera', '20'), 10);         // temporadas que el
 const CARRERAS = parseInt(arg('carreras', '10'), 10);
 const CARRERA_OK_MIN = Math.ceil(0.8 * CARRERAS), OFERTA_PASIVO = [4, 8], OFERTA_ACTIVO = [3, 6], OFERTA_NUNCA_ANTES = 3, BRECHA_PAISES_MAX = 3, NIVEL_ACTIVO_T10 = [84, 90];
 const PAISES_CARRERA = [['España', 'fms_espana'], ['Argentina', 'fms_argentina'], ['México', 'fms_mexico'], ['Chile', 'fms_chile'], ['Perú', 'fms_peru'], ['Colombia', 'fms_colombia'], ['República Dominicana', 'fms_caribe']];
+// Temporada fecha a fecha en carrera (fase C4): un mundo recorrido con pasoCarrera('mia') y otro con 'resto', FECHA_ANOS temporadas cada uno.
+// En 'mia' cada parada de presentación concierne al jugador y cada batalla suya tiene su pausa «Tu batalla»; en 'resto' no hay ninguna pausa;
+// y el registro de una carrera no contiene textos de empresa (REGISTRO_EMPRESA).
+const FECHA_ANOS = parseInt(arg('fechas', '20'), 10);
+const REGISTRO_EMPRESA = /€|taquilla|reputaci|\d+ rep\b|estrella|★|\bcaja\b|patrocinios?\b|tu plantilla|balance|contrato|cobrar/i;
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
@@ -262,7 +267,7 @@ w.addEventListener('load', () => setTimeout(() => {
       g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } });
       g('nuevaCarrera')(); const jug = g('fby')(S.company.carrera.fid);
       modos.crea = S.company.modo === 'carrera' && !!jug && jug.jugador === true && jug.nivel === 60 && nf(jug.attrs) === jug.nivel && jug.fama === g('CARRERA_FAMA') && jug.carrera.exp === 0 && jug.carrera.pot === g('POT_CARRERA');
-      g('jugarTemporadaCarrera')(); g('closeModal')();
+      g('jugarTemporadaCarrera')(); g('closeModal')(); g('jugarTemporadaCarrera')(); g('closeModal')();   // el primer clic arranca la temporada; el segundo salta el resto del año
       modos.ano = g('cur')().phase === 'done' && nf(jug.attrs) === jug.nivel && !jug.retirado;
       const dump = JSON.stringify({ company: S.company, freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter });
       const d = JSON.parse(dump); S.company = d.company; S.freestylers = d.freestylers; S.seasons = d.seasons; S._counter = d._counter; g('syncRealPool')();
@@ -403,8 +408,61 @@ w.addEventListener('load', () => setTimeout(() => {
     console.log(`${okBrecha ? 'OK  ' : 'FAIL'} España y el país más blando se separan ${inf(brechaP)} temporadas en el pasivo y ${inf(brechaA)} en el activo (máximo ${BRECHA_PAISES_MAX}). Criterios: ${CARRERA_OK_MIN} de ${CARRERAS} dentro del rango, nunca antes de T${OFERTA_NUNCA_ANTES}, mediana dentro, nivel del activo a los 10 años entre ${NIVEL_ACTIVO_T10[0]} y ${NIVEL_ACTIVO_T10[1]}`);
     if (carreras.excepciones.length) console.log(`FAIL carreras con error: ${carreras.excepciones.join('; ')}`);
   }
+  // ---- temporada fecha a fecha (fase C4): el mismo recorrido que hacen los botones de «Mi carrera», sin pintar ----
+  const fechas = { mia: null, resto: null };
+  const correrFechas = modo => {
+    const r = { modo, anos: 0, paradas: 0, tuya: 0, batallas: 0, batallasPausadas: 0, pausasRegistradas: 0, ajenas: [], tuyaVacia: 0, porTipo: {}, registroEmpresa: [], excepciones: [] };
+    w.Math.random = mulberry32(SEMILLA);
+    const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
+    w.eval('var _aligerarReal3 = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
+    try {
+      g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Fecha a fecha', country: 'España', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } }); g('nuevaCarrera')();
+      const fid = S.company.carrera.fid; const INTLK = g('INTL').key, MFUK = g('MFU').key;
+      // resuelve una parada de presentación como lo hace el show correspondiente: marca lo visto; el día se juega en la siguiente llamada
+      const resolver = (s, ev) => { const L = s.leagues[ev.key];
+        if (ev.pause === 'lineup') { if (ev.key === INTLK) s.intl.lu.shown = true; else L.lu.shown = true; }
+        else if (ev.pause === 'pairs') L.pv[ev.j].shown = true;
+        else if (ev.pause === 'fms') { if (!L.shown) L.shown = {}; L.shown[L.played] = true; }
+        else if (ev.pause === 'under') g('underByDay')(s)[ev.day].presented = true;
+        else if (ev.pause === 'rb') { if (ev.key === INTLK) s.intl.presented = true; else g('rbEvent')(s, ev.key).presented = true; }
+        else if (ev.pause === 'tuya') S.ui.tuBatalla = null; };
+      const concierne = (s, ev) => { if (ev.pause === 'lineup') return ev.key === INTLK ? (s.intl.lu.order || []).includes(fid) : s.leagues[ev.key].competitors.includes(fid);
+        if (ev.pause === 'pairs') return (s.leagues[ev.key].rounds[ev.j] || []).some(m => m.a === fid || m.b === fid); return g('jugadorJuegaHoy')(s, s.day, fid); };
+      for (let t = 1; t <= FECHA_ANOS; t++) {
+        const s = g('cur')(); g('asegurarOfertas')(s); g('jugarTemporadaCarrera')(); g('closeModal')();
+        if (s.phase !== 'live') { r.excepciones.push(`T${t}: la temporada no arranca`); break; }
+        let guard = 0, ev;
+        while (s.phase === 'live' && guard++ < 3000) {
+          ev = g('pasoCarrera')(modo); if (!ev) break;
+          r.paradas++; r.porTipo[ev.pause] = (r.porTipo[ev.pause] || 0) + 1;
+          if (ev.pause === 'tuya') { r.tuya++; const b = g('batallasDelDia')(s, ev.day, fid); r.batallasPausadas += b.length; if (!b.length) r.tuyaVacia++; }
+          else if (modo === 'mia' && ev.pause !== 'jugado' && !concierne(s, ev)) r.ajenas.push(`T${t} ${ev.pause} ${ev.key} día ${s.day}`);
+          resolver(s, ev);
+        }
+        if (s.phase !== 'done') { r.excepciones.push(`T${t}: no cierra (${guard} pasos, última parada ${JSON.stringify(ev)})`); break; }
+        r.anos++; r.batallas += g('batallasDe')(s, fid).length; r.pausasRegistradas += (s.pausasJugador || []).reduce((a, p) => a + p.n, 0);
+        (s.log || []).forEach(n => { if (REGISTRO_EMPRESA.test(n.text)) r.registroEmpresa.push(n.text.replace(/<[^>]+>/g, '').slice(0, 70)); });
+        g('closeModal')(); g('nextSeason')(); g('closeModal')();
+      }
+    } catch (e) { r.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
+    w.eval('aligerarAntiguas = _aligerarReal3;'); mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null; S.ui.tuBatalla = null;
+    return r;
+  };
+  if (FECHA_ANOS > 0) { fechas.mia = correrFechas('mia'); fechas.resto = correrFechas('resto'); }
+  let okFechas = true;
+  if (FECHA_ANOS > 0) {
+    const m = fechas.mia, x = fechas.resto;
+    const okMia = m.anos === FECHA_ANOS && m.excepciones.length === 0 && m.ajenas.length === 0 && m.tuyaVacia === 0 && m.batallas > 0 && m.batallasPausadas === m.batallas && m.pausasRegistradas === m.batallas;
+    const okResto = x.anos === FECHA_ANOS && x.excepciones.length === 0 && x.paradas === 0 && x.pausasRegistradas === 0;
+    const okReg = m.registroEmpresa.length === 0 && x.registroEmpresa.length === 0;
+    okFechas = okMia && okResto && okReg;
+    console.log(`\nTemporada fecha a fecha en carrera (semilla ${SEMILLA}, ${FECHA_ANOS} temporadas por recorrido)`);
+    console.log(`${okMia ? 'OK  ' : 'FAIL'} «Hasta mi próxima batalla»: ${m.anos} temporadas, ${m.paradas} paradas (${Object.entries(m.porTipo).map(([k, v]) => k + ' ' + v).join(', ')}), ${m.batallas} batallas del jugador y ${m.batallasPausadas} con su pausa «Tu batalla» (${m.tuya} pausas, ${m.tuyaVacia} vacías), ${m.ajenas.length} paradas ajenas${m.ajenas.length ? ': ' + m.ajenas.slice(0, 3).join('; ') : ''}${m.excepciones.length ? ' · ' + m.excepciones.join('; ') : ''}`);
+    console.log(`${okResto ? 'OK  ' : 'FAIL'} «Saltar el resto del año»: ${x.anos} temporadas, ${x.paradas} paradas y ${x.pausasRegistradas} pausas registradas (${x.batallas} batallas del jugador)${x.excepciones.length ? ' · ' + x.excepciones.join('; ') : ''}`);
+    console.log(`${okReg ? 'OK  ' : 'FAIL'} registro de carrera sin textos de empresa: ${m.registroEmpresa.length + x.registroEmpresa.length} entradas con taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla${m.registroEmpresa.length ? ' · ' + [...new Set(m.registroEmpresa)].slice(0, 3).join(' | ') : ''}`);
+  }
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas ? 0 : 1);
 }, 800));
