@@ -7,9 +7,8 @@ const OUT_DIR = path.join(ROOT, 'dist');
 const OUT = path.join(OUT_DIR, 'index.html');
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.woff2': 'font/woff2' };
 
-const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/
-/g, '
-');   // los archivos pueden venir con CRLF (autocrlf)
+// Los archivos pueden venir con CRLF (core.autocrlf): se normalizan a LF al leer.
+const read = rel => fs.readFileSync(path.join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 let embedded = 0;
 
 // Convierte toda referencia a un archivo de assets/ en un data URL.
