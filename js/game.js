@@ -152,6 +152,135 @@ const STYLE_NAMES = Object.keys(STYLES);
 const STYLE_PRESET = {"Chuty": "Ingenio", "Gazir": "Ingenio", "Arkano": "Punchline", "Bnet": "Métrico", "Zasko": "Métrico", "Skone": "Showman", "Mnak": "Punchline", "Sweet Pain": "Poético", "Blon": "Ingenio", "Dani VK": "Ingenio", "Hander": "Punchline", "Sawi Elekipo": "Punchline", "Force": "Punchline", "Le33": "Flow", "Alek": "Coherencia", "Mounts": "Ingenio", "Tirpa": "Poético", "Michu": "Flow", "Fabiuki": "Métrico", "Bta": "Punchline", "Jesús LC": "Punchline", "Kmbra": "Poético", "Nez": "Ingenio", "Barón": "Métrico", "Mr. Ego": "Showman", "Invert": "Showman", "Khan": "Flow", "Sara Socas": "Flow", "Navas": "Disonante", "Mowlihawk": "Showman", "Bélico": "Poético", "Nocre": "Punchline", "BTP": "Punchline", "Errecé": "Flow", "Adriana": "Punchline", "Piromana": "Poético", "Segrelles": "Métrico", "Owen": "Punchline", "Spolker": "Métrico", "Argente": "Showman", "Davisito": "Punchline", "Mr Aaron": "Métrico", "CDFlex": "Showman", "Ander2K": "Métrico", "Sozat": "Flow", "Ibán": "Métrico", "Zyko GDH": "Punchline", "Piezas": "Flow", "Lgido": "Punchline", "Dr. Filtros": "Disonante", "Pirry": "Flow", "Azeta": "Coherencia", "NQP": "Métrico", "Babi": "Showman", "Mike Shinobi": "Flow", "MC Men": "Showman", "Peret": "Punchline", "Soen": "Punchline", "Krisan": "Punchline", "Nacho SRK": "Métrico", "Botta": "Showman", "Nacho Argentino": "Métrico", "Ortega": "Disonante", "Arcoiris": "Disonante", "Kavron": "Punchline", "Akar": "Flow", "Ortiz": "Coherencia", "Titus": "Showman", "Kensuke": "Showman", "Niki DMT": "Punchline", "Kinkiwinky": "Disonante", "Rubenico": "Métrico", "Swit Eme": "Poético", "Driu": "Disonante", "Walls": "Ingenio", "Pyro": "Teatral", "NachoLCM": "Punchline", "Triple R": "Métrico", "Estrimo": "Punchline", "Godlemon": "Métrico", "Jaloner": "Métrico", "Jorge Mauro": "Punchline", "Bohemia": "Punchline", "Santi": "Ingenio", "Rayban": "Showman", "Tanquecrack": "Showman", "NG": "Coherencia", "Stuart": "Poético", "Larrix": "Teatral", "Mecha": "Punchline", "Wos": "Flow", "Papo": "Métrico", "Dtoke": "Showman", "Dani Ribba": "Flow", "Kodigo": "Flow", "Trueno": "Flow", "Klan": "Punchline", "G Sony": "Flow", "Replik": "Poético", "Jesse Pungaz": "Flow", "Nacho": "Punchline", "Naista": "Punchline", "Zaina": "Ingenio", "MP": "Flow", "Tata": "Teatral", "Katra": "Punchline", "Wolf": "Ingenio", "Mito": "Coherencia", "Dybbuk": "Showman", "DAC": "Ingenio", "Jaff": "Teatral", "CTZ": "Poético", "MKS": "Punchline", "Cacha": "Showman", "Sub": "Punchline", "Nasir Catriel": "Punchline", "Barto": "Punchline", "Exe": "Ingenio", "HDR": "Showman", "Sophia": "Poético", "Abel": "Métrico", "Cobe CLK": "Showman", "1Tobi": "Flow", "Dyse": "Coherencia", "GW": "Punchline", "Ritter": "Métrico", "Franchute": "Showman", "Rife": "Poético", "TiagoPZK": "Flow", "Lit Killah": "Métrico", "Duki": "Flow", "Roma": "Punchline", "Dozer": "Punchline", "G5": "Flow", "Brasita": "Punchline", "Parker": "Punchline", "Alkoy": "Flow", "Snake": "Flow", "Acru": "Métrico", "Frescolate": "Punchline", "Dam": "Métrico", "Aczino": "Punchline", "Jony Beltrán": "Showman", "Azuky": "Punchline", "Rapder": "Punchline", "Lobo Estepario": "Punchline", "Yoiker": "Punchline", "RC": "Flow", "Dante": "Punchline", "Skiper": "Ingenio", "Ari Carrillo": "Punchline", "Zticma": "Showman", "Dominic": "Punchline", "Garza": "Showman", "Jack Andrenalina": "Showman", "Nota Roja": "Teatral", "Soto": "Punchline", "Xavlac": "Punchline", "Damián": "Punchline", "Lobo López": "Showman", "Xhavez": "Punchline", "Fat Tony": "Punchline", "Potencia": "Ingenio", "DangerAK": "Punchline", "Saturno": "Ingenio", "Dalia": "Showman", "Sandra": "Punchline", "Hadrian": "Ingenio", "Vens": "Showman", "El Menor": "Métrico", "Teorema": "Métrico", "Acertijo": "Ingenio", "Nitro": "Punchline", "Kaiser": "Showman", "Tom Crowley": "Punchline", "Stigma": "Flow", "Ricto": "Métrico", "Joqerr": "Showman", "Drose": "Métrico", "Pepe Grillo": "Ingenio", "Jokker": "Punchline", "Metalingüística": "Métrico", "Racso": "Punchline", "Esezeta": "Flow", "Rodamiento": "Ingenio", "Anubis": "Métrico", "Basek": "Punchline", "Satim": "Showman", "Blade": "Punchline", "99": "Ingenio", "Bigtamina": "Punchline", "Adesong": "Métrico", "Elemece": "Ingenio", "Eskai": "Punchline", "ChysteMC": "Métrico", "BTI": "Punchline", "Destello": "Showman", "Fusok": "Ingenio", "Scub": "Métrico", "Jaze": "Flow", "Jota": "Flow", "Stick": "Punchline", "KG": "Flow", "Nekroos": "Punchline", "Litzen": "Punchline", "Skill": "Poético", "Choque": "Punchline", "Strike": "Ingenio", "Jair Wong": "Showman", "Vijay Kesh": "Teatral", "Diego MC": "Punchline", "Kian": "Métrico", "Ramset": "Punchline", "Ghost": "Punchline", "Xplain": "Métrico", "Almendrades": "Ingenio", "Piero Pistas": "Punchline", "Katacrist": "Punchline", "Xilo": "Punchline", "Scope": "Punchline", "Maricielo": "Punchline", "Letras Tarapoto": "Punchline", "Blaxi Mental": "Punchline", "Sumeria": "Showman", "Scraps": "Punchline", "Venti": "Ingenio", "Dexuz": "Ingenio", "Danu": "Punchline", "Icon": "Punchline", "Necia": "Ingenio", "Gasper": "Punchline", "Papicha": "Ingenio", "MSL": "Ingenio", "Valles-T": "Punchline", "Marithea": "Ingenio", "Lokillo": "Showman", "Filósofo": "Poético", "J1": "Punchline", "Coloso": "Ingenio", "Puppy": "Ingenio", "RBN": "Punchline", "Airon": "Punchline", "Carpediem": "Métrico", "Elevn": "Punchline", "Fat N": "Showman", "Ken Zingle": "Punchline", "Token": "Punchline", "Axl Evans": "Punchline", "Coffy": "Ingenio", "Urko": "Showman", "Visionario": "Flow", "Pandora": "Ingenio", "Lil White": "Métrico", "Dima": "Métrico", "Kore": "Ingenio", "Nico B": "Punchline", "Flama": "Ingenio", "Gafas": "Ingenio", "Andy Ink": "Punchline", "Tormenta": "Coherencia", "JM Serna": "Ingenio", "Chang": "Ingenio", "Letra": "Coherencia", "Black Code": "Ingenio", "Lit Ignis": "Punchline", "Lancer Lirical": "Flow", "MCKlopedia": "Flow", "Gavyria": "Punchline", "Oner": "Punchline", "Akapellah": "Flow", "AdonysX": "Punchline", "Freites": "Punchline", "White Caracas": "Punchline", "Bobby": "Punchline", "Imigrante": "Punchline", "Lou T": "Punchline", "Mac Tempo": "Punchline", "Abel EC": "Ingenio", "Alfredozki": "Punchline", "Switch": "Ingenio", "Melo": "Punchline", "Eppico": "Punchline", "Big Mind": "Punchline", "Punch": "Punchline", "Andy Novem": "Punchline", "Adulterio": "Punchline", "Amir": "Punchline", "Acxel Rapster": "Punchline", "Santo Skill": "Punchline", "Spektro": "Ingenio", "Wordplay": "Punchline", "Naicen": "Punchline", "Alexunder": "Punchline", "SOK": "Punchline", "Vostok": "Punchline", "Punisher": "Punchline", "Rasta": "Poético", "Ualde": "Punchline", "SFJ": "Punchline", "Varela": "Punchline", "Hammer": "Ingenio", "Morfeo": "Punchline", "Cronin": "Punchline", "Drazer": "Punchline", "Mister H": "Punchline", "Minos": "Punchline", "Éxodo Lirical": "Showman", "KDT": "Punchline", "Shield Master": "Punchline", "SNK": "Ingenio", "RVS": "Punchline", "P8": "Punchline", "Blackhawk": "Punchline", "Eros EQ": "Ingenio", "Kenyari": "Punchline", "Cehzar": "Punchline", "Bana": "Punchline", "Nicosan": "Punchline", "Ritmodelia": "Ingenio", "Aldahir": "Ingenio", "UFO": "Punchline", "Índico": "Ingenio", "Bway Woody": "Punchline", "Zaki": "Ingenio", "Zeu": "Punchline", "Reos": "Punchline", "Verso One": "Ingenio", "Jafet": "Punchline", "Odil": "Punchline", "Pseudocódigo": "Punchline", "Blaze": "Punchline", "Terrorista": "Punchline", "Androide": "Punchline", "Yartzi": "Ingenio", "Outlaw": "Punchline", "Knnon": "Punchline", "Reverse": "Flow", "Perry": "Ingenio", "Kusho": "Poético", "Conde": "Teatral", "JC Snake": "Ingenio", "Tyler": "Punchline", "Vokbulario": "Coherencia", "Cafú": "Punchline"};   // bloc de notas de la base de datos
 function defaultStyle(name){ if(STYLE_PRESET[name]) return STYLE_PRESET[name]; let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))>>>0; return STYLE_NAMES[h%STYLE_NAMES.length]; }
 function styleOf(f){ return (f && STYLES[f.style]) ? f.style : (f ? defaultStyle(f.name) : 'Showman'); }
+
+/* =========================================================================
+   Modelo de atributos y jueces
+   Todas las constantes ajustables del modelo viven en este bloque.
+========================================================================= */
+const ATTR_KEYS = ['punchline','metrica','flow','impro','mentalidad'];
+const ATTR_LABELS = {punchline:'Punchline', metrica:'Métrica', flow:'Flow', impro:'Improvisación', mentalidad:'Mentalidad'};
+// Peso de cada atributo según el tipo de ronda (cada fila suma 1)
+const ROUND_WEIGHTS = {
+  random:{punchline:0.20, metrica:0.10, flow:0.15, impro:0.45, mentalidad:0.10},
+  min:   {punchline:0.20, metrica:0.30, flow:0.30, impro:0.10, mentalidad:0.10},
+  deluxe:{punchline:0.35, metrica:0.25, flow:0.15, impro:0.10, mentalidad:0.15},
+  easy:  {punchline:0.10, metrica:0.35, flow:0.25, impro:0.20, mentalidad:0.10},
+  hard:  {punchline:0.10, metrica:0.35, flow:0.10, impro:0.30, mentalidad:0.15},
+  tema:  {punchline:0.20, metrica:0.15, flow:0.10, impro:0.40, mentalidad:0.15},
+};
+// Sesgo de cada estilo al convertir un nivel en atributos (puntos). La media se reajusta después al nivel exacto.
+const STYLE_ATTR_BIAS = {
+  'Punchline':  {punchline:+8, metrica:0,  flow:-4, impro:-3, mentalidad:+2},
+  'Ingenio':    {punchline:+2, metrica:-3, flow:-3, impro:+8, mentalidad:+3},
+  'Métrico':    {punchline:-3, metrica:+9, flow:+3, impro:-4, mentalidad:-5},
+  'Flow':       {punchline:-4, metrica:+2, flow:+9, impro:-2, mentalidad:-5},
+  'Showman':    {punchline:+2, metrica:-3, flow:+3, impro:+1, mentalidad:0},
+  'Disonante':  {punchline:+4, metrica:-4, flow:+2, impro:+1, mentalidad:-2},
+  'Teatral':    {punchline:-2, metrica:-3, flow:+2, impro:+5, mentalidad:-1},
+  'Coherencia': {punchline:-3, metrica:+3, flow:-2, impro:+2, mentalidad:+4},
+  'Poético':    {punchline:-2, metrica:+4, flow:+1, impro:-4, mentalidad:+4},
+};
+const ATTR_NOISE = 3;          // desviación típica (puntos) del ruido al convertir; determinista por nombre
+const STYLE_ROUND_MOD = 0.5;   // los modificadores por ronda de STYLES (m) pesan la mitad: los atributos ya explican parte
+// Mentalidad y varianza: factor = MENTAL_VAR_BASE − mentalidad·MENTAL_VAR_SLOPE (50 → 1,00 · 90 → 0,80 · 20 → 1,15)
+const MENTAL_VAR_BASE = 1.25, MENTAL_VAR_SLOPE = 0.005;
+const MENTAL_REPLICA = 0.15;   // puntos de nivel equivalentes en la mano alzada por cada punto de mentalidad sobre el rival
+// Jueces
+const JUDGE_TASTE_PER_10 = 0.25;                       // puntos (escala 1-10) por cada 10 puntos de atributo sobre 50 y gusto 1,0
+const JUDGE_NOISE_MIN = 0.25, JUDGE_NOISE_MAX = 0.75;   // ruido por ronda: consistencia 1 → mínimo, 0 → máximo
+const JUDGE_GROUP = {fms_espana:'España', fms_argentina:'Argentina', fms_mexico:'México', fms_chile:'Chile', fms_peru:'Perú', fms_colombia:'Colombia', fms_caribe:'Caribe'};
+const JUDGES_PER_LEAGUE = 5, JUDGES_INTL_PER_LEAGUE = 1;   // por liga y temporada: 4 del país + 1 internacional
+// Pool de jueces (nombres ficticios). gustos: −0,5 a +0,5 · consistencia: 0 a 1 · severidad: −0,4 a +0,4 (igual para ambos)
+const JUDGES = [
+  // España
+  {id:'j_esp_1', name:'Tano Barrera',    country:'España',    gustos:{punchline:+0.4, flow:-0.2},                consistencia:0.85, severidad:-0.1},
+  {id:'j_esp_2', name:'Lía Ferrer',      country:'España',    gustos:{impro:+0.4, metrica:-0.1},                 consistencia:0.70, severidad:+0.2},
+  {id:'j_esp_3', name:'Nuko',            country:'España',    gustos:{metrica:+0.4, flow:+0.2, punchline:-0.2},  consistencia:0.60, severidad:0},
+  {id:'j_esp_4', name:'Rober Dalmau',    country:'España',    gustos:{mentalidad:+0.3, impro:+0.2},              consistencia:0.90, severidad:-0.3},
+  {id:'j_esp_5', name:'Mayka Soler',     country:'España',    gustos:{flow:+0.3, punchline:+0.1, metrica:-0.2},  consistencia:0.55, severidad:+0.3},
+  // Argentina
+  {id:'j_arg_1', name:'Facu Ledesma',    country:'Argentina', gustos:{metrica:+0.4, flow:+0.2},                  consistencia:0.75, severidad:0},
+  {id:'j_arg_2', name:'Pili Rojas',      country:'Argentina', gustos:{punchline:+0.4, impro:-0.1},               consistencia:0.65, severidad:+0.1},
+  {id:'j_arg_3', name:'El Sordo Ruiz',   country:'Argentina', gustos:{flow:+0.4, mentalidad:-0.1},               consistencia:0.50, severidad:+0.3},
+  {id:'j_arg_4', name:'Mati Quiroga',    country:'Argentina', gustos:{impro:+0.3, metrica:+0.2, punchline:-0.2}, consistencia:0.85, severidad:-0.2},
+  {id:'j_arg_5', name:'Lu Ferreyra',     country:'Argentina', gustos:{mentalidad:+0.3, flow:+0.1},               consistencia:0.90, severidad:-0.1},
+  // México
+  {id:'j_mex_1', name:'Chino Valdez',    country:'México',    gustos:{punchline:+0.5, flow:-0.2},                consistencia:0.60, severidad:0},
+  {id:'j_mex_2', name:'Marisol Ibarra',  country:'México',    gustos:{impro:+0.4, mentalidad:+0.1},              consistencia:0.80, severidad:-0.2},
+  {id:'j_mex_3', name:'Rorro Castañeda', country:'México',    gustos:{metrica:+0.3, flow:+0.3},                  consistencia:0.70, severidad:+0.2},
+  {id:'j_mex_4', name:'Dany Olvera',     country:'México',    gustos:{punchline:+0.2, impro:+0.2, metrica:-0.2}, consistencia:0.55, severidad:+0.4},
+  {id:'j_mex_5', name:'Toño Lugo',       country:'México',    gustos:{mentalidad:+0.4, punchline:-0.1},          consistencia:0.90, severidad:-0.3},
+  // Chile
+  {id:'j_chi_1', name:'Pancho Riquelme', country:'Chile',     gustos:{metrica:+0.4, punchline:-0.2},             consistencia:0.80, severidad:-0.1},
+  {id:'j_chi_2', name:'Cata Fuenzalida', country:'Chile',     gustos:{impro:+0.4, flow:+0.1},                    consistencia:0.70, severidad:+0.1},
+  {id:'j_chi_3', name:'Nacho Vergara',   country:'Chile',     gustos:{punchline:+0.4, metrica:+0.1},             consistencia:0.60, severidad:+0.2},
+  {id:'j_chi_4', name:'Kote Saavedra',   country:'Chile',     gustos:{flow:+0.4, impro:-0.2},                    consistencia:0.50, severidad:+0.3},
+  {id:'j_chi_5', name:'Javi Oyarzún',    country:'Chile',     gustos:{mentalidad:+0.3, metrica:+0.2},            consistencia:0.90, severidad:-0.3},
+  // Perú
+  {id:'j_per_1', name:'Renzo Huamán',    country:'Perú',      gustos:{punchline:+0.4, flow:-0.1},                consistencia:0.75, severidad:0},
+  {id:'j_per_2', name:'Kiara Mendoza',   country:'Perú',      gustos:{impro:+0.3, mentalidad:+0.2},              consistencia:0.85, severidad:-0.2},
+  {id:'j_per_3', name:'Piero Zapata',    country:'Perú',      gustos:{metrica:+0.4, impro:-0.2},                 consistencia:0.65, severidad:+0.2},
+  {id:'j_per_4', name:'Gino Chávez',     country:'Perú',      gustos:{flow:+0.4, punchline:+0.1},                consistencia:0.55, severidad:+0.3},
+  {id:'j_per_5', name:'Dayana Quispe',   country:'Perú',      gustos:{punchline:+0.2, metrica:+0.2, flow:-0.2},  consistencia:0.80, severidad:-0.1},
+  // Colombia
+  {id:'j_col_1', name:'Juancho Arango',  country:'Colombia',  gustos:{punchline:+0.4, metrica:-0.2},             consistencia:0.70, severidad:+0.1},
+  {id:'j_col_2', name:'Vale Restrepo',   country:'Colombia',  gustos:{impro:+0.5, flow:-0.1},                    consistencia:0.60, severidad:0},
+  {id:'j_col_3', name:'Pipe Cardona',    country:'Colombia',  gustos:{flow:+0.4, mentalidad:+0.1},               consistencia:0.80, severidad:-0.2},
+  {id:'j_col_4', name:'Sebas Montoya',   country:'Colombia',  gustos:{metrica:+0.3, punchline:+0.2},             consistencia:0.55, severidad:+0.4},
+  {id:'j_col_5', name:'Nata Giraldo',    country:'Colombia',  gustos:{mentalidad:+0.4, impro:+0.1},              consistencia:0.90, severidad:-0.3},
+  // Caribe
+  {id:'j_car_1', name:'Yeyo Marcano',    country:'Caribe',    gustos:{punchline:+0.5, metrica:-0.2},             consistencia:0.60, severidad:+0.2},
+  {id:'j_car_2', name:'Dariel Peña',     country:'Caribe',    gustos:{flow:+0.4, impro:+0.1},                    consistencia:0.70, severidad:0},
+  {id:'j_car_3', name:'Yaritza Bermúdez',country:'Caribe',    gustos:{impro:+0.4, punchline:-0.1},               consistencia:0.80, severidad:-0.1},
+  {id:'j_car_4', name:'Kelvin Santana',  country:'Caribe',    gustos:{metrica:+0.4, flow:+0.1},                  consistencia:0.50, severidad:+0.3},
+  {id:'j_car_5', name:'Marielys Rondón', country:'Caribe',    gustos:{mentalidad:+0.3, punchline:+0.2},          consistencia:0.85, severidad:-0.2},
+  // Internacionales
+  {id:'j_int_1', name:'Max Urrutia',     country:'Internacional', gustos:{punchline:+0.3, impro:+0.2},           consistencia:0.90, severidad:-0.1},
+  {id:'j_int_2', name:'Sol Benítez',     country:'Internacional', gustos:{metrica:+0.3, flow:+0.2},              consistencia:0.85, severidad:0},
+  {id:'j_int_3', name:'Kael Doménech',   country:'Internacional', gustos:{impro:+0.4, mentalidad:+0.1},          consistencia:0.80, severidad:-0.2},
+  {id:'j_int_4', name:'Ana Lucía Prado', country:'Internacional', gustos:{flow:+0.3, punchline:+0.2},            consistencia:0.75, severidad:+0.1},
+  {id:'j_int_5', name:'Jairo Betancur',  country:'Internacional', gustos:{mentalidad:+0.4, metrica:+0.1},        consistencia:0.95, severidad:-0.3},
+];
+const JUDGE_BY_ID = Object.fromEntries(JUDGES.map(j=>[j.id, j]));
+
+/* ---- atributos ---- */
+// Generador con semilla (mulberry32) para que la conversión nivel → atributos sea la misma en todas las partidas
+function seedOf(str){ let h=2166136261; for(const ch of String(str)){ h^=ch.charCodeAt(0); h=Math.imul(h,16777619); } return h>>>0; }
+function seededRandom(seed){ let a=seed>>>0; return function(){ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^(t>>>15), t|1); t^=t+Math.imul(t^(t>>>7), t|61); return ((t^(t>>>14))>>>0)/4294967296; }; }
+function seededGauss(rnd){ let u=0,v=0; while(!u) u=rnd(); while(!v) v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function nivelFromAttrs(at){ return Math.round(ATTR_KEYS.reduce((s,k)=>s+(at[k]||0),0)/ATTR_KEYS.length); }
+// Convierte un nivel y un estilo en los cinco atributos. La media redondeada es exactamente el nivel.
+function attrsFromNivel(nivel, style, seed){
+  const bias=STYLE_ATTR_BIAS[style]||{}; const rnd=seededRandom(seedOf(seed||'')^seedOf(style||''));
+  const raw=ATTR_KEYS.map(k=>(bias[k]||0)+seededGauss(rnd)*ATTR_NOISE);
+  const mean=raw.reduce((a,b)=>a+b,0)/raw.length;
+  const at={}; ATTR_KEYS.forEach((k,i)=>at[k]=clamp(Math.round(nivel+raw[i]-mean),1,99));
+  for(let guard=0; guard<20 && nivelFromAttrs(at)!==nivel; guard++){   // el recorte a 1-99 puede mover la media: se corrige
+    const up=nivelFromAttrs(at)<nivel; const k=ATTR_KEYS.slice().sort((a,b)=>up? at[a]-at[b] : at[b]-at[a])[0]; at[k]=clamp(at[k]+(up?1:-1),1,99); }
+  return at;
+}
+function ensureAttrs(f){ if(!f) return f; if(!f.attrs || ATTR_KEYS.some(k=>typeof f.attrs[k]!=='number')) f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); f.nivel=nivelFromAttrs(f.attrs); return f; }
+function attrOf(f,k){ return (f && f.attrs && typeof f.attrs[k]==='number') ? f.attrs[k] : (f ? f.nivel : 50); }
+// Base de rendimiento en una ronda: media ponderada de los atributos según el tipo de ronda
+function roundBase(f, rt){ const w=ROUND_WEIGHTS[rt]||ROUND_WEIGHTS.min; return ATTR_KEYS.reduce((s,k)=>s+attrOf(f,k)*w[k],0); }
+function mentalFactor(f){ return clamp(MENTAL_VAR_BASE - attrOf(f,'mentalidad')*MENTAL_VAR_SLOPE, 0.5, 1.5); }
+
+/* ---- jueces ---- */
+function judgesByGroup(g){ return JUDGES.filter(j=>j.country===g); }
+// Sortea los jueces de una liga para una temporada: 4 del país + 1 internacional (ligas sin país: 5 internacionales)
+function pickJudges(key){
+  const grp=JUDGE_GROUP[key]; const pool=grp ? judgesByGroup(grp) : [];
+  const intl=judgesByGroup('Internacional').slice().sort(()=>Math.random()-0.5);
+  const loc=pool.slice().sort(()=>Math.random()-0.5);
+  const nIntl = pool.length ? JUDGES_INTL_PER_LEAGUE : JUDGES_PER_LEAGUE;
+  return [...loc.slice(0, JUDGES_PER_LEAGUE-nIntl), ...intl.slice(0, nIntl)].sort(()=>Math.random()-0.5).map(j=>j.id);
+}
+function judgesOf(L){ if(!L) return pickJudges(null); if(!Array.isArray(L.judges) || L.judges.length!==JUDGES_PER_LEAGUE || L.judges.some(id=>!JUDGE_BY_ID[id])) L.judges=pickJudges(L.key); return L.judges; }
+// Cuánto suma o resta un juez a la nota de un freestyler por sus gustos (escala 1-10)
+function judgeTaste(j, f){ if(!j||!j.gustos) return 0; return Object.entries(j.gustos).reduce((s,[k,g])=>s+g*((attrOf(f,k)-50)/10)*JUDGE_TASTE_PER_10, 0); }
+function judgeNoise(j){ const c=j ? clamp(j.consistencia,0,1) : 0.5; return JUDGE_NOISE_MAX-(JUDGE_NOISE_MAX-JUDGE_NOISE_MIN)*c; }
+function judgeName(id){ const j=JUDGE_BY_ID[id]; return j ? j.name : `Juez ${id||''}`.trim(); }
+
 function styleTag(f){ const st=styleOf(f); return `<span class="style-tag st-${st.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}" title="${esc(STYLES[st].txt)}">${st}</span>`; }
 const FOREIGN_MULT = 1.25; // un extranjero cuesta un 25% más por viajes
 function isForeign(f, key){ if(isWS(key)) return false; const d=ldef(key); return !!(d && d.countries && !d.countries.includes(f.country)); }
