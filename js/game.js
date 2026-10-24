@@ -181,6 +181,8 @@ const STYLE_ATTR_BIAS = {
   'Poético':    {punchline:-2, metrica:+4, flow:+1, impro:-4, mentalidad:+4},
 };
 const ATTR_NOISE = 3;          // desviación típica (puntos) del ruido al convertir; determinista por nombre
+const ATTR_MAX = 110;          // tope interno de un atributo (la media sigue siendo el nivel, que no pasa de 99)
+const ATTR_SHOWN_MAX = 99;     // tope al mostrarlo en la interfaz
 const STYLE_ROUND_MOD = 0.5;   // los modificadores por ronda de STYLES (m) pesan la mitad: los atributos ya explican parte
 // Mentalidad y varianza: factor = MENTAL_VAR_BASE − mentalidad·MENTAL_VAR_SLOPE (50 → 1,00 · 90 → 0,80 · 20 → 1,15)
 const MENTAL_VAR_BASE = 1.45, MENTAL_VAR_SLOPE = 0.005;
@@ -254,13 +256,14 @@ function attrsFromNivel(nivel, style, seed){
   const bias=STYLE_ATTR_BIAS[style]||{}; const rnd=seededRandom(seedOf(seed||'')^seedOf(style||''));
   const raw=ATTR_KEYS.map(k=>(bias[k]||0)+seededGauss(rnd)*ATTR_NOISE);
   const mean=raw.reduce((a,b)=>a+b,0)/raw.length;
-  const at={}; ATTR_KEYS.forEach((k,i)=>at[k]=clamp(Math.round(nivel+raw[i]-mean),1,99));
-  for(let guard=0; guard<20 && nivelFromAttrs(at)!==nivel; guard++){   // el recorte a 1-99 puede mover la media: se corrige
-    const up=nivelFromAttrs(at)<nivel; const k=ATTR_KEYS.slice().sort((a,b)=>up? at[a]-at[b] : at[b]-at[a])[0]; at[k]=clamp(at[k]+(up?1:-1),1,99); }
+  const at={}; ATTR_KEYS.forEach((k,i)=>at[k]=clamp(Math.round(nivel+raw[i]-mean),1,ATTR_MAX));
+  for(let guard=0; guard<20 && nivelFromAttrs(at)!==nivel; guard++){   // el recorte a 1-ATTR_MAX puede mover la media: se corrige
+    const up=nivelFromAttrs(at)<nivel; const k=ATTR_KEYS.slice().sort((a,b)=>up? at[a]-at[b] : at[b]-at[a])[0]; at[k]=clamp(at[k]+(up?1:-1),1,ATTR_MAX); }
   return at;
 }
 function ensureAttrs(f){ if(!f) return f; if(!f.attrs || ATTR_KEYS.some(k=>typeof f.attrs[k]!=='number')) f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); f.nivel=nivelFromAttrs(f.attrs); return f; }
 function attrOf(f,k){ return (f && f.attrs && typeof f.attrs[k]==='number') ? f.attrs[k] : (f ? f.nivel : 50); }
+function attrShown(f,k){ return Math.min(ATTR_SHOWN_MAX, Math.round(attrOf(f,k))); }   // para la interfaz: nunca por encima de 99
 // Base de rendimiento en una ronda: media ponderada de los atributos según el tipo de ronda
 function roundBase(f, rt){ const w=ROUND_WEIGHTS[rt]||ROUND_WEIGHTS.min; return ATTR_KEYS.reduce((s,k)=>s+attrOf(f,k)*w[k],0); }
 function mentalFactor(f){ return clamp(MENTAL_VAR_BASE - attrOf(f,'mentalidad')*MENTAL_VAR_SLOPE, 0.5, 1.5); }
@@ -991,7 +994,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:4}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:5}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1734,6 +1737,9 @@ function syncRealPool(){
     state.freestylers.forEach(ensureAttrs);
     state.seasons.forEach(sn=>Object.values(sn.leagues||{}).forEach(judgesOf));
     state.company.dbv=4; }
+  if(state.company && (state.company.dbv||0)<5){   // v5: atributos regenerados con tope interno 110 (misma media = nivel)
+    state.freestylers.forEach(f=>{ f.attrs=attrsFromNivel(f.nivel, styleOf(f), f.name); f.nivel=nivelFromAttrs(f.attrs); });
+    state.company.dbv=5; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }
