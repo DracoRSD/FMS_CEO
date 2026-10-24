@@ -1146,6 +1146,10 @@ function endSeason(s){
     st.forEach((id,i)=>{ const f=fby(id); const delta = i===0?8:(i<3?4:(i>=st.length-2 && !isWS(k)?-3:1)); f.fama=Math.round(clamp(f.fama+delta,5,99)); });
   });
   if(s.intl.champion){ const f=fby(s.intl.champion); f.fama=Math.round(clamp(f.fama+12,5,99)); }
+  // modo carrera: una entrada por temporada cerrada en company.carrera.temporadas (nivel y fama ya evolucionados)
+  if(modoCarrera() && state.company.carrera){ const c=state.company.carrera; const f=fby(c.fid); if(f){ const p=planDe(f); const lk=signedLeagueOf(s,f.id); const st=lk ? s.leagues[lk].finalStandings : [];
+    if(!Array.isArray(c.temporadas)) c.temporadas=[];
+    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)}); } }
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1182,6 +1186,7 @@ function nextSeason(){
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; });   // los tuits de temporadas pasadas no se guardan
   state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
   aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
+  asegurarOfertas(cur());   // modo carrera: ofertas de liga del año nuevo
   { const ns=cur(); ns.activeKeys.forEach(k=>preselectRoster(ns,k)); if(ns.activeKeys.includes(WS.key)){ const c=spState(); if(c.wsPool.length<3) sponsorOffers(state.company.stars||5, 3-c.wsPool.length, false, true); } }
   Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB_|exQ_|draft_)/.test(x)).forEach(x=>delete state.ui[x]);
   { const c=state.company; if(!c.tut) c.tut={};
@@ -1438,22 +1443,20 @@ function renderCarrera(){
 // Un año completo del mundo sin CEO: pretemporada automática, plantillas por nivel, arranque y simulación hasta el cierre
 function jugarTemporadaCarrera(){
   const s=cur();
-  if(s.phase==='pre'){ autoPretemporada(s); autoFicharLigas(s); const iss=preseasonIssues(s); if(iss.length){ toast(iss[0]); render(); return; } startSeason(); }
+  if(s.phase==='pre'){ asegurarOfertas(s); autoPretemporada(s); autoFicharLigas(s); const iss=preseasonIssues(s); if(iss.length){ toast(iss[0]); render(); return; } startSeason(); }
   if(s.phase==='live') advance('year');
   render();
 }
 // Crea la partida de carrera: empresa fantasma (5 estrellas, infinito, 7 ligas), pool real y el freestyler del jugador
 function nuevaCarrera(){
   const d=state.ui.cc; if(!d) return; const prob=ccProblemas(d); if(prob.length){ toast(prob[0]); return; }
-  const name=d.name.trim();
   state.company={modo:'carrera', name:'Mundo', stars:5, infinite:true, money:0, reputation:0, dbv:9, tut:{inf:true, s2:true, intl:true}, spStart:true, spReal:true, carrera:null};
   state.freestylers=generatePool();
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
-  const f={id:uid('f'), name, country:d.country, style:d.style, nivel:0, fama:CARRERA_FAMA, hype:randHype(CARRERA_FAMA), legend:false, jugador:true, attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, d.attrs[k]])), carrera:{exp:0, pot:POT_CARRERA}};
-  f.nivel=nivelFromAttrs(f.attrs);
-  state.freestylers.push(f);
+  const f=crearJugadorCarrera(d);
   state.seasons=[]; state.seasons.push(newSeason(null));
   f.debut=cur().year; state.company.carrera={fid:f.id, inicio:cur().year, temporadas:[]};
+  asegurarOfertas(cur());
   state.ui.cc=null; state.ui.importedPool=null;
   goto('carrera');
 }
@@ -2090,12 +2093,42 @@ function autoFicharLigas(s){
   let faltan=0;
   natKeys(s).forEach(k=>{
     const L=s.leagues[k]; const def=ldef(k);
-    const pool=activos().filter(f=>!signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
+    jugadores().forEach(f=>{ if((f.plan||{}).liga===k && !signedLeagueOf(s,f.id) && L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; } });   // el jugador que aceptó la oferta entra antes que nadie
+    const pool=activos().filter(f=>!f.jugador && !signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
       .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
     for(const f of pool){ if(L.competitors.length>=10) break; L.competitors.push(f.id); L.contracts[f.id]=0; }
     faltan+=Math.max(0, 10-L.competitors.length);
   });
   return faltan;
+}
+// ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
+// Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
+const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
+const OFERTA_APUESTA = 14;          // puesto 11-14: «apuesta de la liga», ofrece con OFERTA_APUESTA_PROB y el jugador ocupa la plaza del décimo
+const OFERTA_APUESTA_PROB = 0.5;
+function jugadores(){ return activos().filter(f=>f.jugador); }
+function planDe(f){ if(!f.plan) f.plan={}; const p=f.plan; if(!Array.isArray(p.inscrito)) p.inscrito=[]; if(!Array.isArray(p.ofertas)) p.ofertas=[]; if(p.entreno===undefined) p.entreno=null; if(p.liga===undefined) p.liga=null; return p; }
+function ligasDelPais(f){ return LEAGUES.filter(L=>L.countries.includes(f.country)).map(L=>L.key); }   // solo las ligas de su país ofrecen
+// Puesto del jugador entre los activos del país de la liga ordenados por nivel (el mismo orden que usa autoFicharLigas); 0 si no es del país
+function puestoEnPais(s, f, key){ const def=ldef(key); if(!def || !def.countries || !def.countries.includes(f.country)) return 0;
+  const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort((a,b)=>b.nivel-a.nivel); return list.findIndex(x=>x.id===f.id)+1; }
+// Ofertas de liga de la pretemporada para cada jugador. Se calculan una vez por temporada (p.ofertasYear) al entrar en la pretemporada o al abrir la pantalla.
+// Por defecto el jugador acepta: su liga del año pasado si vuelve a ofrecer y, si no, la primera oferta. Si estaba fichado y su liga no ofrece, p.noRenueva la señala.
+function asegurarOfertas(s){
+  if(!modoCarrera() || s.phase!=='pre') return;
+  jugadores().forEach(f=>{ const p=planDe(f); if(p.ofertasYear===s.year) return;
+    const antes=p.liga; p.ofertas=[]; p.noRenueva=null; p.ofertasYear=s.year;
+    ligasDelPais(f).filter(k=>s.activeKeys.includes(k)).forEach(k=>{ const puesto=puestoEnPais(s,f,k); if(!puesto) return;
+      if(puesto<=OFERTA_SEGURA) p.ofertas.push({key:k, puesto, apuesta:false});
+      else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true}); });
+    if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva=antes;
+    p.liga = p.ofertas.some(o=>o.key===antes) ? antes : (p.ofertas[0] ? p.ofertas[0].key : null);
+  });
+}
+// Crea el freestyler del jugador a partir de los datos de la pantalla de creación y lo mete en el pool (también lo usa el simulador)
+function crearJugadorCarrera(d){
+  const f={id:uid('f'), name:d.name.trim(), country:d.country, style:d.style, nivel:0, fama:CARRERA_FAMA, hype:randHype(CARRERA_FAMA), legend:false, jugador:true, attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, d.attrs[k]])), carrera:{exp:0, pot:POT_CARRERA}, plan:{entreno:null, inscrito:[], liga:null, ofertas:[]}};
+  f.nivel=nivelFromAttrs(f.attrs); state.freestylers.push(f); return f;
 }
 function devAutoSign(){
   const s=cur(); if(s.phase!=='pre') return;
