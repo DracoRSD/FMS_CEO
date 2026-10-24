@@ -24,7 +24,7 @@ const REF_KO = { favorito: 71.6, sembrado: 40.6 }, REF_UNDER = { favorito: 71.1,
 const CUADROS = parseInt(arg('cuadros', '4000'), 10);
 const PROGRESION = parseInt(arg('progresion', '20'), 10);   // temporadas de evolución del pool (informe de progresión y relevo)
 const CARRERA = parseInt(arg('carrera', '20'), 10);         // temporadas que el mundo corre solo en modo carrera (0 = no se prueba)
-const GUARDADO_CARRERA_MAX = 2 * 1048576, GUARDADO_AMBOS_MAX = 4 * 1048576;   // aviso si el guardado de una carrera a 20 años pasa de 2 MB, o CEO + carrera de 4 MB
+const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Criterios de aceptación del relevo generacional tras PROGRESION temporadas (evolución + retiros + nuevos talentos)
 const TOP30_TOL = 3, TOP100_TOL = 4;   // el nivel medio del top 30 y del top 100 queda a ±esto del inicio
 const POOL_TOL = 10;                   // el pool de activos no varía más de ±esto (%)
@@ -166,36 +166,63 @@ w.addEventListener('load', () => setTimeout(() => {
   }
   g('state').freestylers = pool;
 
-  // ---- modo carrera: el mundo corre solo CARRERA años con una empresa fantasma (5 estrellas, infinito, 7 ligas) y sin CEO ----
-  // Cada año: autoPretemporada, autoFicharLigas, startSeason, advance('year'), nextSeason. Se restaura el estado al terminar.
-  const carrera = { anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [] };
-  if (CARRERA > 0) {
-    const S = g('state'); const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
+  // ---- el mundo corre solo CARRERA años (fase C1) y guardado ligero (fase G) ----
+  // correrMundo('carrera') crea la carrera como en el juego; correrMundo('ceo') crea un mundo de CEO con el mismo piloto automático
+  // (empresa con 5 estrellas y la votación de Red Bull resuelta a mano). Cada año: autoPretemporada, autoFicharLigas, startSeason,
+  // advance('year'), nextSeason. La poda se desactiva durante la simulación para medir el guardado antes y después, comprobar que
+  // historial, títulos, clasificaciones y fatiga de carteles no cambian al podar, y probar la migración dbv 8 → 9. Se restaura el estado.
+  function correrMundo(modo) {
+    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
+    const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
     S.company = null; S.freestylers = []; S.seasons = [];
-    g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } });
-    g('nuevaCarrera')();   // como en el juego: empresa fantasma, pool real y el freestyler del jugador
+    w.eval('var _aligerarReal = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
     const errAntes = errores.length;
     try {
+      if (modo === 'carrera') { g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } }); g('nuevaCarrera')(); }
+      else { S.company = { modo: 'ceo', name: 'CEO de prueba', stars: 5, infinite: true, money: 0, reputation: 0, dbv: 9, tut: { inf: true, s2: true, intl: true }, spStart: true, spReal: true }; S.freestylers = g('generatePool()'); S.seasons = [g('newSeason')(null)]; }
       for (let t = 1; t <= CARRERA; t++) {
         const s = g('cur')();
         g('autoPretemporada')(s); g('autoFicharLigas')(s); const issues = g('preseasonIssues')(s); const nat = g('natKeys')(s);
         const ok10 = nat.length === 7 && nat.every(k => s.leagues[k].competitors.length === 10), ok9 = nat.length === 7 && nat.every(k => s.leagues[k].dates.length === 9);
-        if (!ok10 || !ok9 || issues.length) { carrera.arranquesMal.push(`T${t} ${s.year}: ${issues[0] || (nat.length + ' ligas')}`); break; }
-        g('startSeason')(); g('advance')('year');
-        if (s.phase !== 'done') { const ev = g('simulateDay')(true); carrera.pausas.push(`T${t} ${s.year} día ${s.day}: pausa ${JSON.stringify(ev && ev.pause)}`); break; }
+        if (!ok10 || !ok9 || issues.length) { r.arranquesMal.push(`T${t} ${s.year}: ${issues[0] || (nat.length + ' ligas')}`); break; }
+        g('startSeason')();
+        for (let v = 0; v < 3 && s.phase === 'live'; v++) { g('advance')('year'); if (modo === 'ceo' && s.phase === 'live' && g('rbNeedsVote')(s, s.day)) g('rbResolveVote')(s, []); }
+        if (s.phase !== 'done') { const ev = g('simulateDay')(true); r.pausas.push(`T${t} ${s.year} día ${s.day}: pausa ${JSON.stringify(ev && ev.pause)}`); break; }
         const q = s.intl.qualifiers || []; const distintos = new Set(q).size;
-        if (!(q.length === 16 && distintos === 16 && s.intl.champion)) carrera.intlMal.push(`T${t} ${s.year}: ${q.length} clasificados, ${distintos} distintos`);
+        if (!(q.length === 16 && distintos === 16 && s.intl.champion)) r.intlMal.push(`T${t} ${s.year}: ${q.length} clasificados, ${distintos} distintos`);
         const nombre = id => { const f = S.freestylers.find(x => x.id === id); return f ? f.name : '—'; };
         const huecoMax = Math.max(...nat.map(k => { const d = s.leagues[k].dates; let m = 0; for (let i = 1; i < d.length; i++) m = Math.max(m, d[i] - d[i - 1]); return m; }));
-        carrera.filas.push(`T${String(t).padEnd(2)} ${s.year}  ligas ${nat.length}  hueco máx ${String(huecoMax).padStart(2)} d  INTL ${s.intl.sede.padEnd(9)} ${nombre(s.intl.champion).padEnd(14)} clasificados ${distintos}  RB Int ${nombre(s.rb.inter.champion).padEnd(14)} retiros ${(s.summary && s.summary.relevo ? s.summary.relevo.retirados.length : 0)} novatos ${(s.summary && s.summary.relevo ? s.summary.relevo.novatos.length : 0)}`);
-        carrera.anos++;
+        r.filas.push(`T${String(t).padEnd(2)} ${s.year}  ligas ${nat.length}  hueco máx ${String(huecoMax).padStart(2)} d  INTL ${s.intl.sede.padEnd(9)} ${nombre(s.intl.champion).padEnd(14)} clasificados ${distintos}  RB Int ${nombre(s.rb.inter.champion).padEnd(14)} retiros ${(s.summary && s.summary.relevo ? s.summary.relevo.retirados.length : 0)} novatos ${(s.summary && s.summary.relevo ? s.summary.relevo.novatos.length : 0)}`);
+        r.anos++;
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
-    } catch (e) { carrera.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 3).join(' · ')); }
-    carrera.erroresJsdom = errores.splice(errAntes).length;   // los errores del bloque no cuentan como errores de carga
-    try { g('save')(); carrera.bytes = (w._mem.get(g('CARRERA_KEY')) || '').length; } catch (e) { carrera.bytes = -1; }
-    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view;
+      // guardado antes y después de la poda; el historial, los títulos, las clasificaciones y la fatiga no deben cambiar
+      const key = g('storageKey')(); g('save')(); r.bytesAntes = (mem.get(key) || '').length;
+      const cerradas = S.seasons.filter(s => s.phase === 'done');
+      const foto = () => cerradas.map(s => g('champRows')(s) + g('sumRight')(s)).join('\n');
+      const titulos = () => S.freestylers.map(f => f.id + ':' + g('titlesOf')(f.id).join(',')).join('|');
+      const clasif = () => cerradas.map(s => s.activeKeys.map(k => s.leagues[k].finalStandings.join(',')).join(';')).join('|');
+      const fatiga = () => { const ids = S.freestylers.slice(0, 60).map(f => f.id); const out = []; for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) out.push(g('pairFatigue')(ids[i], ids[j])); return out.join(','); };
+      const antes = [foto(), titulos(), clasif(), fatiga(), g('renderHistory')()];
+      const sinImg = (k, v) => (k === 'img' && typeof v === 'string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v;
+      const dumpViejo = JSON.stringify({ company: Object.assign({}, S.company, { dbv: 8 }), freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter }, sinImg);
+      w.eval('aligerarAntiguas = _aligerarReal;');
+      r.aligeradas = g('aligerarAntiguas')(); g('save')(); r.bytesDespues = (mem.get(key) || '').length;
+      const despues = [foto(), titulos(), clasif(), fatiga(), g('renderHistory')()];
+      r.identicos = antes.every((x, i) => x === despues[i]);
+      // migración: la misma partida sin podar y en dbv 8 carga, queda en 9 y podada, con los mismos títulos e historial
+      mem.set(key, dumpViejo); S.company = null; S.seasons = []; S.freestylers = [];
+      const carga = g('load')(modo); const ligeras = S.seasons.filter(s => s.phase === 'done' && s.ligera).length;
+      r.migra = !!carga && S.company.dbv === 9 && ligeras === r.aligeradas && S.freestylers.map(f => f.id + ':' + g('titlesOf')(f.id).join(',')).join('|') === antes[1] && g('renderHistory')() === antes[4];
+      g('save')(); r.bytesMigrado = (mem.get(key) || '').length;
+    } catch (e) { r.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 3).join(' · ')); }
+    w.eval('aligerarAntiguas = _aligerarReal;');
+    r.erroresJsdom = errores.splice(errAntes).length;   // los errores del bloque no cuentan como errores de carga
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY'));
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view; S.ui.cc = null;
+    return r;
   }
+  const mundos = CARRERA > 0 ? [correrMundo('carrera'), correrMundo('ceo')] : [];
 
   // ---- modos y guardado (fase C2) ----
   // Una partida de CEO en dbv 7 carga y queda en 8 con modo 'ceo' sin tocar niveles ni atributos; una carrera creada con nuevaCarrera
@@ -211,7 +238,7 @@ w.addEventListener('load', () => setTimeout(() => {
       S.company = { name: 'CEO de prueba', stars: 1, reputation: 0, money: 1000, dbv: 7 }; S.freestylers = poolCeo; S.seasons = [g('newSeason')(null)];
       const antes = JSON.stringify(poolCeo.map(f => [f.nivel, f.attrs]));
       g('save')(); S.company = null; S.freestylers = []; S.seasons = [];
-      modos.migra = g('load')('ceo') && S.company.dbv === 8 && S.company.modo === 'ceo' && JSON.stringify(S.freestylers.map(f => [f.nivel, f.attrs])) === antes;
+      modos.migra = g('load')('ceo') && S.company.dbv === 9 && S.company.modo === 'ceo' && JSON.stringify(S.freestylers.map(f => [f.nivel, f.attrs])) === antes;
       S.company = null; S.freestylers = []; S.seasons = [];
       g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } });
       g('nuevaCarrera')(); const jug = g('fby')(S.company.carrera.fid);
@@ -278,19 +305,24 @@ w.addEventListener('load', () => setTimeout(() => {
 
   let okCarrera = true;
   if (CARRERA > 0) {
-    console.log(`\nModo carrera: el mundo corre solo ${CARRERA} temporadas (empresa fantasma con 5 estrellas, 7 ligas, sin CEO)`);
-    carrera.filas.forEach(l => console.log('  ' + l));
-    const sinPausas = carrera.pausas.length === 0 && carrera.excepciones.length === 0 && carrera.erroresJsdom === 0 && carrera.anos === CARRERA;
-    okCarrera = sinPausas && carrera.arranquesMal.length === 0 && carrera.intlMal.length === 0;
-    console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${carrera.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${carrera.pausas.length ? ' · ' + carrera.pausas.join('; ') : ''}${carrera.excepciones.length ? ' · excepción: ' + carrera.excepciones.join('; ') : ''}${carrera.erroresJsdom ? ' · errores de página: ' + carrera.erroresJsdom : ''}`);
-    console.log(`${carrera.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${carrera.arranquesMal.length ? ' · ' + carrera.arranquesMal.join('; ') : ''}`);
-    console.log(`${carrera.intlMal.length === 0 ? 'OK  ' : 'FAIL'} la Internacional tiene cada año 16 clasificados distintos con 7 ligas${carrera.intlMal.length ? ' · ' + carrera.intlMal.join('; ') : ''}`);
-    const mb = x => (x / 1048576).toFixed(2).replace('.', ',');
-    const pasa = carrera.bytes > GUARDADO_CARRERA_MAX || carrera.bytes * 2 > GUARDADO_AMBOS_MAX;
-    console.log(`${pasa ? 'AVISO' : 'INFO '} guardado de una carrera tras ${carrera.anos} temporadas: ${mb(carrera.bytes)} MB (aviso si pasa de ${mb(GUARDADO_CARRERA_MAX)} MB); con una partida de CEO del mismo tamaño serían ${mb(carrera.bytes * 2)} MB juntas (aviso si pasan de ${mb(GUARDADO_AMBOS_MAX)} MB)`);
+    const kb = x => (x / 1024).toFixed(0) + ' KB';
+    mundos.forEach(c => {
+      console.log(`\n${c.modo === 'carrera' ? 'Modo carrera' : 'Mundo de CEO con piloto automático'}: ${CARRERA} temporadas sin CEO (7 ligas)`);
+      if (c.modo === 'carrera') c.filas.forEach(l => console.log('  ' + l));
+      const sinPausas = c.pausas.length === 0 && c.excepciones.length === 0 && c.erroresJsdom === 0 && c.anos === CARRERA;
+      const okTam = c.bytesDespues > 0 && c.bytesDespues <= GUARDADO_MAX;
+      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true;
+      okCarrera = okCarrera && okMundo;
+      console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${c.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${c.pausas.length ? ' · ' + c.pausas.join('; ') : ''}${c.excepciones.length ? ' · excepción: ' + c.excepciones.join('; ') : ''}${c.erroresJsdom ? ' · errores de página: ' + c.erroresJsdom : ''}`);
+      console.log(`${c.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${c.arranquesMal.length ? ' · ' + c.arranquesMal.join('; ') : ''}`);
+      console.log(`${c.intlMal.length === 0 ? 'OK  ' : 'FAIL'} la Internacional tiene cada año 16 clasificados distintos con 7 ligas${c.intlMal.length ? ' · ' + c.intlMal.join('; ') : ''}`);
+      console.log(`${okTam ? 'OK  ' : 'FAIL'} guardado tras ${c.anos} temporadas: ${kb(c.bytesDespues)} con temporadas ligeras (límite ${kb(GUARDADO_MAX)}; sin podar serían ${kb(c.bytesAntes)}; ${c.aligeradas} temporadas aligeradas)`);
+      console.log(`${c.identicos === true ? 'OK  ' : 'FAIL'} resumen de temporada, historial, títulos, clasificaciones y fatiga de carteles idénticos antes y después de podar`);
+      console.log(`${c.migra === true ? 'OK  ' : 'FAIL'} la misma partida sin podar en dbv 8 carga, queda en dbv 9 con ${c.aligeradas} temporadas ligeras (${kb(c.bytesMigrado)}) y los mismos títulos e historial`);
+    });
   }
   const okModos = !modos.excepcion && modos.migra && modos.crea && modos.ano && modos.exporta && modos.dosClaves && modos.abreCarrera && modos.abreCeo;
-  console.log(`\n${okModos ? 'OK  ' : 'FAIL'} modos y guardado: CEO dbv 7 → 8 sin cambios (${!!modos.migra}), carrera creada con nivel = media, fama 20, experiencia 0 y potencial 92 (${!!modos.crea}), un año con el botón y nivel = media (${!!modos.ano}), exportar e importar idéntico (${!!modos.exporta}), dos claves a la vez (${!!modos.dosClaves}) y las dos abren (${!!(modos.abreCarrera && modos.abreCeo)})${modos.excepcion ? ' · excepción: ' + modos.excepcion : ''}`);
+  console.log(`\n${okModos ? 'OK  ' : 'FAIL'} modos y guardado: CEO dbv 7 → 9 sin cambios (${!!modos.migra}), carrera creada con nivel = media, fama 20, experiencia 0 y potencial 92 (${!!modos.crea}), un año con el botón y nivel = media (${!!modos.ano}), exportar e importar idéntico (${!!modos.exporta}), dos claves a la vez (${!!modos.dosClaves}) y las dos abren (${!!(modos.abreCarrera && modos.abreCeo)})${modos.excepcion ? ' · excepción: ' + modos.excepcion : ''}`);
 
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
