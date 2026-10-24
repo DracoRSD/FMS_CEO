@@ -846,7 +846,7 @@ function startSeason(){
   rbDraw(s);
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
   addLog(s, 0, `Arranca la temporada ${s.year} con ${s.activeKeys.length} liga(s)${s.intlEnabled?' + Internacional':''}.`, 'gold');
-  goto('dashboard');
+  goto(modoCarrera() ? 'carrera' : 'dashboard');
 }
 
 /* ---------- Hype de freestylers ---------- */
@@ -1443,12 +1443,32 @@ function renderCarrera(){
         ${attrBars(f)}
         <div class="style-box">${styleTag(f)}<span>${esc(STYLES[styleOf(f)].txt)}</span></div></div>
     </div></div>
+    ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
-      <p class="step-note" style="margin:6px 0 12px">Pantalla provisional de la fase C2: las ligas y torneos corren solos. En las fases siguientes aquí elegirás liga, patrocinador, entrenamiento y torneos.</p>
+      <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Pantalla provisional: el patrocinador y el resumen personal llegan en las fases siguientes.'}</p>
       ${boton}
     </div>
   </div>`;
+}
+// Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
+function carreraDecisiones(s, f){
+  asegurarOfertas(s); const p=planDe(f);
+  const nr=p.noRenueva; const aviso = nr ? `<p class="step-note aviso">${nr.puesto>OFERTA_APUESTA || !nr.puesto ? `La liga no te renueva: ya no estás entre los ${OFERTA_APUESTA} mejores de tu país.` : `La liga no te renueva: estabas en el puesto ${nr.puesto} de tu país y este año ha apostado por otro.`}</p>` : '';
+  const ofertas = p.ofertas.map(o=>`<button class="ltoggle ${p.liga===o.key?'on':''}" onclick="carreraElegirLiga('${o.key}')" aria-pressed="${p.liga===o.key}">${leagueDot(o.key)}<span>${esc(ldef(o.key).name)}<small>Puesto ${o.puesto} de tu país${o.apuesta?' · apuesta de la liga':''}</small></span></button>`).join('');
+  const libre = `<button class="ltoggle ${!p.liga?'on':''}" onclick="carreraElegirLiga(null)" aria-pressed="${!p.liga}"><span>Seguir libre<small>${p.ofertas.length ? 'Rechazas la oferta y juegas Under, Monster Fu, Red Bull y Plazas' : 'Ninguna liga de tu país te ha ofrecido este año'}</small></span></button>`;
+  const racha=p.racha||{attr:null, n:0};
+  const entreno = ATTR_KEYS.map(k=>{ const rep = racha.attr===k && racha.n+1>=ENTRENO_REPETICION; return `<button class="ltoggle ${p.entreno===k?'on':''}" onclick="carreraEntrenar('${k}')" aria-pressed="${p.entreno===k}"><span>${esc(ATTR_LABELS[k])}<small>${attrShown(f,k)}${rep ? ` · ${racha.n+1}.º año seguido: rinde la mitad` : ''}</small></span></button>`; }).join('');
+  const torneos = torneosDelJugador(s,f).map(t=>{ const on=p.inscrito.includes(t.key) && t.apto; return `<button class="ltoggle ${on?'on':''} ${t.apto?'':'locked'}" onclick="carreraInscribir('${t.key}')" aria-pressed="${on}"><span>${esc(t.name)}<small>${t.apto ? (on ? 'Inscrito: plaza garantizada' : 'Sin inscribir') : esc(t.motivo||'No apto')}</small></span></button>`; }).join('');
+  const etapa=etapaOf(f); const efecto = etapa==='joven' ? `+${ENTRENO_JOVEN} además del crecimiento` : (etapa==='madurez' ? `+${ENTRENO_MADUREZ} en el atributo` : 'el declive de ese atributo se reduce a la mitad');
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${libre}</div></div>
+    <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
+    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? 'Con liga solo puedes jugar tu Red Bull nacional o Plazas.' : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}</div></div>`;
+}
+// En directo o cerrada: el plan de la temporada en solo lectura
+function carreraPlanResumen(s, f){
+  const p=planDe(f); const lk=signedLeagueOf(s,f.id); const nombres=p.inscrito.map(k=>{ const d=udef(k)||rbdef(k); return d ? esc(d.name) : k; });
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Tu temporada ${s.year}</span><p class="step-note" style="margin:0">Liga: <b>${lk ? esc(ldef(lk).name) : 'libre'}</b> · Entrenas: <b>${p.entreno ? esc(ATTR_LABELS[p.entreno]) : 'nada'}</b> · Torneos: <b>${nombres.length ? nombres.join(', ') : 'ninguno'}</b></p></div>`;
 }
 // Un año completo del mundo sin CEO: pretemporada automática, plantillas por nivel, arranque y simulación hasta el cierre
 function jugarTemporadaCarrera(){
@@ -2131,10 +2151,21 @@ function asegurarOfertas(s){
     ligasDelPais(f).filter(k=>s.activeKeys.includes(k)).forEach(k=>{ const puesto=puestoEnPais(s,f,k); if(!puesto) return;
       if(puesto<=OFERTA_SEGURA) p.ofertas.push({key:k, puesto, apuesta:false});
       else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true}); });
-    if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva=antes;
+    if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva={key:antes, puesto:puestoEnPais(s,f,antes)};
     p.liga = p.ofertas.some(o=>o.key===antes) ? antes : (p.ofertas[0] ? p.ofertas[0].key : null);
+    // valores por defecto de la temporada: entrenar el atributo más bajo e inscribirse en todo lo que se pueda
+    p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0];
+    p.inscrito=torneosDelJugador(s,f).filter(t=>t.apto).map(t=>t.key); if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
   });
 }
+// Decisiones de la pantalla «Mi carrera» (pretemporada)
+function carreraElegirLiga(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.liga = key && p.ofertas.some(o=>o.key===key) ? key : null;
+  p.inscrito=p.inscrito.filter(k=>torneosDelJugador(s,f).some(t=>t.key===k && t.apto)); render(); }
+function carreraEntrenar(attr){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre' || !ATTR_KEYS.includes(attr)) return; planDe(f).entreno=attr; render(); }
+function carreraInscribir(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); const t=torneosDelJugador(s,f).find(x=>x.key===key); if(!t || !t.apto) return;
+  if(p.inscrito.includes(key)) p.inscrito=p.inscrito.filter(k=>k!==key); else p.inscrito.push(key);
+  if(key===rbNacionalDe(f) && p.inscrito.includes(key)) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // Plazas es para quien no juega su nacional
+  render(); }
 // Crea el freestyler del jugador a partir de los datos de la pantalla de creación y lo mete en el pool (también lo usa el simulador)
 function crearJugadorCarrera(d){
   const f={id:uid('f'), name:d.name.trim(), country:d.country, style:d.style, nivel:0, fama:CARRERA_FAMA, hype:randHype(CARRERA_FAMA), legend:false, jugador:true, attrs:Object.fromEntries(ATTR_KEYS.map(k=>[k, d.attrs[k]])), carrera:{exp:0, pot:POT_CARRERA}, plan:{entreno:null, inscrito:[], liga:null, ofertas:[]}};

@@ -561,6 +561,9 @@ html{ scroll-padding-top:env(safe-area-inset-top,0px); }
 .cc-attr.mal input{border-color:#ff6b6b;}
 .carrera-ficha{display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;}
 .carrera-ficha .profile-avatar{flex:none;}
+.carrera-opts{display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:8px; margin-top:8px;}
+.carrera-opts .ltoggle{width:100%; text-align:left;}
+.step-note.aviso{color:var(--gold); margin:0 0 10px;}
 
 @media(max-width:640px){
   .cal-cell{min-height:58px; padding:3px; border-radius:6px;}
