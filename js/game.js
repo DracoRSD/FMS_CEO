@@ -421,7 +421,7 @@ function retirarFreestylers(s){
   if(s.intl && s.intl.champion) protegidos.add(s.intl.champion);
   const out=[];
   state.freestylers.forEach(f=>{
-    if(f.retirado || f.custom || protegidos.has(f.id)) return;
+    if(f.retirado || f.custom || f.jugador || protegidos.has(f.id)) return;   // el retiro del jugador lo decide el modo carrera
     if(Math.random()<retiroProb(f)){ f.retirado=true; f.retiradoEn=s.year; out.push(f.id); }
   });
   return out;
@@ -478,7 +478,9 @@ function salaryOf(f){
 /* =========================================================================
    ESTADO
 ========================================================================= */
-const STORAGE_KEY = 'fms_ceo_v1';
+const STORAGE_KEY = 'fms_ceo_v1';                 // partida de CEO
+const CARRERA_KEY = 'fms_ceo_carrera_v1';         // partida del modo carrera, aparte: las dos conviven en el mismo navegador
+function storageKey(modo){ return (modo || (state.company && state.company.modo)) === 'carrera' ? CARRERA_KEY : STORAGE_KEY; }
 let state = { company:null, freestylers:[], seasons:[], logos:{}, _counter:1, view:{name:'dashboard', params:{}}, ui:{} };
 let _skipScrollRestore = false;
 function uid(p){ return p + (state._counter++); }
@@ -494,15 +496,15 @@ function cur(){ return state.seasons[state.seasons.length-1]; }
 function save(){
   try{
     const dump = {company:state.company, freestylers:state.freestylers, seasons:state.seasons, _counter:state._counter};
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dump, (k,v)=> (k==='img' && typeof v==='string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v));   // las fotos de los tuits se recuperan al pintar
+    localStorage.setItem(storageKey(), JSON.stringify(dump, (k,v)=> (k==='img' && typeof v==='string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v));   // las fotos de los tuits se recuperan al pintar
     state.ui.saveFailed=false;
   }catch(e){
     if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(()=>toast('No cabe más en el guardado del navegador (demasiadas imágenes). Exporta la partida para no perderla.'),50); }
   }
 }
-function load(){
+function load(modo){   // modo: 'ceo' o 'carrera'; sin modo, la partida de CEO
   try{
-    const raw = localStorage.getItem(STORAGE_KEY); if(!raw) return false;
+    const raw = localStorage.getItem(storageKey(modo)); if(!raw) return false;
     const d = JSON.parse(raw); if(!d || !d.company) return false;
     state.company=d.company; state.freestylers=d.freestylers||[]; state.seasons=d.seasons||[]; state._counter=d._counter||1;
     state.seasons.forEach((s,i)=>{ const last=i===state.seasons.length-1;
@@ -1180,7 +1182,7 @@ function nextSeason(){
 ========================================================================= */
 function newGame(){
   const name=(document.getElementById('ng_name').value||'').trim()||'FMS';
-  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:7}; state.ui.tutQ=null;
+  state.company={name, stars:0, reputation:0, money:START_MONEY, dbv:8, modo:'ceo'}; state.ui.tutQ=null;
   if(!state.ui.importedPool) state.freestylers=generatePool();
   else state.freestylers=state.ui.importedPool;
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -1206,7 +1208,7 @@ function importPoolFile(ev){
 function exportGame(){
   const dump={company:state.company, freestylers:state.freestylers, seasons:state.seasons, _counter:state._counter};
   const blob=new Blob([JSON.stringify(dump)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`fms_ceo_${cur()?cur().year:'partida'}.json`; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`${modoCarrera()?'fms_carrera_':'fms_ceo_'}${cur()?cur().year:'partida'}.json`; a.click();
 }
 function importGameFile(ev){
   const file=ev.target.files[0]; if(!file) return;
@@ -1224,7 +1226,7 @@ function resetGame(){
   openModal(`<h3>Borrar partida</h3><p class="step-note">Se pierde la empresa, las temporadas y los freestylers. Exporta antes si quieres conservarla.</p>
   <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn danger" onclick="doReset()">Borrar partida</button></div>`);
 }
-function doReset(){ try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} state.company=null; state.seasons=[]; state.freestylers=[]; closeModal(); goto('welcome'); }
+function doReset(){ try{ localStorage.removeItem(storageKey()); }catch(e){} state.company=null; state.seasons=[]; state.freestylers=[]; closeModal(); goto('welcome'); }
 /* =========================================================================
    RENDER
 ========================================================================= */
@@ -2075,6 +2077,9 @@ function syncRealPool(){
     state.company.dbv=6; }
   if(state.company && (state.company.dbv||0)<7){   // v7: relevo generacional. Campos opcionales (retirado, retiradoEn, generado, debut): nada que convertir
     state.company.dbv=7; }
+  if(state.company && (state.company.dbv||0)<8){   // v8: modo de partida ('ceo' o 'carrera'). Solo añade el campo; no toca niveles ni atributos
+    if(!state.company.modo) state.company.modo='ceo';
+    state.company.dbv=8; }
   const s=cur(); const ref=new Set();
   if(s){ Object.values(s.leagues||{}).forEach(L=>L.competitors.forEach(id=>ref.add(id)));
     if(rbOn(s)){ s.rb.events.forEach(e=>e.participants.forEach(id=>ref.add(id))); (s.rb.inter.qualifiers||[]).forEach(id=>ref.add(id)); (s.rb.interPodium||[]).forEach(id=>ref.add(id)); } }

@@ -12,6 +12,6 @@ Juego de fans, gratuito y sin ánimo de lucro: un manager de batallas de freesty
 ## Reglas
 
 - Todos los textos (interfaz, comentarios, commits) en español.
-- No romper partidas guardadas: `STORAGE_KEY` es `fms_ceo_v1`. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy 7), nunca descartarlos.
+- No romper partidas guardadas: `STORAGE_KEY` es `fms_ceo_v1`. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy 8), nunca descartarlos.
 - Una fase por vez: presentar el plan o el modelo de datos y esperar el OK antes de ejecutar. Commits pequeños.
 - No cambiar las reglas del juego salvo que la fase lo pida.
