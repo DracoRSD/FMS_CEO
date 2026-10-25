@@ -394,7 +394,7 @@ w.addEventListener('load', () => setTimeout(() => {
       const A = 'fms_argentina', B = 'fms_espana'; const x = s1.leagues[A].competitors[0];
       Object.values(s2.leagues).forEach(L => { L.competitors = L.competitors.filter(id => id !== x); }); s2.leagues[B].competitors = [x, ...s2.leagues[B].competitors].slice(0, 10);
       g('luGenerate')(s2, B); const lu = s2.leagues[B].lu; const prevName = g('ldef')(A).name;
-      cambioLiga[modo] = { ok: !!lu && lu.tweets.some(tw => tw.text.includes(prevName)), n: lu ? lu.tweets.length : 0 };
+      cambioLiga[modo] = { ok: !!lu && lu.tweets.some(tw => tw.h === A || tw.text.includes(prevName)), n: lu ? lu.tweets.length : 0 };   // la cuenta oficial de la liga de origen despide al que se va (no todas sus frases la nombran)
     } catch (e) { cambioLiga[modo] = { ok: false, n: 0, err: String(e && e.message || e) }; }
     mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
     S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view;
