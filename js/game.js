@@ -1577,11 +1577,13 @@ function twCarreraBatalla(s, b, fid){
   const r=redesDe(); const f=fby(fid); if(!r || !f) return [];
   const m=b.m; const rivalId = m.a===fid ? m.b : m.a; const o=fby(rivalId); const gane = m.result.winner===fid;
   r.racha = gane ? (r.racha||0)+1 : 0;
-  const yo = m.a===fid ? 'A' : 'B'; const votos = (m.d && m.d.v) ? Array.from(m.d.v) : null; const ptb = votos ? `${votos.filter(x=>x===yo).length}-${votos.filter(x=>x!==yo && x!=='R').length}${m.result.tiebreak?' tras réplica':''}` : (m.result.tiebreak ? 'en réplica' : 'por decisión');   // marcador en votos de los jueces
+  // marcador en votos de los jueces; si hubo réplica, el de la mano alzada de la réplica (m.d.h = [A, B])
+  const yo = m.a===fid ? 'A' : 'B'; const votos = (m.d && m.d.v) ? Array.from(m.d.v) : null; const h = (m.result.tiebreak && m.d && m.d.h) ? (yo==='A' ? [m.d.h[0], m.d.h[1]] : [m.d.h[1], m.d.h[0]]) : null;
+  const ptb = h ? `${h[0]}-${h[1]}` : (votos ? `${votos.filter(x=>x===yo).length}-${votos.filter(x=>x!==yo && x!=='R').length}` : (m.result.tiebreak ? 'en réplica' : 'por decisión'));
   const comp = etiquetaBatalla(b).split(' · ')[0]; const dn=(o?o.nivel:f.nivel)-f.nivel;
   const sorpresa = gane && dn>=REDES_SORPRESA, batacazo = !gane && dn<=-REDES_BATACAZO;
   const victorias = batallasDe(s, fid).filter(x=>x.w===fid).length;
-  const ptbo = votos ? `${votos.filter(x=>x!==yo && x!=='R').length}-${votos.filter(x=>x===yo).length}` : ptb;
+  const ptbo = h ? `${h[1]}-${h[0]}` : (votos ? `${votos.filter(x=>x!==yo && x!=='R').length}-${votos.filter(x=>x===yo).length}` : ptb);
   const datos={n:f.name, o:o?o.name:'su rival', ptb, ptbo, comp, r:r.racha, v:victorias, liga: signedLeagueOf(s,fid) ? ldef(signedLeagueOf(s,fid)).name : ''};
   // fans y haters que nacen de esta batalla
   const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country), todos=TWITTEROS.filter(t=>!t.special);
