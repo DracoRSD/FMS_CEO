@@ -1529,17 +1529,19 @@ function rivalDeCuadro(order, fid){ if(!order) return null; const i=order.indexO
 // Todas las batallas del jugador en la partida: temporadas completas con batallasDe y ligeras con lo que guardó la fase G
 function batallasDelJugador(fid){ const out=[]; state.seasons.forEach(s=>{ if(s.phase==='pre') return; if(s.ligera){ if(s.jugador && s.jugador.fid===fid) out.push(...s.jugador.batallas.map(b=>Object.assign({year:s.year}, b))); } else out.push(...batallasDe(s, fid).map(b=>Object.assign({year:s.year}, b))); }); return out; }
 // Rivales con el récord contra cada uno, ordenados por batallas
-function rivalesDelJugador(fid){ const por={}; batallasDelJugador(fid).forEach(b=>{ const r=b.a===fid?b.b:b.a; const o=por[r]=por[r]||{id:r, v:0, d:0, ultimo:null}; if(b.w===fid) o.v++; else o.d++; o.ultimo={year:b.year, gane:b.w===fid, comp:b.comp}; });
-  return Object.values(por).sort((a,b)=>(b.v+b.d)-(a.v+a.d) || b.v-a.v); }
+function rivalesDelJugador(fid){ const por={}; batallasDelJugador(fid).forEach(b=>{ const r=b.a===fid?b.b:b.a; const o=por[r]=por[r]||{id:r, v:0, d:0, sp:0, ultimo:null}; if(b.w===fid) o.v++; else o.d++; o.ultimo={year:b.year, gane:b.w===fid, comp:b.comp}; });
+  const c=state.company && state.company.carrera; if(c && c.fid===fid) (c.sparrings||[]).forEach(x=>{ const o=por[x.rival]=por[x.rival]||{id:x.rival, v:0, d:0, sp:0, ultimo:null}; o.sp++; });   // descubiertos en sparring
+  return Object.values(por).sort((a,b)=>(b.v+b.d)-(a.v+a.d) || b.sp-a.sp || b.v-a.v); }
 // Bloques de «Mi carrera» en directo: próximo compromiso y rivales
 function carreraEnDirecto(s, f){
   const fid=f.id; const px=proximoCompromiso(s, fid);
   const rivalTxt = !px ? '' : (px.rival ? `${miniAvatar(px.rival,22)} ${fnameH(px.rival)}` : (px.sinRival ? esc(px.sinRival) : 'rival por sortear'));
   const prox = px ? `<p class="step-note" style="margin:0"><b>${fmtDay(s.year, px.day)}</b> · ${esc(px.nombre)} · ${rivalTxt}</p>` : `<p class="step-note" style="margin:0">No te queda ningún compromiso este año${s.day<daysInYear(s.year)?': nada en el calendario donde estés inscrito':''}.</p>`;
   const riv=rivalesDelJugador(fid).slice(0, 8); const rec=batallasDelJugador(fid); const v=rec.filter(b=>b.w===fid).length;
-  const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : ''}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v}-${r.d}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
+  const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}${r.sp && !(r.v+r.d) ? ' <span class="rtag">sparring</span>' : ''}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : (r.sp ? `nivel ${fby(r.id)?fby(r.id).nivel:'—'} · ${styleOf(fby(r.id))}` : '')}${r.sp ? ` · sparring ×${r.sp}` : ''}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v+r.d ? r.v+'-'+r.d : '—'}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
+  const sp=(state.company.carrera.sparrings||[])[0]; const spTxt = sp ? `<p class="step-note" style="margin:8px 0 0">Último sparring: ${sp.gane?'ganaste a':'perdiste con'} <b>${fnameH(sp.rival)}</b> (nivel ${sp.nivel}) el ${fmtDay(sp.y, sp.d)} ${sp.y}.</p>` : '';
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Próximo compromiso</span>${prox}</div>
-    <div class="step" style="margin-top:16px;"><span class="field-label">Rivales · récord total ${v}-${rec.length-v}</span>${filas}</div>`;
+    <div class="step" style="margin-top:16px;"><span class="field-label">Rivales · récord total ${v}-${rec.length-v}</span>${filas}${spTxt}</div>`;
 }
 // ---- Redes de la carrera (fase T): fans, haters, medios del país y reaccionadores comentan al jugador según datos reales ----
 // company.carrera.redes = { fans:[handles], haters:[handles], racha, feed:[últimos REDES_FEED_MAX tuits], hitos:{} }. El feed va en el guardado, acotado.
@@ -2546,7 +2548,20 @@ function aplicarSesion(s, f, tipo, k){ const p=planDe(f); planMesDe(f); const a=
   if(tipo==='sparring'){ a.sparring++; sparringSesion(s, f); return; }
   if(!ATTR_KEYS.includes(k)) return; const tope=(f.carrera?f.carrera.pot:POT_CARRERA)+BOOST_OVER_POT; const v=Math.min(Math.max(f.attrs[k], tope), f.attrs[k]+cuotaSesion(f,k));
   f.attrs[k]=Math.round(v*10)/10; f.nivel=nivelFromAttrs(f.attrs); a.entreno[k]=(a.entreno[k]||0)+1; }
-function sparringSesion(s, f){ }   // fase D1, paso 2
+// Sparring (fase D1, paso 2): el juego propone 3 rivales del país a ±SPARRING_MARGEN de nivel y el jugador elige; sin elección (o al saltar) se usa el primero.
+// Batalla corta sin público: no entra en batallasDe, títulos ni redes. +0,1 de impro y mentalidad por sesión con tope +1 al año; el rival queda descubierto en «Rivales».
+const SPARRING_MARGEN = 5, SPARRINGS_MAX = 20;
+function proponerSparring(s, f){ const p=planDe(f); const mes=s.phase==='live' ? monthOf(s.year, s.day) : -1;
+  if(p.sparringOpciones && p.sparringMes===mes && p.sparringOpciones.length) return p.sparringOpciones;
+  const pool=activos().filter(x=>x.id!==f.id && !x.jugador && x.country===f.country && Math.abs(x.nivel-f.nivel)<=SPARRING_MARGEN);
+  const alt=activos().filter(x=>x.id!==f.id && !x.jugador && Math.abs(x.nivel-f.nivel)<=SPARRING_MARGEN);
+  p.sparringOpciones=shuffle(pool.length>=3 ? pool : (pool.length ? pool : alt)).slice(0,3).map(x=>x.id); p.sparringMes=mes; p.sparringElegido=null; return p.sparringOpciones; }
+function sparringSesion(s, f){ const p=planDe(f); const ops=proponerSparring(s, f); if(!ops.length) return null;
+  const rivalId = ops.includes(p.sparringElegido) ? p.sparringElegido : ops[0]; const o=fby(rivalId); if(!o) return null;
+  const m={a:f.id, b:rivalId, result:null, sparring:true}; simulateKOBattle(m, null, pickJudges(null)); const gane=m.result.winner===f.id;
+  const a=p.anio; if(a.sparringGan<SPARRING_TOPE){ const tope=(f.carrera?f.carrera.pot:POT_CARRERA)+BOOST_OVER_POT; ['impro','mentalidad'].forEach(k=>{ f.attrs[k]=Math.round(Math.min(Math.max(f.attrs[k], tope), f.attrs[k]+SPARRING_GANANCIA)*10)/10; }); a.sparringGan=Math.round((a.sparringGan+SPARRING_GANANCIA)*10)/10; f.nivel=nivelFromAttrs(f.attrs); }
+  if(state.company.carrera && f.id===state.company.carrera.fid){ const c=state.company.carrera; if(!Array.isArray(c.sparrings)) c.sparrings=[]; c.sparrings.unshift({y:s.year, d:s.day, rival:rivalId, gane, nivel:o.nivel}); if(c.sparrings.length>SPARRINGS_MAX) c.sparrings.length=SPARRINGS_MAX; }
+  return {rival:rivalId, gane}; }
 // El plan del mes se ejecuta al cerrar cada mes, en los tres modos de avance; un mes sin batallas descansa solo
 function ejecutarPlanMes(s, f, mes){ const m=planMesDe(f); Object.entries(m.entreno||{}).forEach(([k,n])=>{ for(let i=0;i<n;i++) aplicarSesion(s,f,'entreno',k); }); for(let i=0;i<(m.sparring||0);i++) aplicarSesion(s,f,'sparring'); for(let i=0;i<(m.descanso||0);i++) aplicarSesion(s,f,'descanso');
   if(f.ultBatallaMes!==mes) f.fatiga=clamp((f.fatiga||0)-FATIGA_MES_SIN,0,100); }
