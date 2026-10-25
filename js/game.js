@@ -1208,6 +1208,7 @@ function nextSeason(){
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; delete o.twUsados; delete o.twTextos; });   // los tuits de temporadas pasadas no se guardan
   state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
   aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
+  aligerarLocales();    // y en todas las cerradas, los cuadros de los torneos locales que no jugó el jugador se quedan en campeón y finalista
   asegurarOfertas(cur());   // modo carrera: ofertas de liga del año nuevo
   { const ns=cur(); ns.activeKeys.forEach(k=>preselectRoster(ns,k)); if(ns.activeKeys.includes(WS.key)){ const c=spState(); if(c.wsPool.length<3) sponsorOffers(state.company.stars||5, 3-c.wsPool.length, false, true); } }
   Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB_|exQ_|draft_)/.test(x)).forEach(x=>delete state.ui[x]);
@@ -3365,6 +3366,11 @@ function aligerarTemporada(s){
   s.ligera=true; return true;
 }
 // Aligera todas las temporadas cerradas salvo las LIGERA_TRAS más recientes. Devuelve cuántas aligeró.
+// Torneos locales de temporadas cerradas: solo campeón, finalista y tercero; los que jugó el jugador se conservan enteros (su historia y sus rivales salen de ahí). Devuelve cuántos podó.
+function aligerarLocales(){ const fid=state.company && state.company.carrera ? state.company.carrera.fid : null; let n=0;
+  state.seasons.filter(s=>s.phase==='done' && !s.ligera).forEach(s=>{ (s.under||[]).forEach((e,i)=>{ if(!esLocal(e.key) || !e.bracket) return; if(fid && (e.participants||[]).includes(fid)) return;
+    s.under[i]={key:e.key, day:e.day, played:e.played, size:e.size, champion:e.champion, runnerUp:e.runnerUp, third:e.third, podado:true}; n++; }); });
+  return n; }
 function aligerarAntiguas(){ const cerradas=state.seasons.filter(s=>s.phase==='done'); let n=0; cerradas.slice(0, Math.max(0, cerradas.length-LIGERA_TRAS)).forEach(s=>{ if(aligerarTemporada(s)) n++; }); return n; }
 function topFreestylersHtml(s){
   const top=seasonTopFreestylers(s,10); if(!top.length) return '';
@@ -3796,7 +3802,7 @@ function runUnder(s, ev, d){
 // Inscripciones del jugador (fase C3b, docs/modo-carrera.md 5.4). La inscripción garantiza la plaza: el jugador no pasa por underPick ni probPick.
 // Con liga solo puede inscribirse en su Red Bull nacional y en Plazas; Plazas es para los que no juegan su nacional.
 const PLAZAS_FAMA_MAX = 83, MFU_FAMA_MAX = 83;
-const LIGA_TORNEOS_EXTRA = 2, LIGA_CHOQUE_DIAS = 2;   // con liga: hasta 2 torneos más (Under o locales) que no caigan a 2 días o menos de una jornada suya
+const LIGA_TORNEOS_EXTRA = 3, LIGA_CHOQUE_DIAS = 2;   // con liga: hasta 3 torneos más (Under o locales) que no caigan a 2 días o menos de una jornada suya
 // ¿Choca el torneo (sus fechas de este año) con las jornadas de la liga del jugador? Devuelve la fecha de la jornada que choca o null. Sin fechas de liga aún, no choca.
 function chocaConLiga(s, f, key){ const lk=signedLeagueOf(s, f.id) || (s.phase==='pre' ? planDe(f).liga : null); if(!lk || !s.leagues[lk] || !s.leagues[lk].dates.length) return null;
   const dias=(s.under||[]).filter(u=>u.key===key).map(u=>u.day); const ch=s.leagues[lk].dates.find(d=>dias.some(x=>Math.abs(x-d)<=LIGA_CHOQUE_DIAS)); return ch!=null ? ch : null; }
@@ -3843,6 +3849,7 @@ function showUnder(key, day){
   let body='';
   if(!ev.played) body=`<p class="step-note">Se juega el ${fmtDay(s.year,ev.day)}. Es una competición externa: no puedes poner jornadas ese día.</p>`;
   else if(ev.battles) body=`<div class="tb-list">${ev.battles.map((m,i)=>{ const wa=m.result.winner===m.a; return `<div class="tb-row clickable"${battleClick(m,'under:'+key+':'+ev.day,'b',i)}><div class="tb-faces"><span class="tb-face ${wa?'w':''}" style="${avatarDivStyle(fby(m.a))}">${avatarContent(fby(m.a))}</span><span class="tb-face ${wa?'':'w'}" style="${avatarDivStyle(fby(m.b))}">${avatarContent(fby(m.b))}</span></div><div class="tb-info"><div class="tb-names"><span class="${wa?'w':''}">${fnameH(m.a)}</span> <i>vs</i> <span class="${wa?'':'w'}">${fnameH(m.b)}</span></div><div class="tb-meta">gana ${fnameH(m.result.winner)}</div></div><div class="tb-views">${fmtViews(m.views)}<small>visitas</small></div></div>`; }).join('')}</div>`;
+  else if(!ev.bracket) body=`<div class="sum-row"><span>🏆 Campeón</span><b>${fnameH(ev.champion)}</b></div><div class="sum-row"><span>Subcampeón</span><span>${fnameH(ev.runnerUp)}</span></div>${ev.third?`<div class="sum-row"><span>3º</span><span>${fnameH(ev.third)}</span></div>`:''}<p class="step-note">Cuadro no guardado: de las temporadas cerradas solo se conserva el podio de los torneos locales que no jugaste.</p>`;
   else { const fin=ev.bracket.rounds[ev.bracket.rounds.length-1][0];
     body=`<div class="sum-row"><span>🏆 Campeón</span><b>${fnameH(ev.champion)}</b></div><div class="sum-row"><span>Subcampeón</span><span>${fnameH(ev.runnerUp)}</span></div><div class="sum-row"><span>3º</span><span>${fnameH(ev.third)}</span></div>
       <div class="sum-sec">Cuadro</div>${bracketHtml(ev.bracket, 'under:'+key+':'+ev.day)}
