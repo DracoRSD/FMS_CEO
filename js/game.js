@@ -275,6 +275,8 @@ function setNivel(f, n){
 function attrOf(f,k){ return (f && f.attrs && typeof f.attrs[k]==='number') ? f.attrs[k] : (f ? f.nivel : 50); }
 function attrShown(f,k){ return Math.min(ATTR_SHOWN_MAX, Math.round(attrOf(f,k))); }   // para la interfaz: nunca por encima de 99
 // Base de rendimiento en una ronda: media ponderada de los atributos según el tipo de ronda
+// Fatiga del jugador en la batalla (fase D1): solo jugador:true; el resto del pool no tiene fatiga
+function fatigaMod(F){ if(!F || !F.jugador) return 0; const x=F.fatiga||0; if(x>=FATIGA_ALTA) return -FATIGA_PENAL*Math.min(1,(x-FATIGA_ALTA)/(100-FATIGA_ALTA)); if(x<=FATIGA_BAJA) return FATIGA_BONUS; return 0; }
 function roundBase(f, rt){ const w=ROUND_WEIGHTS[rt]||ROUND_WEIGHTS.min; return ATTR_KEYS.reduce((s,k)=>s+attrOf(f,k)*w[k],0); }
 function mentalFactor(f){ return clamp(MENTAL_VAR_BASE - attrOf(f,'mentalidad')*MENTAL_VAR_SLOPE, 0.5, 1.5); }
 
@@ -352,6 +354,11 @@ const ENTRENO_JOVEN = 7;            // joven: además del crecimiento normal (ca
 const ENTRENO_MADUREZ = 1.0;        // madurez: pequeño a propósito, el empujón va en los años jóvenes
 const ENTRENO_VETERANO = 0.5;       // veterano: el declive de ese atributo se multiplica por esto
 const ENTRENO_REPETICION = 3, ENTRENO_REPETICION_MULT = 0.5;   // el mismo atributo tres años seguidos rinde la mitad desde el tercero
+// Fase D1: el entrenamiento se vive por sesiones mensuales y sube el atributo en el momento. 3 entrenos al mes × 12 = la cuota anual de arriba.
+const SESIONES_MES = 4, SESIONES_ENTRENO_ANO = 36;
+const FATIGA_BATALLA = 8, FATIGA_SESION = 3, FATIGA_DESCANSO = 15, FATIGA_MES_SIN = 10;   // la fatiga del jugador (0-100): sube con batallas y sesiones, baja descansando
+const FATIGA_ALTA = 70, FATIGA_BAJA = 30, FATIGA_PENAL = 3, FATIGA_BONUS = 1;              // en la batalla: hasta −3 de nivel efectivo de 70 a 100, +1 hasta 30
+const SPARRING_GANANCIA = 0.1, SPARRING_TOPE = 1;                                       // sparring: +0,1 de impro y mentalidad por sesión, tope +1 al año
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
 const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
 const FAMA_SUBE = 0.3;              // si la fama está por debajo del nivel, sube esta fracción de la distancia (el nivel acaba haciéndose notar); el mínimo que mantiene la fama del top 100 a ±3 con los torneos
@@ -401,10 +408,8 @@ function evolveFreestylers(s){
     ensureAttrs(f); ensureCarrera(f);
     const before=f.nivel; f.attrsPrev={...f.attrs};
     const etapa=etapaOf(f); const exp=f.carrera.exp; const pot=f.carrera.pot;
-    // entrenamiento del jugador: atributo elegido en f.plan.entreno; la racha cuenta los años seguidos con el mismo
-    const ent = f.jugador && f.plan && ATTR_KEYS.includes(f.plan.entreno) ? f.plan.entreno : null; let entMult=0;
-    if(f.jugador && f.plan){ const r=f.plan.racha||{attr:null, n:0}; const n = ent ? (r.attr===ent ? r.n+1 : 1) : 0; f.plan.racha={attr:ent, n}; if(ent) entMult = n>=ENTRENO_REPETICION ? ENTRENO_REPETICION_MULT : 1; }
-    const entBonus = ent ? (etapa==='joven' ? ENTRENO_JOVEN : (etapa==='madurez' ? ENTRENO_MADUREZ : 0))*entMult : 0;
+    // el entrenamiento del jugador se aplica por sesiones durante la temporada (aplicarSesion); aquí ya no hay empujón de cierre
+    const ent = null; const entMult=0; const entBonus = 0;
     const d={};
     ATTR_KEYS.forEach(k=>{
       let v=0;
@@ -423,7 +428,7 @@ function evolveFreestylers(s){
       nv+=bk; if(bk>0 && nv>pot+BOOST_OVER_POT) nv=Math.max(f.attrs[k], pot+BOOST_OVER_POT);
       f.attrs[k]=clamp(Math.round(nv*10)/10, 1, ATTR_MAX);
     });
-    ATTR_KEYS.forEach(k=>f.attrs[k]=Math.round(f.attrs[k]));
+    ATTR_KEYS.forEach(k=>f.attrs[k]= f.jugador ? Math.round(f.attrs[k]*10)/10 : Math.round(f.attrs[k]));   // el jugador conserva las décimas de sus sesiones
     const n=nivelFromAttrs(f.attrs);
     if(n<NIVEL_MIN || n>NIVEL_MAX) setNivel(f, clamp(n, NIVEL_MIN, NIVEL_MAX)); else f.nivel=n;
     f.carrera.exp+=1;
@@ -1001,6 +1006,7 @@ function runIntl(s, d){
 }
 
 function monthEnd(s, m){
+  if(modoCarrera()) jugadores().forEach(f=>ejecutarPlanMes(s, f, m));   // fase D1: sesiones del mes de cada jugador
   // leyendas que llevan mucho sin batallar: la gente las echa de menos
   const now=s.year*366+dateToDay(s.year,m+1,0);
   state.freestylers.forEach(f=>{ if(!f.legend || f.retirado) return; if(f.lastB==null) f.lastB=now-30; const idle=now-f.lastB; if(idle>=90) addHype(f.id, idle>=180?2:1); });
@@ -1082,6 +1088,7 @@ function simulateDay(auto, soloFid){
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
   if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
   // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
+  if(carr) jugadores().forEach(j=>{ const n=batallasDelDia(s, d, j.id).length; if(n){ j.fatiga=clamp((j.fatiga||0)+FATIGA_BATALLA*n,0,100); j.ultBatallaMes=monthOf(y,d); } });   // fase D1: la batalla cansa
   if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } redesEventosDia(s, fid); }
   s.day++;
   if(s.day>=diy) endSeason(s);
@@ -1169,8 +1176,10 @@ function endSeason(s){
   if(modoCarrera() && state.company.carrera){ const c=state.company.carrera; const f=fby(c.fid); if(f){ const p=planDe(f); const lk=signedLeagueOf(s,f.id); const st=lk ? s.leagues[lk].finalStandings : [];
     if(!Array.isArray(c.temporadas)) c.temporadas=[];
     const prevT=(c.temporadas||[]).slice(-1)[0]; const nivelPrev = prevT ? prevT.nivel : (c.nivelInicio!=null ? c.nivelInicio : null);
-    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
+    const sesiones=cerrarSesionesAno(f);
+    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
+  if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f); });
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1450,7 +1459,7 @@ function renderCarrera(){
       <div class="profile-avatar" style="${avatarDivStyle(f)}">${avatarContent(f)}</div>
       <div style="min-width:0; flex:1;"><h3 style="margin:0">${nameH(f)}</h3><div class="pc">${esc(f.country)} · ${lk?ldef(lk).name:'Libre'} · debut ${f.debut||'—'}</div>
         <div class="stat-bars" style="margin-top:8px">
-          <div class="hype-row">Nivel <div class="hype"><i style="width:${f.nivel}%;background:var(--red-bright)"></i></div><b>${f.nivel}</b></div>
+          <div class="hype-row">Nivel <div class="hype"><i style="width:${f.nivel}%;background:var(--red-bright)"></i></div><b>${nivelDec(f)}</b></div>
           <div class="hype-row">Fama <div class="hype"><i style="width:${f.fama}%;background:var(--gold)"></i></div><b>${f.fama}</b></div>
         </div>
         ${attrBars(f)}
@@ -2328,7 +2337,7 @@ function showBattleBase(key, j, mi){
 // Flecha ▲▼ con la diferencia frente a la temporada anterior (f.attrsPrev, guardado en endSeason). Sin dato → nada
 function attrArrow(f,k){ if(!f.attrsPrev || typeof f.attrsPrev[k]!=='number') return '<span class="attr-arrow"></span>'; const d=Math.min(ATTR_SHOWN_MAX, Math.round(attrOf(f,k)))-Math.min(ATTR_SHOWN_MAX, Math.round(f.attrsPrev[k])); if(!d) return '<span class="attr-arrow"></span>'; return `<span class="attr-arrow ${d>0?'up':'down'}" title="${d>0?'Sube':'Baja'} ${Math.abs(d)} respecto a la temporada anterior">${d>0?'▲':'▼'}${Math.abs(d)}</span>`; }
 function attrBars(f){ const car=f.carrera ? ` · ${etapaOf(f)=='joven'?'Joven':(etapaOf(f)=='madurez'?'Madurez':'Veterano')} · ${f.carrera.exp} temporada${f.carrera.exp===1?'':'s'}` : '';
-  return `<div class="attr-bars"><span class="attr-title">Atributos${esc(car)}</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${v}</b>${attrArrow(f,k)}</div>`; }).join('')}</div>`; }
+  return `<div class="attr-bars"><span class="attr-title">Atributos${esc(car)}</span>${ATTR_KEYS.map(k=>{ const v=attrShown(f,k); return `<div class="hype-row attr-row"><span class="attr-lbl">${esc(ATTR_LABELS[k])}</span><div class="hype"><i style="width:${v}%"></i></div><b>${attrTxt(f,k)}</b>${attrArrow(f,k)}</div>`; }).join('')}</div>`; }
 
 /* ---------- imágenes (fotos y logos) ---------- */
 function pickImage(target){ state.ui.imgTarget=target; document.getElementById('imgFileInput').click(); }
@@ -2519,10 +2528,34 @@ function asegurarOfertas(s){
     if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.noRenueva) twCarreraEvento(s, 'noRenueva', {liga: ldef(p.noRenueva.key).name}); else if(p.ofertas.length && !p.ofertas.some(o=>o.key===antes)) twCarreraEvento(s, 'oferta', {liga: ldef(p.ofertas[0].key).name}); }
     // valores por defecto de la temporada: entrenar el atributo más bajo e inscribirse en todo lo que se pueda
     p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0];
+    p.mes={entreno:{[p.entreno]:SESIONES_MES-1}, sparring:0, descanso:1};   // plan del mes por defecto: 3 entrenos del más bajo y 1 descanso
     p.inscrito=[]; torneosDelJugador(s,f).forEach(t=>{ if(torneosDelJugador(s,f).find(x=>x.key===t.key).apto) p.inscrito.push(t.key); });   // uno a uno: con liga el tope de extras se aplica en orden
     if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
   });
 }
+// ---- Sesiones de entrenamiento (fase D1): plan del mes, cuota por sesión aplicada al momento, fatiga ----
+function planMesDe(f){ const p=planDe(f); if(!p.mes || typeof p.mes!=='object' || !p.mes.entreno){ const k=ATTR_KEYS.includes(p.entreno) ? p.entreno : ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0]; p.mes={entreno:{[k]:SESIONES_MES-1}, sparring:0, descanso:1}; } if(!p.anio) p.anio={entreno:{}, sparring:0, descanso:0, sparringGan:0}; return p.mes; }
+function sesionesDe(m){ return Object.values((m&&m.entreno)||{}).reduce((a,b)=>a+b,0)+((m&&m.sparring)||0)+((m&&m.descanso)||0); }
+// Cuota por sesión según la etapa: de joven 7/36, en la madurez 1/36, de veterano 36 sesiones compensan la mitad del declive máximo del atributo; la racha de 3 años la deja a la mitad
+function cuotaSesion(f, k){ const etapa=etapaOf(f); const r=f.plan&&f.plan.racha; const mult = (r && r.attr===k && r.n>=ENTRENO_REPETICION-1) ? ENTRENO_REPETICION_MULT : 1;
+  if(etapa==='joven') return ENTRENO_JOVEN/SESIONES_ENTRENO_ANO*mult; if(etapa==='madurez') return ENTRENO_MADUREZ/SESIONES_ENTRENO_ANO*mult;
+  return DECLINE_MAX*(1-ENTRENO_VETERANO)*(DECLINE_WEIGHT[k]||1)/SESIONES_ENTRENO_ANO*mult; }
+function aplicarSesion(s, f, tipo, k){ const p=planDe(f); planMesDe(f); const a=p.anio;
+  if(tipo==='descanso'){ f.fatiga=clamp((f.fatiga||0)-FATIGA_DESCANSO,0,100); a.descanso++; return; }
+  f.fatiga=clamp((f.fatiga||0)+FATIGA_SESION,0,100);
+  if(tipo==='sparring'){ a.sparring++; sparringSesion(s, f); return; }
+  if(!ATTR_KEYS.includes(k)) return; const tope=(f.carrera?f.carrera.pot:POT_CARRERA)+BOOST_OVER_POT; const v=Math.min(Math.max(f.attrs[k], tope), f.attrs[k]+cuotaSesion(f,k));
+  f.attrs[k]=Math.round(v*10)/10; f.nivel=nivelFromAttrs(f.attrs); a.entreno[k]=(a.entreno[k]||0)+1; }
+function sparringSesion(s, f){ }   // fase D1, paso 2
+// El plan del mes se ejecuta al cerrar cada mes, en los tres modos de avance; un mes sin batallas descansa solo
+function ejecutarPlanMes(s, f, mes){ const m=planMesDe(f); Object.entries(m.entreno||{}).forEach(([k,n])=>{ for(let i=0;i<n;i++) aplicarSesion(s,f,'entreno',k); }); for(let i=0;i<(m.sparring||0);i++) aplicarSesion(s,f,'sparring'); for(let i=0;i<(m.descanso||0);i++) aplicarSesion(s,f,'descanso');
+  if(f.ultBatallaMes!==mes) f.fatiga=clamp((f.fatiga||0)-FATIGA_MES_SIN,0,100); }
+// Cierre del año: racha por atributo con más del 50 % de las sesiones de entreno y resumen para temporadas[]
+function cerrarSesionesAno(f){ const p=planDe(f); planMesDe(f); const a=p.anio; const tot=Object.values(a.entreno).reduce((x,y)=>x+y,0); const top=Object.entries(a.entreno).sort((x,y)=>y[1]-x[1])[0];
+  const attr = top && tot>0 && top[1]>tot/2 ? top[0] : null; const r=p.racha||{attr:null, n:0}; p.racha={attr, n: attr ? (r.attr===attr ? r.n+1 : 1) : 0};
+  const resumen={entreno:{...a.entreno}, sparring:a.sparring, descanso:a.descanso}; p.anio={entreno:{}, sparring:0, descanso:0, sparringGan:0}; return resumen; }
+function nivelDec(f){ const v=ATTR_KEYS.reduce((a,k)=>a+attrOf(f,k),0)/ATTR_KEYS.length; return v.toFixed(1).replace('.',','); }
+function attrTxt(f,k){ return f.jugador ? Math.min(ATTR_SHOWN_MAX, attrOf(f,k)).toFixed(1).replace('.',',') : String(attrShown(f,k)); }
 // Decisiones de la pantalla «Mi carrera» (pretemporada)
 function carreraElegirLiga(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.liga = key && p.ofertas.some(o=>o.key===key) ? key : null;
   p.inscrito=p.inscrito.filter(k=>torneosDelJugador(s,f).some(t=>t.key===k && t.apto)); render(); }
@@ -3190,7 +3223,7 @@ function simulateFMSBattle(m, lvB, judges, opts){
   const perf=(F,S,form,rt)=>{
     if(F.name==='Khan') return 47.5 + form*0.4 + gauss()*4;    // PTB muy bajo (60-120 en formato largo)
     if(F.name==='Navas') return 57 + form*0.4 + gauss()*4;     // bajo (110-170 en formato largo)
-    let p=roundBase(F,rt)+lvB+bonusOf(F.id)+form+gauss()*8*S.v*mentalFactor(F)+(S.m[rt]||0)*STYLE_ROUND_MOD+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0);
+    let p=roundBase(F,rt)+lvB+bonusOf(F.id)+form+gauss()*8*S.v*mentalFactor(F)+(S.m[rt]||0)*STYLE_ROUND_MOD+((S.fmt&&S.fmt[fmt])||0)+(UQ_PERF[F.id]||0)+fatigaMod(F);
     if(S.spike && Math.random()<0.12) p+=11; return p; };
   let s='';
   const tA=[0,0,0,0,0], tB=[0,0,0,0,0];

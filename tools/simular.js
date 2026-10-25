@@ -422,7 +422,7 @@ w.addEventListener('load', () => setTimeout(() => {
       PAISES_CARRERA.forEach(([c], i) => { ['pasivo', 'activo'].forEach(perfil => { if (i === 0 && perfil === 'pasivo') return; const f = g('crearJugadorCarrera')({ name: perfil + ' ' + c, country: c, style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: c, perfil, primera: null, enLiga: 0, nivel10: null }); }); });
       for (let t = 1; t <= CARRERA; t++) {
         const s = g('cur')(); g('asegurarOfertas')(s);
-        jugs.forEach(j => { const f = g('fby')(j.fid); const p = g('planDe')(f); if (j.perfil === 'pasivo') p.entreno = null; if (p.ofertas.length && j.primera == null) j.primera = t; });
+        jugs.forEach(j => { const f = g('fby')(j.fid); const p = g('planDe')(f); if (j.perfil === 'pasivo') { p.entreno = null; p.mes = { entreno: {}, sparring: 0, descanso: g('SESIONES_MES') }; } if (p.ofertas.length && j.primera == null) j.primera = t; });   // pasivo: no entrena (4 descansos); activo: plan por defecto
         g('autoPretemporada')(s); g('autoFicharLigas')(s); const iss = g('preseasonIssues')(s); if (iss.length) { carreras.excepciones.push(`semilla ${semilla} T${t}: ${iss[0]}`); break; }
         g('startSeason')();
         jugs.forEach(j => { if (g('signedLeagueOf')(s, j.fid)) j.enLiga++; });
