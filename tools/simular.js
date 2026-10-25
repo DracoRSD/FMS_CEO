@@ -381,6 +381,26 @@ w.addEventListener('load', () => setTimeout(() => {
   const okModos = !modos.excepcion && modos.migra && modos.crea && modos.ano && modos.exporta && modos.dosClaves && modos.abreCarrera && modos.abreCeo;
   console.log(`\n${okModos ? 'OK  ' : 'FAIL'} modos y guardado: CEO dbv 7 → 9 sin cambios (${!!modos.migra}), carrera creada con nivel = media, fama 20, experiencia 0 y potencial 92 (${!!modos.crea}), un año con el botón y nivel = media (${!!modos.ano}), exportar e importar idéntico (${!!modos.exporta}), dos claves a la vez (${!!modos.dosClaves}) y las dos abren (${!!(modos.abreCarrera && modos.abreCeo)})${modos.excepcion ? ' · excepción: ' + modos.excepcion : ''}`);
 
+  // ---- cambio de liga entre temporadas (fase T): luGenerate con un competidor que viene de otra liga, en CEO y en carrera ----
+  const cambioLiga = {};
+  ['ceo', 'carrera'].forEach(modo => {
+    const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
+    S.company = null; S.freestylers = []; S.seasons = [];
+    try {
+      if (modo === 'carrera') { g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Cambio', country: 'España', style: 'Flow', attrs: { punchline: 60, metrica: 60, flow: 60, impro: 60, mentalidad: 60 } }); g('nuevaCarrera')(); }
+      else { S.company = { modo: 'ceo', name: 'CEO de prueba', stars: 5, infinite: true, money: 0, reputation: 0, dbv: 9, tut: { inf: true, s2: true, intl: true }, spStart: true, spReal: true }; S.freestylers = g('generatePool()'); S.seasons = [g('newSeason')(null)]; }
+      const s1 = g('cur')(); g('autoPretemporada')(s1); g('autoFicharLigas')(s1); s1.phase = 'done';
+      S.seasons.push(g('newSeason')(s1)); const s2 = g('cur')(); g('autoPretemporada')(s2); g('autoFicharLigas')(s2);
+      const A = 'fms_argentina', B = 'fms_espana'; const x = s1.leagues[A].competitors[0];
+      Object.values(s2.leagues).forEach(L => { L.competitors = L.competitors.filter(id => id !== x); }); s2.leagues[B].competitors = [x, ...s2.leagues[B].competitors].slice(0, 10);
+      g('luGenerate')(s2, B); const lu = s2.leagues[B].lu; const prevName = g('ldef')(A).name;
+      cambioLiga[modo] = { ok: !!lu && lu.tweets.some(tw => tw.text.includes(prevName)), n: lu ? lu.tweets.length : 0 };
+    } catch (e) { cambioLiga[modo] = { ok: false, n: 0, err: String(e && e.message || e) }; }
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view;
+  });
+  const okCambio = cambioLiga.ceo.ok && cambioLiga.carrera.ok;
+  console.log(`${okCambio ? 'OK  ' : 'FAIL'} cambio de liga entre temporadas: la revelación del line up menciona la liga de origen en CEO (${cambioLiga.ceo.ok}, ${cambioLiga.ceo.n} tuits${cambioLiga.ceo.err ? ', error: ' + cambioLiga.ceo.err : ''}) y en carrera (${cambioLiga.carrera.ok}, ${cambioLiga.carrera.n} tuits${cambioLiga.carrera.err ? ', error: ' + cambioLiga.carrera.err : ''})`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
   const carreras = { porPais: {}, excepciones: [], anos: 0 };
   PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [] }; });
@@ -492,5 +512,5 @@ w.addEventListener('load', () => setTimeout(() => {
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas && okCambio ? 0 : 1);
 }, 800));

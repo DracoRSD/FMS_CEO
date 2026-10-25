@@ -5076,8 +5076,8 @@ function luGenerate(s, k){
   // 3) competidores: 2-3 tuits (bienvenidas a fichajes de otra liga o "voy a por todo")
   if(!isI){ let budget=rint(2,3);
     const moved=shuffle(ids.map(id=>({id, p:luPrevLeague(s,id,k)})).filter(x=>x.p));
-    moved.slice(0,2).forEach(mv=>{ const f=fby(mv.id); const pk=mv.p.k, prev=ldef(pk).name; const acc=leagueAcc(pk); const es=twDia(acc.country)==='es';
-      const o=state.seasons[state.seasons.length-2]; const champ=o && o.leagues[pk] && (o.leagues[pk].finalStandings||[])[0]===mv.id;
+    moved.slice(0,2).forEach(mv=>{ const f=fby(mv.id); const ligaPrev=mv.p.k, prev=ldef(ligaPrev).name; const acc=leagueAcc(ligaPrev); const es=twDia(acc.country)==='es';   // ligaPrev: antes se llamaba pk y tapaba la función pk
+      const o=state.seasons[state.seasons.length-2]; const champ=o && o.leagues[ligaPrev] && (o.leagues[ligaPrev].finalStandings||[])[0]===mv.id;
       add(acc, fill(pk(TW_OFFICIAL[(es?'es':'la')+(champ?'C':'')]),{liga, prev, n:f.name, h:twHandle(f.name)}), champ?1:0, at(mv.id)); });
     if(moved.length){ const mv=moved[0]; const f=fby(mv.id); const prev=ldef(mv.p.k).name;
       const mates=shuffle(mv.p.mates.filter(x=>fby(x) && !isRival(x,mv.id))).map(x=>({id:x, nw:false}));
