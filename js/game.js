@@ -1694,7 +1694,7 @@ function carreraDecisiones(s, f){
   const etapa=etapaOf(f); const efecto = etapa==='joven' ? `+${ENTRENO_JOVEN} además del crecimiento` : (etapa==='madurez' ? `+${ENTRENO_MADUREZ} en el atributo` : 'el declive de ese atributo se reduce a la mitad');
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${libre}</div></div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
-    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? 'Con liga solo puedes jugar tu Red Bull nacional o Plazas.' : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}</div></div>`;
+    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}</div></div>`;
 }
 // En directo o cerrada: el plan de la temporada en solo lectura
 function carreraPlanResumen(s, f){
@@ -2495,7 +2495,8 @@ function asegurarOfertas(s){
     if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.noRenueva) twCarreraEvento(s, 'noRenueva', {liga: ldef(p.noRenueva.key).name}); else if(p.ofertas.length && !p.ofertas.some(o=>o.key===antes)) twCarreraEvento(s, 'oferta', {liga: ldef(p.ofertas[0].key).name}); }
     // valores por defecto de la temporada: entrenar el atributo más bajo e inscribirse en todo lo que se pueda
     p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0];
-    p.inscrito=torneosDelJugador(s,f).filter(t=>t.apto).map(t=>t.key); if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
+    p.inscrito=[]; torneosDelJugador(s,f).forEach(t=>{ if(torneosDelJugador(s,f).find(x=>x.key===t.key).apto) p.inscrito.push(t.key); });   // uno a uno: con liga el tope de extras se aplica en orden
+    if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
   });
 }
 // Decisiones de la pantalla «Mi carrera» (pretemporada)
@@ -3772,14 +3773,20 @@ function runUnder(s, ev, d){
 // Inscripciones del jugador (fase C3b, docs/modo-carrera.md 5.4). La inscripción garantiza la plaza: el jugador no pasa por underPick ni probPick.
 // Con liga solo puede inscribirse en su Red Bull nacional y en Plazas; Plazas es para los que no juegan su nacional.
 const PLAZAS_FAMA_MAX = 83, MFU_FAMA_MAX = 83;
+const LIGA_TORNEOS_EXTRA = 2, LIGA_CHOQUE_DIAS = 2;   // con liga: hasta 2 torneos más (Under o locales) que no caigan a 2 días o menos de una jornada suya
+// ¿Choca el torneo (sus fechas de este año) con las jornadas de la liga del jugador? Devuelve la fecha de la jornada que choca o null. Sin fechas de liga aún, no choca.
+function chocaConLiga(s, f, key){ const lk=signedLeagueOf(s, f.id) || (s.phase==='pre' ? planDe(f).liga : null); if(!lk || !s.leagues[lk] || !s.leagues[lk].dates.length) return null;
+  const dias=(s.under||[]).filter(u=>u.key===key).map(u=>u.day); const ch=s.leagues[lk].dates.find(d=>dias.some(x=>Math.abs(x-d)<=LIGA_CHOQUE_DIAS)); return ch!=null ? ch : null; }
 function rbNacionalDe(f){ const d=RB_NATS.find(d=>d.countries.includes(f.country)); return d ? d.key : null; }
 function torneosDelJugador(s, f){
   const p=planDe(f); const conLiga=!!p.liga || !!signedLeagueOf(s,f.id); const out=[];
-  const noLiga=conLiga ? 'no compatible con la liga' : null;
-  UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return;
-    out.push({key:d.key, name:d.name, apto:!conLiga && f.fama<=d.famaMax, motivo: noLiga || (f.fama>d.famaMax ? 'fama por encima de '+d.famaMax : null)}); });
-  LOCAL_DEFS.forEach(d=>{ if(!d.countries.includes(f.country)) return; out.push({key:d.key, name:d.name+' ('+d.size+')', apto:!conLiga && f.fama<=d.famaMax, motivo: noLiga || (f.fama>d.famaMax ? 'fama por encima de '+d.famaMax : null), local:true}); });
-  if(f.country==='España') out.push({key:MFU.key, name:MFU.name, apto:!conLiga && f.fama<=MFU_FAMA_MAX, motivo: noLiga || (f.fama>MFU_FAMA_MAX ? 'fama por encima de '+MFU_FAMA_MAX : null)});
+  // con liga: Under y locales siguen abiertos, hasta LIGA_TORNEOS_EXTRA y sin chocar con sus jornadas; Monster Fu (3 fechas) no
+  const extra=d=>{ if(f.fama>d.famaMax) return {apto:false, motivo:'fama por encima de '+d.famaMax}; if(!conLiga) return {apto:true, motivo:null};
+    const ch=chocaConLiga(s, f, d.key); if(ch!=null) return {apto:false, motivo:'choca con tu jornada del '+fmtDay(s.year, ch)};
+    const yaExtra=p.inscrito.filter(k=>k!==d.key && (isUnder(k)) && k!==MFU.key).length; if(!p.inscrito.includes(d.key) && yaExtra>=LIGA_TORNEOS_EXTRA) return {apto:false, motivo:'con liga, como mucho '+LIGA_TORNEOS_EXTRA+' torneos más'}; return {apto:true, motivo:null}; };
+  UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name, apto:e.apto, motivo:e.motivo}); });
+  LOCAL_DEFS.forEach(d=>{ if(!d.countries.includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name+' ('+d.size+')', apto:e.apto, motivo:e.motivo, local:true}); });
+  if(f.country==='España') out.push({key:MFU.key, name:MFU.name, apto:!conLiga && f.fama<=MFU_FAMA_MAX, motivo: (conLiga ? 'no compatible con la liga' : null) || (f.fama>MFU_FAMA_MAX ? 'fama por encima de '+MFU_FAMA_MAX : null)});
   const rb=rbNacionalDe(f); if(rb) out.push({key:rb, name:rbdef(rb).name, apto:true, motivo:null});
   const enNacional=rb && p.inscrito.includes(rb);
   out.push({key:RB_PLZ.key, name:RB_PLZ.name, apto:!enNacional && f.fama<=PLAZAS_FAMA_MAX, motivo: enNacional ? 'ya juegas tu Red Bull nacional' : (f.fama>PLAZAS_FAMA_MAX ? 'fama por encima de '+PLAZAS_FAMA_MAX : null)});
