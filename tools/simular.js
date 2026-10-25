@@ -42,7 +42,10 @@ const REGISTRO_EMPRESA = /€|taquilla|reputaci|\d+ rep\b|estrella|★|\bcaja\b|
 const TW_BASE_PLANTILLA = 60.2, TW_MEJORA = 0.6, TW_TOPE_TEXTO = 3;
 // Redes de la carrera: cada batalla del jugador recibe al menos un tuit y el volumen por batalla crece con la fama (el tercio de batallas con más fama
 // frente al tercio con menos, al menos REDES_CRECE veces más); el feed guardado no pasa de REDES_FEED_MAX del juego.
-const REDES_CRECE = 2;   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
+const REDES_CRECE = 2;
+// Más torneos (fase torneos): batallas por temporada de los 14 jugadores de la escalera, libre y con liga, media por país sobre las 10 semillas.
+// Objetivos: libre 10-14 en los países con Under nacional (España, Argentina, México, Chile), 8-12 en los demás, y 13-17 con liga. El modo CEO no tiene torneos locales.
+const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 17], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
@@ -196,7 +199,7 @@ w.addEventListener('load', () => setTimeout(() => {
   // advance('year'), nextSeason. La poda se desactiva durante la simulación para medir el guardado antes y después, comprobar que
   // historial, títulos, clasificaciones y fatiga de carteles no cambian al podar, y probar la migración dbv 8 → 9. Se restaura el estado.
   function correrMundo(modo) {
-    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, redes: [], feed: 0, hitos: {}, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
+    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, redes: [], feed: 0, hitos: {}, locales: 0, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
     const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
     S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
@@ -234,6 +237,7 @@ w.addEventListener('load', () => setTimeout(() => {
         const huecoMax = Math.max(...nat.map(k => { const d = s.leagues[k].dates; let m = 0; for (let i = 1; i < d.length; i++) m = Math.max(m, d[i] - d[i - 1]); return m; }));
         r.filas.push(`T${String(t).padEnd(2)} ${s.year}  ligas ${nat.length}  hueco máx ${String(huecoMax).padStart(2)} d  INTL ${s.intl.sede.padEnd(9)} ${nombre(s.intl.champion).padEnd(14)} clasificados ${distintos}  RB Int ${nombre(s.rb.inter.champion).padEnd(14)} retiros ${(s.summary && s.summary.relevo ? s.summary.relevo.retirados.length : 0)} novatos ${(s.summary && s.summary.relevo ? s.summary.relevo.novatos.length : 0)}`);
         r.anos++;
+        r.locales += (s.under || []).filter(u => g('esLocal')(u.key)).length;
         if (modo === 'carrera') medirTuits(s);
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
@@ -362,7 +366,8 @@ w.addEventListener('load', () => setTimeout(() => {
         const avg = a => a.reduce((x, y) => x + y.n, 0) / a.length; const bajo = ord.slice(0, k), alto = ord.slice(-k); const mb = avg(bajo), ma = avg(alto);
         okRedes = min >= 1 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
         redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · tercio de menos fama (≤ ${ord[k - 1].fama}) ${f1b(mb)} por batalla, tercio de más fama (≥ ${ord[R.length - k].fama}) ${f1b(ma)} (al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
-      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes;
+      const okLocales = c.modo === 'ceo' ? c.locales === 0 : c.locales > 0;
+      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales;
       okCarrera = okCarrera && okMundo;
       console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${c.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${c.pausas.length ? ' · ' + c.pausas.join('; ') : ''}${c.excepciones.length ? ' · excepción: ' + c.excepciones.join('; ') : ''}${c.erroresJsdom ? ' · errores de página: ' + c.erroresJsdom : ''}`);
       console.log(`${c.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${c.arranquesMal.length ? ' · ' + c.arranquesMal.join('; ') : ''}`);
@@ -375,6 +380,7 @@ w.addEventListener('load', () => setTimeout(() => {
         console.log(`${okSal ? 'OK  ' : 'FAIL'} salario medio del top 60 sin prima de leyenda: ${eur(c.fama0.salarioSinPrima)} → ${eur(c.fama1.salarioSinPrima)} (${sg(dSal)} %; límite ±${SALARIO_TOL} %) · con la prima ${eur(c.fama0.salario)} → ${eur(c.fama1.salario)} (${sg(dSalPrima)} %: las leyendas se retiran y ningún novato lo es)`);
         console.log(`INFO poco conocidos (nivel − fama ≥ ${POCO_CONOCIDO}) sin fichar al arrancar la temporada: T5 ${(c.poco[5] || {}).sinFichar} de ${(c.poco[5] || {}).total} · T10 ${(c.poco[10] || {}).sinFichar} de ${(c.poco[10] || {}).total}`);
         if (redesTxt) console.log(`${okRedes ? 'OK  ' : 'FAIL'} redes de la carrera: ${redesTxt}`);
+        console.log(`${okLocales ? 'OK  ' : 'FAIL'} torneos locales en ${c.anos} temporadas: ${c.locales} (${c.modo === 'ceo' ? 'el modo CEO no tiene' : 'solo en carrera'})`);
         if (c.modo === 'carrera' && T.n) console.log(`${okTw ? 'OK  ' : 'FAIL'} tuits: ${T.n} en ${c.anos} temporadas (${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + v).join(', ')}) · misma plantilla dentro de la temporada ${f1b(pctTpl)} % (${TW_BASE_PLANTILLA ? 'límite ' + f1b(TW_BASE_PLANTILLA * (1 - TW_MEJORA)) + ' %, base ' + f1b(TW_BASE_PLANTILLA) + ' %' : 'base por fijar'}; por fuente ${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + f1b(100 * (T.repFuente[k] || 0) / v) + ' %').join(', ')}) · texto exacto repetido ${f1b(100 * T.repTxt / T.n)} %, máximo ${T.maxTxt} veces, ${T.textosMas} textos por encima de ${TW_TOPE_TEXTO}${T.ejemplos ? ' (' + T.ejemplos.slice(0, 3).join(' | ') + ')' : ''}`); }
     });
   }
@@ -403,7 +409,7 @@ w.addEventListener('load', () => setTimeout(() => {
   console.log(`${okCambio ? 'OK  ' : 'FAIL'} cambio de liga entre temporadas: la revelación del line up menciona la liga de origen en CEO (${cambioLiga.ceo.ok}, ${cambioLiga.ceo.n} tuits${cambioLiga.ceo.err ? ', error: ' + cambioLiga.ceo.err : ''}) y en carrera (${cambioLiga.carrera.ok}, ${cambioLiga.carrera.n} tuits${cambioLiga.carrera.err ? ', error: ' + cambioLiga.carrera.err : ''})`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
   const carreras = { porPais: {}, excepciones: [], anos: 0 };
-  PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [] }; });
+  PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [], batLibre: [], batLiga: [] }; });
   for (let semilla = 1; semilla <= CARRERAS; semilla++) {
     w.Math.random = mulberry32(semilla);
     const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
@@ -422,6 +428,7 @@ w.addEventListener('load', () => setTimeout(() => {
         for (let v = 0; v < 3 && s.phase === 'live'; v++) g('advance')('year');
         if (s.phase !== 'done') { carreras.excepciones.push(`semilla ${semilla} T${t}: pausa en el día ${s.day}`); break; }
         carreras.anos++;
+        jugs.forEach(j => { const n = g('batallasDe')(s, j.fid).length; const pp = carreras.porPais[j.pais]; (g('signedLeagueOf')(s, j.fid) ? pp.batLiga : pp.batLibre).push(n); });
         if (t === 10) jugs.forEach(j => { j.nivel10 = g('fby')(j.fid).nivel; });
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
@@ -454,6 +461,13 @@ w.addEventListener('load', () => setTimeout(() => {
     const inf = v => v === Infinity ? 'infinitas' : v;
     console.log(`${okBrecha ? 'OK  ' : 'FAIL'} España y el país más blando se separan ${inf(brechaP)} temporadas en el pasivo y ${inf(brechaA)} en el activo (máximo ${BRECHA_PAISES_MAX}). Criterios: ${CARRERA_OK_MIN} de ${CARRERAS} dentro del rango, nunca antes de T${OFERTA_NUNCA_ANTES}, mediana dentro, nivel del activo a los 10 años entre ${NIVEL_ACTIVO_T10[0]} y ${NIVEL_ACTIVO_T10[1]}`);
     if (carreras.excepciones.length) console.log(`FAIL carreras con error: ${carreras.excepciones.join('; ')}`);
+    // batallas por temporada: libre y con liga, media por país (los 2 jugadores × 10 semillas × 20 temporadas)
+    let okBat = true; console.log(`\nBatallas por temporada del jugador (media por país; objetivo libre ${BAT_LIBRE_UNDER.join('-')} con Under nacional y ${BAT_LIBRE_SIN.join('-')} sin él, con liga ${BAT_LIGA.join('-')})`);
+    PAISES_CARRERA.forEach(([c]) => { const pp = carreras.porPais[c]; if (!pp.batLibre.length && !pp.batLiga.length) return; const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
+      const rl = PAISES_CON_UNDER.includes(c) ? BAT_LIBRE_UNDER : BAT_LIBRE_SIN; const r1 = x => Math.round(x * 10) / 10; const ml = r1(avg(pp.batLibre)), mg = r1(avg(pp.batLiga));   // a un decimal, como se imprime
+      const okL = !pp.batLibre.length || (ml >= rl[0] && ml <= rl[1]), okG = !pp.batLiga.length || (mg >= BAT_LIGA[0] && mg <= BAT_LIGA[1]); okBat = okBat && okL && okG;
+      console.log(`${okL && okG ? 'OK  ' : 'FAIL'} ${c.padEnd(21)} libre ${pp.batLibre.length ? f1b(ml) + ' (' + pp.batLibre.length + ' temporadas)' : '—'}  ·  con liga ${pp.batLiga.length ? f1b(mg) + ' (' + pp.batLiga.length + ')' : '—'}`); });
+    okCarreras = okCarreras && okBat;
   }
   // ---- temporada fecha a fecha (fase C4): el mismo recorrido que hacen los botones de «Mi carrera», sin pintar ----
   const fechas = { mia: null, resto: null };

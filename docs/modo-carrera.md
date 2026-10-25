@@ -295,6 +295,15 @@ Los tuits del juego (line up, cruces, campeón) salían de 3 a 6 plantillas por 
 - **Dónde se ve.** Bloque «Las redes» dentro de «Tu batalla» (showBattle intacto por dentro), panel «Redes» en Mi carrera y «Las redes este año» en el resumen personal.
 - **Criterios (simulador, mundo de carrera de 20 temporadas con la semilla 1):** plantilla repetida un 60 % por debajo de la base, ningún texto exacto más de 3 veces por temporada, al menos un tuit por batalla del jugador, el tercio de batallas con más fama recibe al menos el doble de tuits que el tercio con menos (`REDES_CRECE`), feed dentro del tope, guardado bajo 1,5 MB, favorito en liga ≤ 70 % y relevo en verde.
 
+## 11. Fase torneos · Más batallas en la carrera
+
+Medido antes de la fase (semilla 1, jugador con 60 en todo): libre, de 3 a 7 batallas por temporada según el país (Perú, Colombia y Caribe no tienen Under nacional y solo juegan Red Bull y BDM); con liga, de 10 a 13. Tres cambios, solo en modo carrera:
+
+- **Circuito local por país** (`LOCAL_DEFS`): 3 o 4 torneos al año por país de liga, de 8 o 16, fama máxima 70 (`LOCAL_FAMA_MAX`), +1 de fama al campeón, +0,25 por victoria de cuadro y +2 de hype. Nombres ficticios salvo Combate Mortal Freestyle (CMF) en el Caribe, con 16. Van en `s.under` con los Under y se generan en `underGenerate` solo si `modoCarrera()`: el modo CEO no cambia. Participan activos del país sin liga; si no hay 16 aptos el torneo baja a 8. Los locales de otros países no paran «Siguiente fecha» y los del país del jugador se abren con el cuadro en modal.
+- **Con liga, hasta dos torneos más** (`LIGA_TORNEOS_EXTRA`): Under o locales, siempre que no caigan a 2 días o menos (`LIGA_CHOQUE_DIAS`) de una jornada suya. Las fechas de liga se fijan al empezar la temporada, así que el choque se detecta en el sorteo y deja al jugador fuera de ese torneo; la pantalla y el calendario lo dicen. Monster Fu sigue cerrado con liga.
+- **Invitaciones a exhibiciones** (`invitacionesExhibicion`, al arrancar la temporada): por jornada de las ligas de su país, 10 % entre 40 y 69 de fama con tope 2 al año, 20 % desde 70 con tope 3 y también de otras ligas; con liga, solo de otras ligas y sin chocar. Rival del país sin liga y fama a ±15. Reutiliza `L.fexhib`; la exhibición ganada da +1 de fama. Interruptor «Aceptar invitaciones a exhibiciones» en la pretemporada, encendido por defecto.
+- **Criterios (simulador, 14 jugadores × 10 semillas × 20 temporadas, media por país):** libre entre 10 y 14 batallas por temporada en los países con Under nacional (España, Argentina, México, Chile) y entre 8 y 12 en los demás; con liga entre 13 y 17; el mundo de CEO sin torneos locales; favorito en liga ≤ 70 %, relevo y fama en verde. La escalera (sección 8, C3) sigue pendiente de calibrar.
+
 ## 9. Decisiones cerradas
 
 Las tres preguntas abiertas de la primera versión ya están respondidas y recogidas al principio del documento:
