@@ -348,8 +348,8 @@ const CARRERA_PUNTOS = 300, CARRERA_ATTR_MIN = 45, CARRERA_ATTR_MAX = 75;   // p
 const CARRERA_FAMA = 20;            // fama inicial: apto para todo el Under
 const POT_CARRERA = 92;             // potencial del jugador, fijo y oculto
 // Entrenamiento del jugador (fase C3b, docs/modo-carrera.md 5.2): un empujón más en el atributo elegido, con el tope de los empujones (pot + BOOST_OVER_POT)
-const ENTRENO_JOVEN = 1.5;          // joven: además del crecimiento normal
-const ENTRENO_MADUREZ = 1.0;        // madurez
+const ENTRENO_JOVEN = 7;            // joven: además del crecimiento normal (calibrado: el activo llega a su primera liga 1,5 temporadas antes que el pasivo sin pasar de 90 a los 10 años)
+const ENTRENO_MADUREZ = 1.0;        // madurez: pequeño a propósito, el empujón va en los años jóvenes
 const ENTRENO_VETERANO = 0.5;       // veterano: el declive de ese atributo se multiplica por esto
 const ENTRENO_REPETICION = 3, ENTRENO_REPETICION_MULT = 0.5;   // el mismo atributo tres años seguidos rinde la mitad desde el tercero
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
@@ -3810,7 +3810,7 @@ function rbNacionalDe(f){ const d=RB_NATS.find(d=>d.countries.includes(f.country
 function torneosDelJugador(s, f){
   const p=planDe(f); const conLiga=!!p.liga || !!signedLeagueOf(s,f.id); const out=[];
   // con liga: Under y locales siguen abiertos, hasta LIGA_TORNEOS_EXTRA y sin chocar con sus jornadas; Monster Fu (3 fechas) no
-  const extra=d=>{ if(f.fama>d.famaMax) return {apto:false, motivo:'fama por encima de '+d.famaMax}; if(!conLiga) return {apto:true, motivo:null};
+  const extra=d=>{ if(!d.local && d.key!==MFU.key){ /* Under: el jugador se apunta sin tope de fama */ } else if(f.fama>d.famaMax) return {apto:false, motivo:'fama por encima de '+d.famaMax}; if(!conLiga) return {apto:true, motivo:null};
     const ch=chocaConLiga(s, f, d.key); if(ch!=null) return {apto:false, motivo:'choca con tu jornada del '+fmtDay(s.year, ch)};
     const yaExtra=p.inscrito.filter(k=>k!==d.key && (isUnder(k)) && k!==MFU.key).length; if(!p.inscrito.includes(d.key) && yaExtra>=LIGA_TORNEOS_EXTRA) return {apto:false, motivo:'con liga, como mucho '+LIGA_TORNEOS_EXTRA+' torneos más'}; return {apto:true, motivo:null}; };
   UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name, apto:e.apto, motivo:e.motivo}); });

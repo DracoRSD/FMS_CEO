@@ -26,10 +26,11 @@ const PROGRESION = parseInt(arg('progresion', '20'), 10);   // temporadas de evo
 const CARRERA = parseInt(arg('carrera', '20'), 10);         // temporadas que el mundo corre solo en modo carrera (0 = no se prueba)
 // Carreras del jugador (fase C3b): CARRERAS mundos de carrera con las semillas 1..CARRERAS, cada uno con un jugador pasivo (sin entrenar) y uno activo
 // (entrena su atributo más bajo) por país de liga, todos inscritos en todo lo permitido y aceptando la primera oferta. Criterios sobre las CARRERAS muestras
-// por país y perfil: al menos CARRERA_OK_MIN de CARRERAS dentro del rango (pasivo T4-T8, activo T3-T6), nunca antes de T3, mediana dentro del rango,
+// por país y perfil: al menos CARRERA_OK_MIN de CARRERAS dentro del rango (pasivo T6-T11, activo T4-T8), nunca antes de T3, mediana dentro del rango, separación activo-pasivo,
 // España y el país más blando a 3 temporadas o menos, y nivel del activo a los 10 años con mediana entre 84 y 90.
 const CARRERAS = parseInt(arg('carreras', '10'), 10);
-const CARRERA_OK_MIN = Math.ceil(0.8 * CARRERAS), OFERTA_PASIVO = [4, 8], OFERTA_ACTIVO = [3, 6], OFERTA_NUNCA_ANTES = 3, BRECHA_PAISES_MAX = 3, NIVEL_ACTIVO_T10 = [84, 90];
+const CARRERA_OK_MIN = Math.ceil(0.8 * CARRERAS), OFERTA_PASIVO = [6, 11], OFERTA_ACTIVO = [4, 8], OFERTA_NUNCA_ANTES = 3, BRECHA_PAISES_MAX = 3, NIVEL_ACTIVO_T10 = [84, 90];
+const SEPARACION_MIN = 1.5, SEPARACION_PAISES = 5, SEPARACION_TODOS = 1;   // la mediana del activo llega al menos 1,5 temporadas antes que la del pasivo en 5 de 7 países, y al menos 1 en todos
 const PAISES_CARRERA = [['España', 'fms_espana'], ['Argentina', 'fms_argentina'], ['México', 'fms_mexico'], ['Chile', 'fms_chile'], ['Perú', 'fms_peru'], ['Colombia', 'fms_colombia'], ['República Dominicana', 'fms_caribe']];
 // Temporada fecha a fecha en carrera (fase C4): un mundo recorrido con pasoCarrera('mia') y otro con 'resto', FECHA_ANOS temporadas cada uno.
 // En 'mia' cada parada de presentación concierne al jugador y cada batalla suya tiene su pausa «Tu batalla»; en 'resto' no hay ninguna pausa;
@@ -40,12 +41,12 @@ const REGISTRO_EMPRESA = /€|taquilla|reputaci|\d+ rep\b|estrella|★|\bcaja\b|
 // «Plantilla» = texto con nombres de freestylers y ligas sustituidos y números quitados. Base fijada con la semilla 1 antes de la fase T;
 // el criterio es una repetición de plantilla dentro de la temporada un 60 % menor y ningún texto exacto más de TW_TOPE_TEXTO veces por temporada.
 const TW_BASE_PLANTILLA = 60.2, TW_MEJORA = 0.6, TW_TOPE_TEXTO = 3;
-// Redes de la carrera: cada batalla del jugador recibe al menos un tuit y el volumen por batalla crece con la fama (el tercio de batallas con más fama
-// frente al tercio con menos, al menos REDES_CRECE veces más); el feed guardado no pasa de REDES_FEED_MAX del juego.
-const REDES_CRECE = 2;
+// Redes de la carrera: cada batalla del jugador recibe al menos un tuit y el volumen por batalla crece con la fama (las batallas con fama REDES_FAMA_ALTA o más
+// frente a las de menos de REDES_FAMA_BAJA, al menos REDES_CRECE veces más); el feed guardado no pasa de REDES_FEED_MAX del juego.
+const REDES_CRECE = 2, REDES_FAMA_BAJA = 50, REDES_FAMA_ALTA = 85;
 // Más torneos (fase torneos): batallas por temporada de los 14 jugadores de la escalera, libre y con liga, media por país sobre las 10 semillas.
 // Objetivos: libre 10-14 en los países con Under nacional (España, Argentina, México, Chile), 8-12 en los demás, y 13-17 con liga. El modo CEO no tiene torneos locales.
-const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 17], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
+const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
@@ -362,10 +363,10 @@ w.addEventListener('load', () => setTimeout(() => {
       const okFama = Math.abs(dFama) <= FAMA_TOL, okSal = Math.abs(dSal) <= SALARIO_TOL;
       const T = c.tw; const pctTpl = T.n ? 100 * T.repTpl / T.n : 0; const okTw = c.modo !== 'carrera' || (T.n > 0 && (TW_BASE_PLANTILLA === 0 || pctTpl <= TW_BASE_PLANTILLA * (1 - TW_MEJORA)) && T.textosMas === 0);
       let okRedes = true, redesTxt = '';
-      if (c.modo === 'carrera' && c.redes.length) { const R = c.redes; const min = Math.min(...R.map(x => x.n)); const ord = R.slice().sort((a, b) => a.fama - b.fama); const k = Math.max(1, Math.floor(R.length / 3));
-        const avg = a => a.reduce((x, y) => x + y.n, 0) / a.length; const bajo = ord.slice(0, k), alto = ord.slice(-k); const mb = avg(bajo), ma = avg(alto);
-        okRedes = min >= 1 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
-        redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · tercio de menos fama (≤ ${ord[k - 1].fama}) ${f1b(mb)} por batalla, tercio de más fama (≥ ${ord[R.length - k].fama}) ${f1b(ma)} (al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
+      if (c.modo === 'carrera' && c.redes.length) { const R = c.redes; const min = Math.min(...R.map(x => x.n));
+        const avg = a => a.length ? a.reduce((x, y) => x + y.n, 0) / a.length : NaN; const bajo = R.filter(x => x.fama < REDES_FAMA_BAJA), alto = R.filter(x => x.fama >= REDES_FAMA_ALTA); const mb = avg(bajo), ma = avg(alto);
+        okRedes = min >= 1 && bajo.length > 0 && alto.length > 0 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
+        redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · con fama < ${REDES_FAMA_BAJA}: ${f1b(mb)} por batalla (${bajo.length} batallas), con fama ≥ ${REDES_FAMA_ALTA}: ${f1b(ma)} (${alto.length}; al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
       const okLocales = c.modo === 'ceo' ? c.locales === 0 : c.locales > 0;
       const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales;
       okCarrera = okCarrera && okMundo;
@@ -442,7 +443,7 @@ w.addEventListener('load', () => setTimeout(() => {
     const pct = (a, q) => { const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(q * b.length))]; };
     const fmtT = v => v === Infinity ? 'nunca' : ('T' + (Number.isInteger(v) ? v : v.toFixed(1)));
     console.log(`\nCarreras del jugador: ${CARRERAS} mundos (semillas 1 a ${CARRERAS}) de ${CARRERA} temporadas con un pasivo y un activo por país (${carreras.anos} temporadas jugadas)`);
-    console.log('     País                  Pasivo: 1.ª oferta mediana · p10-p90 · dentro T4-T8     Activo: 1.ª oferta mediana · p10-p90 · dentro T3-T6     Nivel activo T10   Temporadas en liga pasivo / activo');
+    console.log(`     País                  Pasivo: 1.ª oferta mediana · p10-p90 · dentro T${OFERTA_PASIVO.join('-T')}    Activo: 1.ª oferta mediana · p10-p90 · dentro T${OFERTA_ACTIVO.join('-T')}     Nivel activo T10   Temporadas en liga pasivo / activo`);
     const medP = {}, medA = {};
     PAISES_CARRERA.forEach(([c]) => { const pp = carreras.porPais[c]; if (!pp.pasivo.length) return;
       const dentro = (a, r) => a.filter(v => v >= r[0] && v <= r[1]).length; const antes = a => a.filter(v => v < OFERTA_NUNCA_ANTES).length;
@@ -458,6 +459,9 @@ w.addEventListener('load', () => setTimeout(() => {
     const brecha = m => !finitos(m).length ? 0 : (m['España'] === Infinity ? Infinity : m['España'] - Math.min(...finitos(m)));
     const brechaP = brecha(medP), brechaA = brecha(medA);
     const okBrecha = brechaP <= BRECHA_PAISES_MAX && brechaA <= BRECHA_PAISES_MAX; okCarreras = okCarreras && okBrecha;
+    const seps = PAISES_CARRERA.map(([c]) => [c, (medP[c] === Infinity || medA[c] === Infinity) ? -Infinity : medP[c] - medA[c]]).filter(x => Number.isFinite(x[1]) || x[1] === -Infinity);
+    const okSep = seps.length > 0 && seps.filter(x => x[1] >= SEPARACION_MIN).length >= SEPARACION_PAISES && seps.every(x => x[1] >= SEPARACION_TODOS); okCarreras = okCarreras && okSep;
+    console.log(`${okSep ? 'OK  ' : 'FAIL'} entrenar importa: el activo llega antes que el pasivo ${seps.map(x => x[0] + ' ' + (x[1] === -Infinity ? '—' : x[1])).join(', ')} temporadas (al menos ${SEPARACION_MIN} en ${SEPARACION_PAISES} países y ${SEPARACION_TODOS} en todos)`);
     const inf = v => v === Infinity ? 'infinitas' : v;
     console.log(`${okBrecha ? 'OK  ' : 'FAIL'} España y el país más blando se separan ${inf(brechaP)} temporadas en el pasivo y ${inf(brechaA)} en el activo (máximo ${BRECHA_PAISES_MAX}). Criterios: ${CARRERA_OK_MIN} de ${CARRERAS} dentro del rango, nunca antes de T${OFERTA_NUNCA_ANTES}, mediana dentro, nivel del activo a los 10 años entre ${NIVEL_ACTIVO_T10[0]} y ${NIVEL_ACTIVO_T10[1]}`);
     if (carreras.excepciones.length) console.log(`FAIL carreras con error: ${carreras.excepciones.join('; ')}`);
