@@ -203,7 +203,7 @@ w.addEventListener('load', () => setTimeout(() => {
   // advance('year'), nextSeason. La poda se desactiva durante la simulación para medir el guardado antes y después, comprobar que
   // historial, títulos, clasificaciones y fatiga de carteles no cambian al podar, y probar la migración dbv 8 → 9. Se restaura el estado.
   function correrMundo(modo) {
-    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, redes: [], feed: 0, hitos: {}, locales: 0, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
+    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, redes: [], feed: 0, hitos: {}, locales: 0, extranjeros: {}, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
     const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
     S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
@@ -242,6 +242,7 @@ w.addEventListener('load', () => setTimeout(() => {
         r.filas.push(`T${String(t).padEnd(2)} ${s.year}  ligas ${nat.length}  hueco máx ${String(huecoMax).padStart(2)} d  INTL ${s.intl.sede.padEnd(9)} ${nombre(s.intl.champion).padEnd(14)} clasificados ${distintos}  RB Int ${nombre(s.rb.inter.champion).padEnd(14)} retiros ${(s.summary && s.summary.relevo ? s.summary.relevo.retirados.length : 0)} novatos ${(s.summary && s.summary.relevo ? s.summary.relevo.novatos.length : 0)}`);
         r.anos++;
         r.locales += (s.under || []).filter(u => g('esLocal')(u.key)).length;
+        nat.forEach(k => { const def = g('ldef')(k); const n = s.leagues[k].competitors.filter(id => { const f = g('fby')(id); return f && !def.countries.includes(f.country); }).length; r.extranjeros[k] = (r.extranjeros[k] || 0) + n; });
         if (modo === 'carrera') medirTuits(s);
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
@@ -385,6 +386,7 @@ w.addEventListener('load', () => setTimeout(() => {
         console.log(`INFO poco conocidos (nivel − fama ≥ ${POCO_CONOCIDO}) sin fichar al arrancar la temporada: T5 ${(c.poco[5] || {}).sinFichar} de ${(c.poco[5] || {}).total} · T10 ${(c.poco[10] || {}).sinFichar} de ${(c.poco[10] || {}).total}`);
         if (redesTxt) console.log(`${okRedes ? 'OK  ' : 'FAIL'} redes de la carrera: ${redesTxt}`);
         console.log(`${okLocales ? 'OK  ' : 'FAIL'} torneos locales en ${c.anos} temporadas: ${c.locales} (${c.modo === 'ceo' ? 'el modo CEO no tiene' : 'solo en carrera'})`);
+        console.log(`INFO extranjeros por liga y temporada (cupo ${g('CUPO_EXTRANJEROS')}, solo en carrera): ${Object.entries(c.extranjeros).map(([k, n]) => g('ldef')(k).short + ' ' + f1b(n / Math.max(1, c.anos))).join(', ')}`);
         if (c.modo === 'carrera' && T.n) console.log(`${okTw ? 'OK  ' : 'FAIL'} tuits: ${T.n} en ${c.anos} temporadas (${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + v).join(', ')}) · misma plantilla dentro de la temporada ${f1b(pctTpl)} % (${TW_BASE_PLANTILLA ? 'límite ' + f1b(TW_BASE_PLANTILLA * (1 - TW_MEJORA)) + ' %, base ' + f1b(TW_BASE_PLANTILLA) + ' %' : 'base por fijar'}; por fuente ${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + f1b(100 * (T.repFuente[k] || 0) / v) + ' %').join(', ')}) · texto exacto repetido ${f1b(100 * T.repTxt / T.n)} %, máximo ${T.maxTxt} veces, ${T.textosMas} textos por encima de ${TW_TOPE_TEXTO}${T.ejemplos ? ' (' + T.ejemplos.slice(0, 3).join(' | ') + ')' : ''}`); }
     });
   }

@@ -2505,11 +2505,21 @@ function autoFicharLigas(s){
     jugadores().forEach(f=>{ if((f.plan||{}).liga===k && !signedLeagueOf(s,f.id) && L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; } });   // el jugador que aceptó la oferta entra antes que nadie
     const pool=activos().filter(f=>!f.jugador && !signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
       .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
-    for(const f of pool){ if(L.competitors.length>=10) break; L.competitors.push(f.id); L.contracts[f.id]=0; }
+    if(modoCarrera()){   // fase D2: cupo de extranjeros. 8 locales por nivel y hasta CUPO_EXTRANJEROS extranjeros que superen en EXTRANJERO_MARGEN al octavo local; el resto, locales
+      const locales=pool.filter(f=>def.countries.includes(f.country)), fuera=pool.filter(f=>!def.countries.includes(f.country));
+      let ext=L.competitors.filter(id=>{ const f=fby(id); return f && !def.countries.includes(f.country); }).length;
+      for(const f of locales){ if(L.competitors.length>=10-CUPO_EXTRANJEROS+ext) break; L.competitors.push(f.id); L.contracts[f.id]=0; }
+      const octavo=locales[7] ? locales[7].nivel : (locales.length ? locales[locales.length-1].nivel : 0);
+      for(const f of fuera){ if(L.competitors.length>=10 || ext>=CUPO_EXTRANJEROS) break; if(f.nivel<octavo+EXTRANJERO_MARGEN) break; L.competitors.push(f.id); L.contracts[f.id]=0; ext++; }
+      for(const f of locales){ if(L.competitors.length>=10) break; if(L.competitors.includes(f.id)) continue; L.competitors.push(f.id); L.contracts[f.id]=0; }
+      for(const f of fuera){ if(L.competitors.length>=10) break; if(L.competitors.includes(f.id)) continue; L.competitors.push(f.id); L.contracts[f.id]=0; }   // sin locales suficientes, lo que haya
+    } else for(const f of pool){ if(L.competitors.length>=10) break; L.competitors.push(f.id); L.contracts[f.id]=0; }
     faltan+=Math.max(0, 10-L.competitors.length);
   });
   return faltan;
 }
+// Mercado (fase D2): cupo de extranjeros por liga en el auto-fichaje de carrera. Los países de la liga Caribe no son extranjeros entre sí (están todos en su lista).
+const CUPO_EXTRANJEROS = 1, EXTRANJERO_MARGEN = 3;   // con cupo 2 el pasivo de la escalera llegaba una temporada más tarde en México, Chile y Perú
 // ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
 // Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
 const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
