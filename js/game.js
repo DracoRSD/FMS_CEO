@@ -850,6 +850,7 @@ function startSeason(){
   s.phase='live'; s.day=0; state.ui.calMonth=null;
   rbDraw(s);
   invitacionesExhibicion(s);   // modo carrera: exhibiciones del año según la fama
+  if(modoCarrera()) firmarContratos(s);   // fase D2: contratos de los jugadores fichados
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
   addLog(s, 0, `Arranca la temporada ${s.year} con ${s.activeKeys.length} liga(s)${s.intlEnabled?' + Internacional':''}.`, 'gold');
   goto(modoCarrera() ? 'carrera' : 'dashboard');
@@ -1176,10 +1177,11 @@ function endSeason(s){
   if(modoCarrera() && state.company.carrera){ const c=state.company.carrera; const f=fby(c.fid); if(f){ const p=planDe(f); const lk=signedLeagueOf(s,f.id); const st=lk ? s.leagues[lk].finalStandings : [];
     if(!Array.isArray(c.temporadas)) c.temporadas=[];
     const prevT=(c.temporadas||[]).slice(-1)[0]; const nivelPrev = prevT ? prevT.nivel : (c.nivelInicio!=null ? c.nivelInicio : null);
-    const sesiones=cerrarSesionesAno(f);
-    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
+    const sesiones=cerrarSesionesAno(f); const salario = (p.contrato && lk===p.contrato.liga && p.contrato.hasta>=s.year) ? p.contrato.salario : 0;
+    c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, salario, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
-  if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f); });
+  if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
+    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(c && lk===c.liga && c.hasta>=s.year){ p.dinero=(p.dinero||0)+c.salario; const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1468,6 +1470,7 @@ function renderCarrera(){
     </div></div>
     ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
     ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
+    ${contratoPanel(s, f)}
     ${redesPanel(f)}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
@@ -1715,13 +1718,17 @@ function redesDelAno(year){ const r=redesDe(); return r ? r.feed.filter(t=>t.y==
 function redesDeBatalla(key, j, mi){ const r=redesDe(); if(!r) return []; const ref=key+'|'+j+'|'+mi; return r.feed.filter(t=>t.ref===ref); }
 function redesFeedHtml(list, vacio){ return `<div class="lu-x redes-x"><div class="lu-feed">${list.length ? list.map(t=>luTweetHtml(t)).join('') : `<p class="step-note" style="padding:12px">${vacio||'Nadie ha dicho nada todavía.'}</p>`}</div></div>`; }
 // Panel «Redes» de Mi carrera: seguidores, fans, haters y los últimos tuits sobre el jugador
+function contratoPanel(s, f){ const p=planDe(f); const c=p.contrato; const vig = c && c.hasta>=s.year; const lk=signedLeagueOf(s,f.id);
+  const txt = vig ? `${esc(ldef(c.liga).name)} · ${dineroTxt(c.salario)} al año · hasta ${c.hasta}${c.hasta===s.year ? ' (último año)' : ''}${c.extranjero ? ' · extranjero' : ''}` : (lk ? 'Sin contrato' : 'Libre, sin contrato');
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Contrato</span><p class="step-note" style="margin:0">${txt} · Dinero acumulado: <b>${dineroTxt(p.dinero||0)}</b></p></div>`; }
 function redesPanel(f){ const r=redesDe(); if(!r) return ''; const seg=redesSeguidores(f); const segTxt = seg>=1000 ? (Math.round(seg/100)/10).toLocaleString('es-ES')+' k' : String(seg);
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Redes</span><p class="step-note" style="margin:0 0 10px">${segTxt} seguidores · ${r.fans.length} fans · ${r.haters.length} haters · racha ${r.racha||0}</p>${redesFeedHtml(r.feed.slice(0, REDES_PANEL_MAX), 'Todavía nadie habla de ti. Compite y verás.')}</div>`; }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
   const nr=p.noRenueva; const aviso = nr ? `<p class="step-note aviso">${nr.puesto>OFERTA_APUESTA || !nr.puesto ? `La liga no te renueva: ya no estás entre los ${OFERTA_APUESTA} mejores de tu país.` : `La liga no te renueva: estabas en el puesto ${nr.puesto} de tu país y este año ha apostado por otro.`}</p>` : '';
-  const ofertas = p.ofertas.map(o=>`<button class="ltoggle ${p.liga===o.key?'on':''}" onclick="carreraElegirLiga('${o.key}')" aria-pressed="${p.liga===o.key}">${leagueDot(o.key)}<span>${esc(ldef(o.key).name)}<small>Puesto ${o.puesto} de tu país${o.apuesta?' · apuesta de la liga':''}</small></span></button>`).join('');
+  const ofertas = p.ofertas.map(o=>`<button class="ltoggle ${p.liga===o.key?'on':''}" onclick="carreraElegirLiga('${o.key}')" aria-pressed="${p.liga===o.key}" ${o.contrato?'disabled':''}>${leagueDot(o.key)}<span>${esc(ldef(o.key).name)}<small>${o.contrato ? `Contrato en vigor hasta ${p.contrato.hasta} · ${dineroTxt(o.salario)} al año` : `Puesto ${o.puesto} de tu país${o.apuesta?' · apuesta de la liga':''}${o.renovacion?' · renovación':''} · ${dineroTxt(o.salario)} al año`}</small></span></button>`).join('');
+  const anos = (p.ofertas.length && !p.ofertas.some(o=>o.contrato)) ? `<div class="carrera-opts" style="margin-top:8px">${CONTRATO_ANOS.map(n=>`<button class="ltoggle ${p.anos===n?'on':''}" onclick="carreraAnos(${n})" aria-pressed="${p.anos===n}"><span>${n} año${n>1?'s':''}<small>${n===1 ? 'Salario fijo un año; la liga decide cada verano' : `Salario fijo ${n} años; la liga no puede no renovarte hasta ${s.year+n-1}`}</small></span></button>`).join('')}</div>` : '';
   const decimo=nivelDecimoPais(s, f); const libre = `<button class="ltoggle ${!p.liga?'on':''}" onclick="carreraElegirLiga(null)" aria-pressed="${!p.liga}"><span>Seguir libre<small>${p.ofertas.length ? 'Rechazas la oferta y juegas Under, Monster Fu, Red Bull y Plazas' : 'Ninguna liga de tu país te ha ofrecido este año'}${decimo!=null ? ` · el décimo de tu país tiene nivel ${decimo} (tú ${nivelDec(f)})` : ''}</small></span></button>`;
   const racha=p.racha||{attr:null, n:0};
   const entreno = ATTR_KEYS.map(k=>{ const rep = racha.attr===k && racha.n+1>=ENTRENO_REPETICION; return `<button class="ltoggle ${p.entreno===k?'on':''}" onclick="carreraEntrenar('${k}')" aria-pressed="${p.entreno===k}"><span>${esc(ATTR_LABELS[k])}<small>${attrShown(f,k)}${rep ? ` · ${racha.n+1}.º año seguido: rinde la mitad` : ''}</small></span></button>`; }).join('');
@@ -1729,7 +1736,7 @@ function carreraDecisiones(s, f){
   const etapa=etapaOf(f); const efecto = etapa==='joven' ? `+${ENTRENO_JOVEN} además del crecimiento` : (etapa==='madurez' ? `+${ENTRENO_MADUREZ} en el atributo` : 'el declive de ese atributo se reduce a la mitad');
   const avOn=p.avisoMes!==false; const avBtn=`<button class="ltoggle ${avOn?'on':''}" onclick="carreraAvisoMes()" aria-pressed="${avOn}"><span>Avisarme cada mes<small>${avOn ? 'El día 1 de cada mes eliges las 4 sesiones (entrenar, sparring, descanso)' : 'El plan del mes se repite solo; lo cambias desde Mi carrera'}</small></span></button>`;
   const exOn=p.exhibiciones!==false; const exBtn=`<button class="ltoggle ${exOn?'on':''}" onclick="carreraExhibiciones()" aria-pressed="${exOn}"><span>Aceptar invitaciones a exhibiciones<small>${f.fama<EXHIB_FAMA_MIN ? 'Con menos de '+EXHIB_FAMA_MIN+' de fama nadie te invita todavía' : (exOn ? 'Las ligas te invitarán a exhibiciones sin puntos según tu fama' : 'Rechazarás todas las invitaciones')}</small></span></button>`;
-  return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${libre}</div></div>
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${p.ofertas.some(o=>o.contrato) ? '' : libre}</div>${anos}</div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}${avBtn}</div></div>`;
 }
@@ -1975,6 +1982,7 @@ function showResumenCarrera(){
     <div class="sum-row"><span>Títulos</span><b>${titulos.length ? titulos.map(t=>esc(t.slice(0,-5))).join(', ') : '—'}</b></div>
     <div class="sum-row"><span>Nivel</span><b>${f.nivel}${dn!=null ? ` <span class="${dn>=0?'pos-v':'neg-v'}">${dn>=0?'▲':'▼'}${Math.abs(dn)}</span>` : ''}</b></div>
     <div class="sum-row"><span>Fama</span><b>${f.fama} <span class="${f.fama-famaPrev>=0?'pos-v':'neg-v'}">${f.fama-famaPrev>=0?'+':''}${f.fama-famaPrev}</span></b></div>
+    <div class="sum-row"><span>Salario del año</span><b>${dineroTxt((c.temporadas.slice(-1)[0]||{}).salario||0)} · acumulado ${dineroTxt(planDe(f).dinero||0)}</b></div>
     ${entreno ? `<div class="sum-row"><span>Entrenaste</span><b>${esc(entreno)}</b></div>` : ''}
     ${attrBars(f)}
     <div class="sum-sec">Torneos y ligas</div>${torneos}`;
@@ -2520,6 +2528,21 @@ function autoFicharLigas(s){
 }
 // Mercado (fase D2): cupo de extranjeros por liga en el auto-fichaje de carrera. Los países de la liga Caribe no son extranjeros entre sí (están todos en su lista).
 const CUPO_EXTRANJEROS = 1, EXTRANJERO_MARGEN = 3;   // con cupo 2 el pasivo de la escalera llegaba una temporada más tarde en México, Chile y Perú
+// Contratos (fase D2): salario anual = salaryOf × multiplicador de liga (× FOREIGN_MULT si es extranjero), redondeado a cientos; duración 1-3 años elegida por el jugador.
+// Con contrato en vigor la liga no puede no renovar; al vencer, prima por puesto medio del contrato. El dinero se acumula en plan.dinero (la billetera llega en D3).
+const MULT_LIGA = {fms_espana:1.3, fms_argentina:1.1, fms_mexico:1.0, fms_chile:0.9, fms_peru:0.85, fms_colombia:0.85, fms_caribe:0.8};
+const CONTRATO_ANOS = [1, 2, 3], CONTRATO_ANOS_DEF = 2;
+const PRIMA_PUESTO = [[3, 1.20], [7, 1.05], [10, 0.90]];   // puesto medio ≤ 3 → +20 %, ≤ 7 → +5 %, el resto −10 %
+function salarioOferta(f, key, extranjero, puestoMedio){ let v=salaryOf(f)*(MULT_LIGA[key]||1)*(extranjero?FOREIGN_MULT:1);
+  if(puestoMedio!=null){ const pr=PRIMA_PUESTO.find(x=>puestoMedio<=x[0]); v*=pr?pr[1]:1; } return Math.max(500, Math.round(v/100)*100); }
+function contratoVigente(s, f){ const c=planDe(f).contrato; return c && c.hasta>=s.year && c.desde<=s.year ? c : null; }
+// Firma el contrato de la oferta aceptada (o uno de 1 año a quien ya estaba fichado sin contrato, partidas de antes de D2)
+function firmarContratos(s){ jugadores().forEach(f=>{ const p=planDe(f); const lk=signedLeagueOf(s, f.id); if(!lk) return; const c=p.contrato;
+  if(c && c.liga===lk && c.hasta>=s.year && c.desde<=s.year) return;
+  const o=(p.ofertas||[]).find(x=>x.key===lk); const anos = CONTRATO_ANOS.includes(p.anos) ? p.anos : CONTRATO_ANOS_DEF; const salario = o ? o.salario : salarioOferta(f, lk, !ldef(lk).countries.includes(f.country));
+  p.contrato={liga:lk, salario, desde:s.year, hasta:s.year+(o ? anos : 1)-1, extranjero:!ldef(lk).countries.includes(f.country), puestos:[]}; }); }
+function carreraAnos(n){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre' || !CONTRATO_ANOS.includes(n)) return; planDe(f).anos=n; render(); }
+function dineroTxt(n){ return moneyK(n||0); }
 // ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
 // Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
 const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
@@ -2536,10 +2559,15 @@ function puestoEnPais(s, f, key){ const def=ldef(key); if(!def || !def.countries
 function asegurarOfertas(s){
   if(!modoCarrera() || s.phase!=='pre') return;
   jugadores().forEach(f=>{ const p=planDe(f); if(p.ofertasYear===s.year) return;
-    const antes=p.liga; p.ofertas=[]; p.noRenueva=null; p.ofertasYear=s.year;
-    ligasDelPais(f).filter(k=>s.activeKeys.includes(k)).forEach(k=>{ const puesto=puestoEnPais(s,f,k); if(!puesto) return;
-      if(puesto<=OFERTA_SEGURA) p.ofertas.push({key:k, puesto, apuesta:false});
-      else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true}); });
+    const antes=p.liga; p.ofertas=[]; p.noRenueva=null; p.ofertasYear=s.year; if(!CONTRATO_ANOS.includes(p.anos)) p.anos=CONTRATO_ANOS_DEF;
+    const c=p.contrato; const vigente = c && c.hasta>=s.year && s.activeKeys.includes(c.liga);
+    if(vigente){ p.liga=c.liga; p.ofertas=[{key:c.liga, puesto:puestoEnPais(s,f,c.liga), apuesta:false, salario:c.salario, contrato:true}]; p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0]; p.mes={entreno:{[p.entreno]:SESIONES_MES-1}, sparring:0, descanso:1}; p.inscrito=[]; torneosDelJugador(s,f).forEach(t=>{ if(torneosDelJugador(s,f).find(x=>x.key===t.key).apto) p.inscrito.push(t.key); }); if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key); return; }   // contrato en vigor: sigue en su liga
+    const vencido = c && c.hasta===s.year-1 && c.liga; const puestoMedio = vencido && c.puestos && c.puestos.length ? c.puestos.reduce((a,b)=>a+b,0)/c.puestos.length : null;
+    ligasDelPais(f).filter(k=>s.activeKeys.includes(k)).forEach(k=>{ const puesto=puestoEnPais(s,f,k); if(!puesto) return; const ext=!ldef(k).countries.includes(f.country);
+      const salario=salarioOferta(f, k, ext, vencido===k ? puestoMedio : null);
+      if(puesto<=OFERTA_SEGURA) p.ofertas.push({key:k, puesto, apuesta:false, salario, renovacion: vencido===k});
+      else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true, salario, renovacion: vencido===k}); });
+    p.ofertas.sort((a,b)=>b.salario-a.salario);
     if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva={key:antes, puesto:puestoEnPais(s,f,antes)};
     p.liga = p.ofertas.some(o=>o.key===antes) ? antes : (p.ofertas[0] ? p.ofertas[0].key : null);
     if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.noRenueva) twCarreraEvento(s, 'noRenueva', {liga: ldef(p.noRenueva.key).name}); else if(p.ofertas.length && !p.ofertas.some(o=>o.key===antes)) twCarreraEvento(s, 'oferta', {liga: ldef(p.ofertas[0].key).name}); }
@@ -2621,7 +2649,7 @@ function infoTorneo(s, f, key){
 function infoTorneoTxt(s, f, key){ const i=infoTorneo(s, f, key); if(i.media==null) return ''; return `nivel medio ${i.media}, máx ${i.max}${i.record ? ' · tu récord '+i.record : ''}`; }
 function nivelDecimoPais(s, f){ const lk=ligasDelPais(f)[0]; if(!lk) return null; const def=ldef(lk); const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort((a,b)=>b.nivel-a.nivel); return list[9] ? list[9].nivel : null; }
 // Decisiones de la pantalla «Mi carrera» (pretemporada)
-function carreraElegirLiga(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.liga = key && p.ofertas.some(o=>o.key===key) ? key : null;
+function carreraElegirLiga(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); if(p.ofertas.some(o=>o.contrato)) return; p.liga = key && p.ofertas.some(o=>o.key===key) ? key : null;
   p.inscrito=p.inscrito.filter(k=>torneosDelJugador(s,f).some(t=>t.key===k && t.apto)); render(); }
 function carreraEntrenar(attr){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre' || !ATTR_KEYS.includes(attr)) return; planDe(f).entreno=attr; render(); }
 function carreraInscribir(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); const t=torneosDelJugador(s,f).find(x=>x.key===key); if(!t || !t.apto) return;
