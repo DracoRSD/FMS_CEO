@@ -1452,7 +1452,7 @@ function renderCarrera(){
   const lk=signedLeagueOf(s,f.id);
   const estado = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='live' ? `Temporada ${s.year} en juego · ${fmtDay(s.year,s.day)}` : `Temporada ${s.year} cerrada`);
   const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Empezar la temporada ${s.year}</button>`
-    : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
+    : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="abrirPlanMes()">Plan del mes</button><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
     : `<button class="btn" onclick="showResumenCarrera()">Ver mi resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
   return `<div class="welcome">
     <div class="step"><div class="carrera-ficha">
@@ -1461,6 +1461,7 @@ function renderCarrera(){
         <div class="stat-bars" style="margin-top:8px">
           <div class="hype-row">Nivel <div class="hype"><i style="width:${f.nivel}%;background:var(--red-bright)"></i></div><b>${nivelDec(f)}</b></div>
           <div class="hype-row">Fama <div class="hype"><i style="width:${f.fama}%;background:var(--gold)"></i></div><b>${f.fama}</b></div>
+          ${fatigaHtml(f)}
         </div>
         ${attrBars(f)}
         <div class="style-box">${styleTag(f)}<span>${esc(STYLES[styleOf(f)].txt)}</span></div></div>
@@ -1536,7 +1537,8 @@ function rivalesDelJugador(fid){ const por={}; batallasDelJugador(fid).forEach(b
 function carreraEnDirecto(s, f){
   const fid=f.id; const px=proximoCompromiso(s, fid);
   const rivalTxt = !px ? '' : (px.rival ? `${miniAvatar(px.rival,22)} ${fnameH(px.rival)}` : (px.sinRival ? esc(px.sinRival) : 'rival por sortear'));
-  const prox = px ? `<p class="step-note" style="margin:0"><b>${fmtDay(s.year, px.day)}</b> · ${esc(px.nombre)} · ${rivalTxt}</p>` : `<p class="step-note" style="margin:0">No te queda ningún compromiso este año${s.day<daysInYear(s.year)?': nada en el calendario donde estés inscrito':''}.</p>`;
+  const fat=Math.round(f.fatiga||0); const fatTxt = fat>=FATIGA_ALTA ? ` · <span class="neg-v">fatiga ${fat}: llegas cansado</span>` : (fat<=FATIGA_BAJA ? ` · <span class="pos-v">fatiga ${fat}: fresco</span>` : ` · fatiga ${fat}`);
+  const prox = px ? `<p class="step-note" style="margin:0"><b>${fmtDay(s.year, px.day)}</b> · ${esc(px.nombre)} · ${rivalTxt}${fatTxt}</p>` : `<p class="step-note" style="margin:0">No te queda ningún compromiso este año${s.day<daysInYear(s.year)?': nada en el calendario donde estés inscrito':''}.</p>`;
   const riv=rivalesDelJugador(fid).slice(0, 8); const rec=batallasDelJugador(fid); const v=rec.filter(b=>b.w===fid).length;
   const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}${r.sp && !(r.v+r.d) ? ' <span class="rtag">sparring</span>' : ''}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : (r.sp ? `nivel ${fby(r.id)?fby(r.id).nivel:'—'} · ${styleOf(fby(r.id))}` : '')}${r.sp ? ` · sparring ×${r.sp}` : ''}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v+r.d ? r.v+'-'+r.d : '—'}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
   const sp=(state.company.carrera.sparrings||[])[0]; const spTxt = sp ? `<p class="step-note" style="margin:8px 0 0">Último sparring: ${sp.gane?'ganaste a':'perdiste con'} <b>${fnameH(sp.rival)}</b> (nivel ${sp.nivel}) el ${fmtDay(sp.y, sp.d)} ${sp.y}.</p>` : '';
@@ -1725,10 +1727,11 @@ function carreraDecisiones(s, f){
   const entreno = ATTR_KEYS.map(k=>{ const rep = racha.attr===k && racha.n+1>=ENTRENO_REPETICION; return `<button class="ltoggle ${p.entreno===k?'on':''}" onclick="carreraEntrenar('${k}')" aria-pressed="${p.entreno===k}"><span>${esc(ATTR_LABELS[k])}<small>${attrShown(f,k)}${rep ? ` · ${racha.n+1}.º año seguido: rinde la mitad` : ''}</small></span></button>`; }).join('');
   const torneos = torneosDelJugador(s,f).map(t=>{ const on=p.inscrito.includes(t.key) && t.apto; return `<button class="ltoggle ${on?'on':''} ${t.apto?'':'locked'}" onclick="carreraInscribir('${t.key}')" aria-pressed="${on}"><span>${esc(t.name)}<small>${t.apto ? (on ? 'Inscrito: plaza garantizada' : 'Sin inscribir') : esc(t.motivo||'No apto')}</small></span></button>`; }).join('');
   const etapa=etapaOf(f); const efecto = etapa==='joven' ? `+${ENTRENO_JOVEN} además del crecimiento` : (etapa==='madurez' ? `+${ENTRENO_MADUREZ} en el atributo` : 'el declive de ese atributo se reduce a la mitad');
+  const avOn=p.avisoMes!==false; const avBtn=`<button class="ltoggle ${avOn?'on':''}" onclick="carreraAvisoMes()" aria-pressed="${avOn}"><span>Avisarme cada mes<small>${avOn ? 'El día 1 de cada mes eliges las 4 sesiones (entrenar, sparring, descanso)' : 'El plan del mes se repite solo; lo cambias desde Mi carrera'}</small></span></button>`;
   const exOn=p.exhibiciones!==false; const exBtn=`<button class="ltoggle ${exOn?'on':''}" onclick="carreraExhibiciones()" aria-pressed="${exOn}"><span>Aceptar invitaciones a exhibiciones<small>${f.fama<EXHIB_FAMA_MIN ? 'Con menos de '+EXHIB_FAMA_MIN+' de fama nadie te invita todavía' : (exOn ? 'Las ligas te invitarán a exhibiciones sin puntos según tu fama' : 'Rechazarás todas las invitaciones')}</small></span></button>`;
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${libre}</div></div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
-    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}</div></div>`;
+    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}${avBtn}</div></div>`;
 }
 function carreraExhibiciones(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.exhibiciones = p.exhibiciones===false; render(); }
 // En directo o cerrada: el plan de la temporada en solo lectura
@@ -1767,6 +1770,7 @@ function batallasDelDia(s, d, fid){
 function pasoCarrera(modo){
   const s=cur(); if(s.phase!=='live') return null; const fid=state.company.carrera.fid; let guard=0;
   while(s.phase==='live' && guard++<400){
+    if(modo!=='resto'){ const f=fby(fid); const mes=monthOf(s.year, s.day); if(f && planDe(f).avisoMes!==false && (s.day===0 || monthOf(s.year, s.day-1)!==mes) && s.mesAvisado!==mes){ s.mesAvisado=mes; return {pause:'mes', mes}; } }   // fase D1: plan del mes
     const ev = modo==='resto' ? simulateDay(true) : simulateDay(false, modo==='mia' ? fid : null);
     if(ev && ev.pause) return ev;
     if(state.ui.tuBatalla) return {pause:'tuya', day:state.ui.tuBatalla.day};
@@ -1789,6 +1793,7 @@ function carreraAvanzar(modo){
     case 'under': if(ev.key===MFU.key) openMFU(ev.day); else if(esLocal(ev.key)){ const u=underByDay(s)[ev.day]; if(u) u.presented=true; advance('day'); showUnder(ev.key, ev.day); } else openRBShow(ev.key); break;
     case 'rb': openRBShow(ev.key); break;
     case 'tuya': abrirTuBatalla(); break;
+    case 'mes': abrirPlanMes(ev.mes); break;
     case 'jugado': toast(ev.key===INTL.key ? `Se jugó el ${INTL.name}.` : (isRB(ev.key) ? `Se jugó la ${rbdef(ev.key).name}.` : `Se jugó la jornada de ${ldef(ev.key).name}.`)); break;
     default: toast('La temporada sigue.'); break;
   }
@@ -2563,7 +2568,7 @@ function sparringSesion(s, f){ const p=planDe(f); const ops=proponerSparring(s, 
   if(state.company.carrera && f.id===state.company.carrera.fid){ const c=state.company.carrera; if(!Array.isArray(c.sparrings)) c.sparrings=[]; c.sparrings.unshift({y:s.year, d:s.day, rival:rivalId, gane, nivel:o.nivel}); if(c.sparrings.length>SPARRINGS_MAX) c.sparrings.length=SPARRINGS_MAX; }
   return {rival:rivalId, gane}; }
 // El plan del mes se ejecuta al cerrar cada mes, en los tres modos de avance; un mes sin batallas descansa solo
-function ejecutarPlanMes(s, f, mes){ const m=planMesDe(f); Object.entries(m.entreno||{}).forEach(([k,n])=>{ for(let i=0;i<n;i++) aplicarSesion(s,f,'entreno',k); }); for(let i=0;i<(m.sparring||0);i++) aplicarSesion(s,f,'sparring'); for(let i=0;i<(m.descanso||0);i++) aplicarSesion(s,f,'descanso');
+function ejecutarPlanMes(s, f, mes){ const m=planMesDe(f); planDe(f).mesAnterior=JSON.parse(JSON.stringify(m)); Object.entries(m.entreno||{}).forEach(([k,n])=>{ for(let i=0;i<n;i++) aplicarSesion(s,f,'entreno',k); }); for(let i=0;i<(m.sparring||0);i++) aplicarSesion(s,f,'sparring'); for(let i=0;i<(m.descanso||0);i++) aplicarSesion(s,f,'descanso');
   if(f.ultBatallaMes!==mes) f.fatiga=clamp((f.fatiga||0)-FATIGA_MES_SIN,0,100); }
 // Cierre del año: racha por atributo con más del 50 % de las sesiones de entreno y resumen para temporadas[]
 function cerrarSesionesAno(f){ const p=planDe(f); planMesDe(f); const a=p.anio; const tot=Object.values(a.entreno).reduce((x,y)=>x+y,0); const top=Object.entries(a.entreno).sort((x,y)=>y[1]-x[1])[0];
@@ -2571,6 +2576,29 @@ function cerrarSesionesAno(f){ const p=planDe(f); planMesDe(f); const a=p.anio; 
   const resumen={entreno:{...a.entreno}, sparring:a.sparring, descanso:a.descanso}; p.anio={entreno:{}, sparring:0, descanso:0, sparringGan:0}; return resumen; }
 function nivelDec(f){ const v=ATTR_KEYS.reduce((a,k)=>a+attrOf(f,k),0)/ATTR_KEYS.length; return v.toFixed(1).replace('.',','); }
 function attrTxt(f,k){ return f.jugador ? Math.min(ATTR_SHOWN_MAX, attrOf(f,k)).toFixed(1).replace('.',',') : String(attrShown(f,k)); }
+// Modal «Plan del mes» (fase D1, paso 3): 4 sesiones entre entrenar un atributo, sparring (con rival a elegir entre 3) y descanso
+function abrirPlanMes(mes){
+  const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return; const p=planDe(f); const m=planMesDe(f); const usadas=sesionesDe(m); const libres=SESIONES_MES-usadas;
+  const fila=(txt, sub, n, menos, mas)=>`<div class="evol-row"><span class="evol-who">${txt}</span><span class="evol-sub">${sub}</span><span class="pm-ctl"><button class="btn small" onclick="${menos}" ${n<=0?'disabled':''}>−</button><b>${n}</b><button class="btn small" onclick="${mas}" ${libres<=0?'disabled':''}>+</button></span></div>`;
+  const cuota=k=>cuotaSesion(f,k).toFixed(2).replace('.',',');
+  const attrs=ATTR_KEYS.map(k=>fila(esc(ATTR_LABELS[k]), `${attrTxt(f,k)} · +${cuota(k)} por sesión`, (m.entreno||{})[k]||0, `planMesAjusta('entreno','${k}',-1)`, `planMesAjusta('entreno','${k}',1)`)).join('');
+  const ops=proponerSparring(s, f); const elegido = ops.includes(p.sparringElegido) ? p.sparringElegido : ops[0];
+  const rivales=ops.map(id=>{ const o=fby(id); return `<button class="ltoggle ${id===elegido?'on':''}" onclick="planMesRival('${id}')" aria-pressed="${id===elegido}">${miniAvatar(id,22)}<span>${nameH(o)}<small>nivel ${o.nivel} · ${esc(styleOf(o))}</small></span></button>`; }).join('');
+  const sparring=fila('Sparring', `+${SPARRING_GANANCIA} de impro y mentalidad por sesión (tope +${SPARRING_TOPE} al año) · +${FATIGA_SESION} de fatiga`, m.sparring||0, `planMesAjusta('sparring',null,-1)`, `planMesAjusta('sparring',null,1)`);
+  const descanso=fila('Descanso', `−${FATIGA_DESCANSO} de fatiga por sesión`, m.descanso||0, `planMesAjusta('descanso',null,-1)`, `planMesAjusta('descanso',null,1)`);
+  openModal(`<h3>Plan de ${MESES[mes!=null?mes:monthOf(s.year,s.day)]} ${s.year}</h3><p class="step-note">${SESIONES_MES} sesiones al mes. Fatiga ahora: <b>${Math.round(f.fatiga||0)}</b> (de ${FATIGA_ALTA} a 100 restas hasta ${FATIGA_PENAL} de nivel en las batallas; hasta ${FATIGA_BAJA} sumas ${FATIGA_BONUS}). Sesiones sin asignar: <b id="pmLibres">${libres}</b>.</p>
+    <div class="sum-sec">Entrenar</div>${attrs}<div class="sum-sec">Sparring y descanso</div>${sparring}${descanso}
+    ${(m.sparring||0)>0 ? `<div class="sum-sec">Rival de sparring</div><div class="carrera-opts">${rivales}</div>` : ''}
+    <div class="modal-actions"><button class="btn" onclick="planMesRepetir()">Repetir el mes pasado</button><button class="btn primary" onclick="closeModal(); render()">Listo</button></div>`, true);
+}
+function planMesAjusta(tipo, k, d){ const f=fby(state.company.carrera.fid); if(!f) return; const m=planMesDe(f); const usadas=sesionesDe(m);
+  if(d>0 && usadas>=SESIONES_MES) return;
+  if(tipo==='entreno'){ const v=((m.entreno||{})[k]||0)+d; if(v<0) return; m.entreno[k]=v; if(!v) delete m.entreno[k]; } else { const v=(m[tipo]||0)+d; if(v<0) return; m[tipo]=v; }
+  abrirPlanMes(); }
+function planMesRival(id){ const f=fby(state.company.carrera.fid); if(!f) return; planDe(f).sparringElegido=id; abrirPlanMes(); }
+function planMesRepetir(){ const f=fby(state.company.carrera.fid); if(!f) return; const p=planDe(f); if(p.mesAnterior) p.mes=JSON.parse(JSON.stringify(p.mesAnterior)); abrirPlanMes(); }
+function carreraAvisoMes(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.avisoMes = p.avisoMes===false; render(); }
+function fatigaHtml(f){ const x=Math.round(f.fatiga||0); const cls = x>=FATIGA_ALTA ? 'neg-v' : (x<=FATIGA_BAJA ? 'pos-v' : ''); return `<div class="hype-row">Forma <div class="hype"><i style="width:${100-x}%;background:${x>=FATIGA_ALTA?'#ff6b6b':(x<=FATIGA_BAJA?'#4bd18f':'#e0b23c')}"></i></div><b class="${cls}">${100-x}</b></div>`; }
 // Decisiones de la pantalla «Mi carrera» (pretemporada)
 function carreraElegirLiga(key){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.liga = key && p.ofertas.some(o=>o.key===key) ? key : null;
   p.inscrito=p.inscrito.filter(k=>torneosDelJugador(s,f).some(t=>t.key===k && t.apto)); render(); }
