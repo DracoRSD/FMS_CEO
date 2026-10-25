@@ -1062,7 +1062,8 @@ function simulateDay(auto, soloFid){
     const u=(s.uq||[]).find(x=>!x.done && x.day<=d); if(u){ u.applied=true; uqApply(s,u); if(sola) uqAuto(s,u); else return {pause:'uq', uq:u}; } }
   const u0=underByDay(s)[d];
   const mio = soloFid ? jugadorJuegaHoy(s, d, soloFid) : true;
-  if(u0 && !u0.presented){ if(ver(mio)) return {pause:'under', key:u0.key, day:d}; u0.presented=true; }
+  const u0mio = !u0 || !esLocal(u0.key) || (carr && state.company.carrera && fby(state.company.carrera.fid) && (udef(u0.key).countries||[]).includes(fby(state.company.carrera.fid).country));   // los locales de otros países no paran «Siguiente fecha»
+  if(u0 && !u0.presented){ if(ver(mio) && u0mio) return {pause:'under', key:u0.key, day:d}; u0.presented=true; }
   const rb0=rbByDay(s)[d];
   if(rb0 && !rbEvent(s,rb0.key).presented){ if(ver(mio)) return {pause:'rb', key:rb0.key}; rbEvent(s,rb0.key).presented=true; }
   const ev0=eventsByDay(s)[d];
@@ -1750,7 +1751,7 @@ function carreraAvanzar(modo){
     case 'lineup': openLineup(ev.key); break;
     case 'pairs': openPairs(ev.key, ev.j); break;
     case 'fms': openFMSShow(ev.key); break;
-    case 'under': if(ev.key===MFU.key) openMFU(ev.day); else openRBShow(ev.key); break;
+    case 'under': if(ev.key===MFU.key) openMFU(ev.day); else if(esLocal(ev.key)){ const u=underByDay(s)[ev.day]; if(u) u.presented=true; advance('day'); showUnder(ev.key, ev.day); } else openRBShow(ev.key); break;
     case 'rb': openRBShow(ev.key); break;
     case 'tuya': abrirTuBatalla(); break;
     case 'jugado': toast(ev.key===INTL.key ? `Se jugó el ${INTL.name}.` : (isRB(ev.key) ? `Se jugó la ${rbdef(ev.key).name}.` : `Se jugó la jornada de ${ldef(ev.key).name}.`)); break;
@@ -2760,7 +2761,7 @@ function rbDraw(s){
 
 /* ---- eliminatorias ---- */
 // judges: 5 ids de juez para todo el cuadro (tourneyJudges / pickJudges). Sin ellos, 5 internacionales
-function runKnockout(ids, bonus, vmult, judges){
+function runKnockout(ids, bonus, vmult, judges, famaVictoria){
   const rounds=[]; const r0=[];
   if(!Array.isArray(judges) || judges.length!==5) judges=pickJudges(null);
   for(let i=0;i<ids.length;i+=2) r0.push({a:ids[i], b:ids[i+1], result:null});
@@ -2776,7 +2777,7 @@ function runKnockout(ids, bonus, vmult, judges){
   }
   const third={a:semis[0], b:semis[1], result:null}; simulateKOBattle(third, bonus, judges);
   const fin=rounds[rounds.length-1][0];
-  rounds.flat().concat([third]).forEach(m=>{ m.views=battleViews(m, vmult||1); addFamaDec(m.result.winner, FAMA_CUADRO_VICTORIA); });
+  rounds.flat().concat([third]).forEach(m=>{ m.views=battleViews(m, vmult||1); addFamaDec(m.result.winner, famaVictoria!=null ? famaVictoria : FAMA_CUADRO_VICTORIA); });
   return {bracket:{rounds, third, judges:judges.slice()}, champion:fin.result.winner, runnerUp:fin.result.loser, third:third.result.winner, fourth:third.result.loser};
 }
 const RB_DECLINE={'Jaloner':1, 'Walls':0.9, 'Piezas':0.9, 'Wos':0.8, 'Trueno':0.8, 'Duki':0.8, 'Lit Killah':0.8, 'ChysteMC':0.8, 'Dani Ribba':0.8, 'Khan':0.8, 'Papo':0.7, 'Bnet':0.7, 'Acru':0.7, 'TiagoPZK':0.7};
@@ -3689,10 +3690,42 @@ const UNDER_DEFS = [
   {key:'u_dem',   name:'DEM Battles',       short:'DEM', countries:['Chile'],     famaMax:85, color:'#7D3C98'},
 ];
 const MFU = {key:'u_mfu', name:'Monster Fu', short:'MFU', color:'#6AB04C'};
+// Circuito local por país (fase torneos, solo en modo carrera): 3 o 4 torneos al año por país de liga, de 8 o 16, fama máxima LOCAL_FAMA_MAX y premio pequeño.
+// Van en la misma lista s.under que los Under, así calendario, cuadros, títulos, aligerado, «Tu torneo», redes y resumen los tratan igual. Nombres ficticios salvo CMF.
+const LOCAL_FAMA_MAX = 70, LOCAL_FAMA_CAMPEON = 1, LOCAL_FAMA_VICTORIA = 0.25, LOCAL_HYPE = 2;
+const LOCAL_DEFS = [
+  {key:'u_l_esp1', name:'Batalla de Barrio',   short:'BDB', countries:['España'],    size:16, color:'#6c757d', local:true},
+  {key:'u_l_esp2', name:'Norte Rap Battle',    short:'NRB', countries:['España'],    size:8,  color:'#5d6d7e', local:true},
+  {key:'u_l_esp3', name:'Levante Fuego',       short:'LVF', countries:['España'],    size:8,  color:'#a04000', local:true},
+  {key:'u_l_esp4', name:'Andalucía Rima',      short:'AND', countries:['España'],    size:16, color:'#7d6608', local:true},
+  {key:'u_l_arg1', name:'Rimas del Conurbano', short:'RDC', countries:['Argentina'], size:16, color:'#5d6d7e', local:true},
+  {key:'u_l_arg2', name:'La Plaza',            short:'PLZ', countries:['Argentina'], size:8,  color:'#1f618d', local:true},
+  {key:'u_l_arg3', name:'Sur Freestyle',       short:'SUR', countries:['Argentina'], size:8,  color:'#117a65', local:true},
+  {key:'u_l_arg4', name:'Córdoba Capital',     short:'CBA', countries:['Argentina'], size:16, color:'#6c3483', local:true},
+  {key:'u_l_mex1', name:'Barrio Beat',         short:'BBT', countries:['México'],    size:16, color:'#196f3d', local:true},
+  {key:'u_l_mex2', name:'Norte Flow',          short:'NFL', countries:['México'],    size:8,  color:'#5d6d7e', local:true},
+  {key:'u_l_mex3', name:'Tarima Chilanga',     short:'TCH', countries:['México'],    size:8,  color:'#9a7d0a', local:true},
+  {key:'u_l_mex4', name:'Sur Punchline',       short:'SPL', countries:['México'],    size:16, color:'#922b21', local:true},
+  {key:'u_l_chi1', name:'Plaza Ñuñoa',         short:'PÑÑ', countries:['Chile'],     size:16, color:'#1a5276', local:true},
+  {key:'u_l_chi2', name:'Norte Grande',        short:'NGR', countries:['Chile'],     size:8,  color:'#7e5109', local:true},
+  {key:'u_l_chi3', name:'Flow del Biobío',     short:'BIO', countries:['Chile'],     size:8,  color:'#0e6655', local:true},
+  {key:'u_l_per1', name:'Lima Rap',            short:'LIM', countries:['Perú'],      size:16, color:'#922b21', local:true},
+  {key:'u_l_per2', name:'Barrio Alto',         short:'BAL', countries:['Perú'],      size:8,  color:'#5d6d7e', local:true},
+  {key:'u_l_per3', name:'Verso Norteño',       short:'VNO', countries:['Perú'],      size:8,  color:'#7d6608', local:true},
+  {key:'u_l_col1', name:'Cafeteros Clash',     short:'CAF', countries:['Colombia'],  size:16, color:'#9a7d0a', local:true},
+  {key:'u_l_col2', name:'Medallo Rima',        short:'MED', countries:['Colombia'],  size:8,  color:'#1f618d', local:true},
+  {key:'u_l_col3', name:'Verso Caribe',        short:'VCA', countries:['Colombia'],  size:8,  color:'#117a65', local:true},
+  {key:'u_l_car1', name:'Combate Mortal Freestyle', short:'CMF', countries:LEAGUES.find(l=>l.key==='fms_caribe').countries, size:16, color:'#1b2631', local:true},
+  {key:'u_l_car2', name:'Isla Verso',          short:'ISV', countries:LEAGUES.find(l=>l.key==='fms_caribe').countries, size:8,  color:'#148f77', local:true},
+  {key:'u_l_car3', name:'Caribe Clash',        short:'CCL', countries:LEAGUES.find(l=>l.key==='fms_caribe').countries, size:8,  color:'#b9770e', local:true},
+];
+LOCAL_DEFS.forEach(d=>{ d.famaMax=LOCAL_FAMA_MAX; });
+function esLocal(key){ return /^u_l_/.test(key||''); }
+
 const UNDER_EXC = ['Teorema','El Menor','Acru','Dyse','Alek','Segrelles','Dalia','Mr. Ego','Kodigo','HDR','Abel','Mecha','Naista','MP','Stick','Replik','NQP','Fat N','Dani VK','Tirpa','Anubis','Bélico','Jesse Pungaz','Exe','Sophia','Kmbra','Nez','Rodamiento','Joqerr','Fabiuki','CTZ','Tata','Fat Tony','Potencia'];
 const UNDER_RARE = ['El Menor','Acru'];
 function ulogo(key){ return (typeof EXTRA_IMG!=='undefined' && EXTRA_IMG[key]) || null; }
-function udef(key){ return key===MFU.key ? MFU : UNDER_DEFS.find(d=>d.key===key); }
+function udef(key){ return key===MFU.key ? MFU : (esLocal(key) ? LOCAL_DEFS.find(d=>d.key===key) : UNDER_DEFS.find(d=>d.key===key)); }
 function isWeekday(y,d){ const w=dayToDate(y,d).getUTCDay(); return w>=1 && w<=5; }
 function underGenerate(s, from){
   const y=s.year, diy=daysInYear(y); from=from||0;
@@ -3703,10 +3736,13 @@ function underGenerate(s, from){
   UNDER_DEFS.forEach(def=>{ while(mi<months.length){ const d=pickDay(months[mi++]); if(d!=null){ ev.push({key:def.key, day:d, played:false}); break; } } });
   const mm=shuffle([...Array(12).keys()].filter(m=>monthOf(y,Math.max(from,0))<=m)); let n=0;
   for(const m of mm){ if(n>=3) break; const d=pickDay(m); if(d!=null){ ev.push({key:MFU.key, day:d, played:false, n:++n}); } }
+  if(modoCarrera()){ const meses=[...Array(12).keys()].filter(m=>monthOf(y,Math.max(from,0))<=m);   // circuito local: solo en carrera (pickDay ya marca el día como ocupado)
+    LOCAL_DEFS.forEach(def=>{ for(const m of shuffle(meses)){ const d=pickDay(m); if(d!=null){ ev.push({key:def.key, day:d, played:false}); break; } } }); }
   s.under=ev.sort((a,b)=>a.day-b.day); let k=0; s.under.forEach(e=>{ if(e.key===MFU.key) e.n=++k; });
 }
 function underByDay(s){ const m={}; (s.under||[]).forEach(e=>m[e.day]=e); return m; }
 function underEligible(f, def){
+  if(def.local) return f.fama<=def.famaMax && !signedLeagueOf(cur(), f.id);
   if(UNDER_EXC.includes(f.name) || (def.exc && def.exc.includes(f.name))){ return UNDER_RARE.includes(f.name) ? Math.random()<0.1 : true; }
   return f.fama<=def.famaMax;
 }
@@ -3726,9 +3762,10 @@ function runUnder(s, ev, d){
     for(let i=0;i+1<ord.length && ev.battles.length<5;i+=2){ const m={a:ord[i], b:ord[i+1], result:null}; simulateKOBattle(m, null, mfuJudges); m.views=Math.round(rint(100000,1000000)*(isRival(m.a,m.b)?1.15:1)); addHype(m.result.winner,3); addFama(m.result.winner, FAMA_MFU_VICTORIA); ev.battles.push(m); }
     ev.played=true; underTutQueue(ev.key, ev.battles.map(m=>m.result.winner)); addLog(s, d, `🟢 ${def.name} #${ev.n}: ${ev.battles.map(m=>fname(m.result.winner)).join(', ')} ganan sus batallas.`, 'rb'); return;
   }
-  const ids=ev.order && ev.order.length===16 ? ev.order.slice() : underDraw(ev);
-  const r=runKnockout(ev.order||shuffle(ids), null, 0.15, tourneyJudges(udef(ev.key).countries));
+  const ids=ev.order && ev.order.length===(ev.size||16) ? ev.order.slice() : underDraw(ev);
+  const r=runKnockout(ev.order||shuffle(ids), null, def.local ? 0.08 : 0.15, tourneyJudges(udef(ev.key).countries), def.local ? LOCAL_FAMA_VICTORIA : undefined);
   Object.assign(ev, r, {participants:ids, played:true});
+  if(def.local){ addHype(r.champion, LOCAL_HYPE); addFama(r.champion, LOCAL_FAMA_CAMPEON); addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana ${def.name} (${ids.length}) ante ${fname(r.runnerUp)}.`, 'rb'); return; }
   addHype(r.champion, 5); addFama(r.champion, FAMA_UNDER[0]); addFama(r.runnerUp, FAMA_UNDER[1]); underTutQueue(ev.key, [r.champion]);
   addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype, +${FAMA_UNDER[0]} de fama).`, 'rb');
 }
@@ -3741,6 +3778,7 @@ function torneosDelJugador(s, f){
   const noLiga=conLiga ? 'no compatible con la liga' : null;
   UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return;
     out.push({key:d.key, name:d.name, apto:!conLiga && f.fama<=d.famaMax, motivo: noLiga || (f.fama>d.famaMax ? 'fama por encima de '+d.famaMax : null)}); });
+  LOCAL_DEFS.forEach(d=>{ if(!d.countries.includes(f.country)) return; out.push({key:d.key, name:d.name+' ('+d.size+')', apto:!conLiga && f.fama<=d.famaMax, motivo: noLiga || (f.fama>d.famaMax ? 'fama por encima de '+d.famaMax : null), local:true}); });
   if(f.country==='España') out.push({key:MFU.key, name:MFU.name, apto:!conLiga && f.fama<=MFU_FAMA_MAX, motivo: noLiga || (f.fama>MFU_FAMA_MAX ? 'fama por encima de '+MFU_FAMA_MAX : null)});
   const rb=rbNacionalDe(f); if(rb) out.push({key:rb, name:rbdef(rb).name, apto:true, motivo:null});
   const enNacional=rb && p.inscrito.includes(rb);
@@ -3753,8 +3791,9 @@ function underDraw(ev){ const def=udef(ev.key); const s=cur(); const fijos=inscr
   if(def.perCountry){ const by={}; const paisesFijos=new Set(fijos.map(id=>fby(id).country)); libres.filter(f=>underEligible(f,def) && !paisesFijos.has(f.country)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
     ids=[...fijos, ...shuffle(Object.keys(by)).slice(0,16-fijos.length).map(c=>underPick(by[c],1)[0])];
     if(ids.length<16){ const rest=libres.filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
-  else ids=[...fijos, ...underPick(libres.filter(f=>def.countries.includes(f.country) && underEligible(f,def)), 16-fijos.length)];
-  if(ids.length<16){ ids.push(...underPick(libres.filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), 16-ids.length)); }
+  else { const aptos=libres.filter(f=>def.countries.includes(f.country) && underEligible(f,def)); let size=def.size||16; if(def.local && aptos.length+fijos.length<16) size=8;   // sin 16 aptos, el local baja a 8
+    ev.size=size; ids=[...fijos, ...underPick(aptos, size-fijos.length)]; }
+  const size=ev.size||16; if(ids.length<size){ ids.push(...underPick(libres.filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), size-ids.length)); }
   ev.participants=ids; return ids;
 }
 function openMFU(day){
@@ -3778,7 +3817,7 @@ function showUnder(key, day){
     body=`<div class="sum-row"><span>🏆 Campeón</span><b>${fnameH(ev.champion)}</b></div><div class="sum-row"><span>Subcampeón</span><span>${fnameH(ev.runnerUp)}</span></div><div class="sum-row"><span>3º</span><span>${fnameH(ev.third)}</span></div>
       <div class="sum-sec">Cuadro</div>${bracketHtml(ev.bracket, 'under:'+key+':'+ev.day)}
       <div class="sum-sec">Participantes</div><div class="un-people">${ev.participants.map(id=>`<span class="un-p">${miniAvatar(id,22)} ${fnameH(id)}</span>`).join('')}</div>`; }
-  openModal(`<h3>${ulogo(key)?`<img class="un-logo" src="${ulogo(key)}" alt="">`:`<span class="un-dot" style="background:${def.color}"></span>`}${def.name}${ev.n?' #'+ev.n:''} ${s.year}</h3>${body}<div class="modal-actions"><button class="btn primary" onclick="closeModal()">Cerrar</button></div>`, true);
+  openModal(`<h3>${ulogo(key)?`<img class="un-logo" src="${ulogo(key)}" alt="">`:`<span class="un-dot" style="background:${def.color}"></span>`}${def.name}${ev.n?' #'+ev.n:''} ${s.year}</h3>${body}<div class="modal-actions"><button class="btn primary" onclick="closeModal(); carreraTrasShow()">Cerrar</button></div>`, true);
 }
 
 /* =========================================================================
