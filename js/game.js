@@ -1646,7 +1646,8 @@ const HITOS = ['debut','primeraVictoria','primeraLiga','primerTitulo','primeraIn
 function twCarreraEvento(s, tipo, datos){
   const r=redesDe(); const f=r && fby(state.company.carrera.fid); if(!r || !f) return []; const hito=HITOS.includes(tipo); if(hito){ if(r.hitos[tipo]) return []; r.hitos[tipo]=s.year; }
   const d=Object.assign({n:f.name, pais:f.country, liga:'', t:'', d:'', pos:''}, datos||{});
-  const n=Math.min(REDES_EVENTO_MAX, redesVolumen(f.fama, hito ? 2 : (tipo==='titulo' ? 1.5 : 1)));   // nunca más de 6 tuits seguidos por un evento const ref='ev:'+tipo+':'+s.year; const out=[]; const usados=new Set();
+  const n=Math.min(REDES_EVENTO_MAX, redesVolumen(f.fama, hito ? 2 : (tipo==='titulo' ? 1.5 : 1)));   // nunca más de 6 tuits seguidos por un evento
+  const ref='ev:'+tipo+':'+s.year; const out=[]; const usados=new Set();
   const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country).map(twAcc), todos=TWITTEROS.filter(t=>!t.special).map(twAcc);
   const libre=pool=>{ const c=pool.filter(a=>!usados.has(a.handle)); const a=c.length?pick(c):null; if(a) usados.add(a.handle); return a; };
   const dia=twDia(f.country); const sent = /noRenueva|nivelBaja/.test(tipo) ? -1 : 1;
@@ -4635,7 +4636,13 @@ var TWITTEROS = [
 const TW_TOPE = 3;
 function twElige(s, list){ if(!list || !list.length) return ''; if(!s.twUsados) s.twUsados={}; const u=s.twUsados; let min=Infinity; list.forEach(t=>{ const n=u[t]||0; if(n<min) min=n; }); const t=pick(list.filter(x=>(u[x]||0)===min)); u[t]=(u[t]||0)+1; return t; }
 // Tope de texto exacto por temporada: si el mismo texto ya salió TW_TOPE veces, se le añade un remate del país que aún no se haya usado con él
-function twUnico(s, text, country){ if(!text || /\n/.test(text)) return text; if(!s.twTextos) s.twTextos={}; const T=s.twTextos; let t=text;
+// Voz del país: el voseo solo en cuentas argentinas (y uruguayas), «a por» solo en españolas, y nunca «el El Menor»
+const VOSEO = [[/\bcon vos\b/g,'contigo'],[/\bpor vos\b/g,'por ti'],[/\ba vos\b/g,'a ti'],[/\bvos no bajás\b/g,'tú no bajas'],[/\bte tenés que\b/g,'te tienes que'],[/\btenés\b/g,'tienes'],[/\bpodés\b/g,'puedes'],[/\bquerés\b/g,'quieres'],[/\bsabés\b/g,'sabes'],[/\bvenís\b/g,'vienes'],[/\bhacés\b/g,'haces'],[/\bsos\b/g,'eres'],[/\bvos\b/g,'tú']];
+function twVoz(text, country){ const d=twDia(country); let t=text;
+  if(d!=='ar') VOSEO.forEach(([re,sub])=>{ t=t.replace(re,sub); });
+  if(d!=='es') t=t.replace(/\bA por\b/g,'Por').replace(/\ba por\b/g,'por');
+  return t.replace(/\b(el|El) El /g,'El ').replace(/\bal El /g,'a El ').replace(/\bdel El /g,'de El '); }
+function twUnico(s, text, country){ if(text) text=twVoz(text, country); if(!text || /\n/.test(text)) return text; if(!s.twTextos) s.twTextos={}; const T=s.twTextos; let t=text;
   if((T[t]||0)>=TW_TOPE){ const posts=(TWX_POST[twDia(country)]||TWX_POST.neu).filter(p=>(T[t+', '+p]||0)<TW_TOPE); if(posts.length) t=t.replace(/\s*🔥$/,'')+', '+pick(posts); }
   T[t]=(T[t]||0)+1; return t; }
 function twDia(c){ if(!c) return 'neu'; if(c==='España') return 'es'; if(c==='Argentina'||c==='Uruguay') return 'ar'; if(c==='México'||c==='EEUU') return 'mx';
