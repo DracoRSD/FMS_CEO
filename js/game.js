@@ -844,6 +844,7 @@ function startSeason(){
   });
   s.phase='live'; s.day=0; state.ui.calMonth=null;
   rbDraw(s);
+  invitacionesExhibicion(s);   // modo carrera: exhibiciones del año según la fama
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
   addLog(s, 0, `Arranca la temporada ${s.year} con ${s.activeKeys.length} liga(s)${s.intlEnabled?' + Internacional':''}.`, 'gold');
   goto(modoCarrera() ? 'carrera' : 'dashboard');
@@ -906,7 +907,7 @@ function runLeagueJornada(s, L, d){
   SPK_BH=spkVal(L.key,'bhype'); RIVAL_DEFER=true; round.forEach(m=>{ m.views = (m.postponed||!m.b) ? 0 : Math.round(battleViews(m, vm)*uqViewMult(s,L,m,zk)); }); RIVAL_DEFER=false;
   round.forEach((m,mi)=>{ if(m.views && isRival(m.a,m.b) && Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', key:L.key, j:L.played, mi, a:m.a, b:m.b, w:m.result&&m.result.winner, v:rint(0,13)}); });
   const fx = L.fexhib && L.fexhib[L.played];
-  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); }
+  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); if(fx.invitacion) addFama(m.result.winner, EXHIB_FAMA_PREMIO); }
   const ex = L.exhib && L.exhib[L.played];
   if(ex && fby(ex.a) && fby(ex.b)){
     const m=ex.m={id:uid('x'), a:ex.a, b:ex.b, result:null, ex:true};
@@ -1480,12 +1481,32 @@ function calendarioCarrera(s, f){
   const liga = lk ? `${leagueDot(lk)} ${esc(ldef(lk).name)} · ${nJ(lk)} jornadas` : 'Libre: sin liga este año';
   return `<div class="step" style="margin-bottom:16px;"><span class="field-label">Tus torneos ${s.year}</span><p class="step-note" style="margin:0 0 8px">${liga}${s.phase==='pre' ? ' · Las inscripciones se eligen en «Mi carrera»; las jornadas de liga se fijan al empezar la temporada.' : ''}</p>${filas}</div>`;
 }
+// Invitaciones a exhibiciones (fase torneos): al arrancar la temporada, cada jornada de una liga puede invitar al jugador a una exhibición sin puntos.
+// Probabilidad por fama: nada por debajo de EXHIB_FAMA_MIN; EXHIB_P_MEDIA por jornada de las ligas de su país entre EXHIB_FAMA_MIN y EXHIB_FAMA_ALTA (tope EXHIB_MAX_MEDIA al año);
+// EXHIB_P_ALTA desde EXHIB_FAMA_ALTA, también de otras ligas (tope EXHIB_MAX_ALTA). Con liga, solo de otras ligas y en días que no choquen con las suyas. Se aceptan solas si plan.exhibiciones.
+const EXHIB_FAMA_MIN = 40, EXHIB_FAMA_ALTA = 70, EXHIB_P_MEDIA = 0.10, EXHIB_P_ALTA = 0.20, EXHIB_MAX_MEDIA = 2, EXHIB_MAX_ALTA = 3, EXHIB_RIVAL_FAMA = 15, EXHIB_FAMA_PREMIO = 1;
+function invitacionesExhibicion(s){
+  if(!modoCarrera() || !state.company.carrera) return; const f=fby(state.company.carrera.fid); if(!f) return; const p=planDe(f); if(p.exhibiciones===false) return;
+  if(f.fama<EXHIB_FAMA_MIN) return; const alta=f.fama>=EXHIB_FAMA_ALTA; const prob = alta ? EXHIB_P_ALTA : EXHIB_P_MEDIA; let tope = alta ? EXHIB_MAX_ALTA : EXHIB_MAX_MEDIA;
+  const lk=signedLeagueOf(s, f.id); const misFechas = lk ? s.leagues[lk].dates : [];
+  const ocupados=new Set([...misFechas, ...(s.under||[]).filter(u=>planDe(f).inscrito.includes(u.key)).map(u=>u.day)]);
+  const ligas=shuffle(natKeys(s).filter(k=>k!==lk && (alta || ldef(k).countries.includes(f.country))));
+  for(const k of ligas){ const L=s.leagues[k]; if(tope<=0) break;
+    for(let j=0;j<L.dates.length && tope>0;j++){ const d=L.dates[j]; if(L.fexhib && L.fexhib[j]) continue; if([...ocupados].some(x=>Math.abs(x-d)<=LIGA_CHOQUE_DIAS)) continue; if(Math.random()>=prob) continue;
+      const pais=ldef(k).countries; const cands=activos().filter(x=>x.id!==f.id && !x.jugador && pais.includes(x.country) && !signedLeagueOf(s,x.id) && Math.abs(x.fama-f.fama)<=EXHIB_RIVAL_FAMA);
+      const pool=cands.length ? cands : activos().filter(x=>x.id!==f.id && !x.jugador && pais.includes(x.country) && !signedLeagueOf(s,x.id)); if(!pool.length) continue;
+      const rival=pick(pool); if(!L.fexhib) L.fexhib={}; L.fexhib[j]={a:f.id, b:rival.id, invitacion:true}; ocupados.add(d); tope--;
+      addLog(s, 0, `🎤 ${ldef(k).name} invita a <b>${fname(f.id)}</b> a una exhibición contra ${fname(rival.id)} en la J${j+1} (${fmtDay(s.year,d)}).`, 'gold'); } }
+}
+// Exhibiciones del jugador este año: [{key, j, day, rival}]
+function exhibicionesDe(s, fid){ const out=[]; natKeys(s).forEach(k=>{ const L=s.leagues[k]; Object.entries(L.fexhib||{}).forEach(([j,x])=>{ if(x.a===fid||x.b===fid) out.push({key:k, j:+j, day:L.dates[+j], rival: x.a===fid?x.b:x.a, jugada:!!x.m}); }); }); return out; }
 // Próximo compromiso del jugador a partir de los datos de la temporada: jornada de su liga (con rival), cuadros de Red Bull e Internacional donde está,
 // Under y Monster Fu en los que está inscrito. Devuelve {day, nombre, key, rival} o null.
 function proximoCompromiso(s, fid){
   if(s.phase!=='live') return null; const out=[]; const hoy=s.day;
   const lk=signedLeagueOf(s, fid);
   if(lk){ const L=s.leagues[lk]; if(!L.finished){ const j=L.played; const d=L.dates[j]; if(d!=null && d>=hoy){ const m=(L.rounds[j]||[]).find(x=>x.a===fid||x.b===fid); out.push({day:d, nombre:`${ldef(lk).name} · J${j+1}`, key:lk, rival: m ? (m.a===fid?m.b:m.a) : null, sinRival: m ? null : 'descansas esta jornada'}); } } }
+  exhibicionesDe(s, fid).forEach(x=>{ if(!x.jugada && x.day!=null && x.day>=hoy) out.push({day:x.day, nombre:`Exhibición · ${ldef(x.key).name} J${x.j+1}`, key:x.key, rival:x.rival}); });
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && s.intl.date>=hoy){ const q = s.intl.order ? s.intl.qualifiers : (natKeys(s).every(k=>s.leagues[k].finished) ? intlQualifiers(s).ids : []); if((q||[]).includes(fid)) out.push({day:s.intl.date, nombre:INTL.name, key:INTL.key, rival:rivalDeCuadro(s.intl.order, fid)}); }
   if(rbOn(s)) rbEventsList(s).forEach(e=>{ if(e.day<hoy) return; const ev=rbEvent(s, e.key); if(!ev || ev.played) return;
     const ids = e.key===RB_INT.key ? (ev.voted ? ev.qualifiers : [...(s.rb.interPodium||[]), ...rbCandidatosSeguros(s)]) : (ev.participants||[]);
@@ -1692,10 +1713,12 @@ function carreraDecisiones(s, f){
   const entreno = ATTR_KEYS.map(k=>{ const rep = racha.attr===k && racha.n+1>=ENTRENO_REPETICION; return `<button class="ltoggle ${p.entreno===k?'on':''}" onclick="carreraEntrenar('${k}')" aria-pressed="${p.entreno===k}"><span>${esc(ATTR_LABELS[k])}<small>${attrShown(f,k)}${rep ? ` · ${racha.n+1}.º año seguido: rinde la mitad` : ''}</small></span></button>`; }).join('');
   const torneos = torneosDelJugador(s,f).map(t=>{ const on=p.inscrito.includes(t.key) && t.apto; return `<button class="ltoggle ${on?'on':''} ${t.apto?'':'locked'}" onclick="carreraInscribir('${t.key}')" aria-pressed="${on}"><span>${esc(t.name)}<small>${t.apto ? (on ? 'Inscrito: plaza garantizada' : 'Sin inscribir') : esc(t.motivo||'No apto')}</small></span></button>`; }).join('');
   const etapa=etapaOf(f); const efecto = etapa==='joven' ? `+${ENTRENO_JOVEN} además del crecimiento` : (etapa==='madurez' ? `+${ENTRENO_MADUREZ} en el atributo` : 'el declive de ese atributo se reduce a la mitad');
+  const exOn=p.exhibiciones!==false; const exBtn=`<button class="ltoggle ${exOn?'on':''}" onclick="carreraExhibiciones()" aria-pressed="${exOn}"><span>Aceptar invitaciones a exhibiciones<small>${f.fama<EXHIB_FAMA_MIN ? 'Con menos de '+EXHIB_FAMA_MIN+' de fama nadie te invita todavía' : (exOn ? 'Las ligas te invitarán a exhibiciones sin puntos según tu fama' : 'Rechazarás todas las invitaciones')}</small></span></button>`;
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${libre}</div></div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
-    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}</div></div>`;
+    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}</div></div>`;
 }
+function carreraExhibiciones(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.exhibiciones = p.exhibiciones===false; render(); }
 // En directo o cerrada: el plan de la temporada en solo lectura
 function carreraPlanResumen(s, f){
   const p=planDe(f); const lk=signedLeagueOf(s,f.id); const nombres=p.inscrito.map(k=>{ const d=udef(k)||rbdef(k); return d ? esc(d.name) : k; });
@@ -1706,7 +1729,7 @@ function carreraPlanResumen(s, f){
 function jugadorJuegaHoy(s, d, fid){
   const ev=eventsByDay(s)[d];
   if(ev){ if(ev.key===INTL.key){ const q=s.intl.order ? s.intl.qualifiers : intlQualifiers(s).ids; if((q||[]).includes(fid)) return true; }
-    else { const L=s.leagues[ev.key]; const r=L && L.rounds[L.played]; if(r && r.some(m=>m.a===fid||m.b===fid)) return true; } }
+    else { const L=s.leagues[ev.key]; const r=L && L.rounds[L.played]; if(r && r.some(m=>m.a===fid||m.b===fid)) return true; const fx=L && L.fexhib && L.fexhib[L.played]; if(fx && (fx.a===fid||fx.b===fid)) return true; } }
   const rb=rbByDay(s)[d];
   if(rb){ const e=rbEvent(s, rb.key); const ids = rb.key===RB_INT.key ? (e.voted ? e.qualifiers : [...(s.rb.interPodium||[]), ...rbCandidatosSeguros(s)]) : (e.participants||[]); if((ids||[]).includes(fid)) return true; }
   const u=underByDay(s)[d];
@@ -1771,7 +1794,7 @@ function abrirTuBatalla(){
 const RONDA_KO = ['Octavos','Cuartos','Semifinal','Final'];
 function etiquetaBatalla(b){ const k=b.key; const ronda = b.j==='third' ? '3er puesto' : (RONDA_KO[+b.j]||('Ronda '+(+b.j+1)));
   if(k==='intl') return `${INTL.name} · ${ronda}`; if(k==='rbinter') return `${RB_INT.name} · ${ronda}`; if(k.startsWith('rb:')) return `${rbdef(k.slice(3)).name} · ${ronda}`;
-  if(k.startsWith('under:')){ const uk=k.split(':')[1]; return b.j==='b' ? udef(uk).name : `${udef(uk).name} · ${ronda}`; } return `${ldef(k).name} · J${+b.j+1}`; }
+  if(k.startsWith('under:')){ const uk=k.split(':')[1]; return b.j==='b' ? udef(uk).name : `${udef(uk).name} · ${ronda}`; } return (b.mi==='ex'||b.mi==='fex') ? `Exhibición · ${ldef(k).name} J${+b.j+1}` : `${ldef(k).name} · J${+b.j+1}`; }
 // Un año completo del mundo sin CEO: pretemporada automática, plantillas por nivel, arranque y simulación hasta el cierre
 function jugarTemporadaCarrera(){
   const s=cur();
