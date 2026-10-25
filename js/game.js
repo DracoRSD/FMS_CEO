@@ -357,7 +357,7 @@ const ENTRENO_REPETICION = 3, ENTRENO_REPETICION_MULT = 0.5;   // el mismo atrib
 // Fase D1: el entrenamiento se vive por sesiones mensuales y sube el atributo en el momento. 3 entrenos al mes × 12 = la cuota anual de arriba.
 const SESIONES_MES = 4, SESIONES_ENTRENO_ANO = 36;
 const FATIGA_BATALLA = 8, FATIGA_SESION = 3, FATIGA_DESCANSO = 15, FATIGA_MES_SIN = 10;   // la fatiga del jugador (0-100): sube con batallas y sesiones, baja descansando
-const FATIGA_ALTA = 70, FATIGA_BAJA = 30, FATIGA_PENAL = 3, FATIGA_BONUS = 1;              // en la batalla: hasta −3 de nivel efectivo de 70 a 100, +1 hasta 30
+const FATIGA_ALTA = 70, FATIGA_BAJA = 30, FATIGA_PENAL = 10, FATIGA_BONUS = 0;             // en la batalla: hasta −10 de nivel efectivo de 70 a 100 (medido sobre 2.000 batallas: con −3 la diferencia de victorias era de 7 puntos y con −6 de 6); sin premio por estar fresco, que daría ventaja a quien no entrena
 const SPARRING_GANANCIA = 0.1, SPARRING_TOPE = 1;                                       // sparring: +0,1 de impro y mentalidad por sesión, tope +1 al año
 // Fama fuera de las ligas (fase C3a). Quien no está fichado en ninguna liga ya no pierde un punto fijo: su fama tiende hacia su nivel.
 const FAMA_BAJA = 0.15;             // si la fama supera el nivel, baja esta fracción de la distancia por temporada (al menos 1 punto)
