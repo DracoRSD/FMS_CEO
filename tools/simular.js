@@ -39,7 +39,10 @@ const REGISTRO_EMPRESA = /€|taquilla|reputaci|\d+ rep\b|estrella|★|\bcaja\b|
 // Repetición de tuits (fase T), medida en el mundo de carrera de 20 temporadas: tuits de line up, cruces y campeón sin las cuentas de noticias.
 // «Plantilla» = texto con nombres de freestylers y ligas sustituidos y números quitados. Base fijada con la semilla 1 antes de la fase T;
 // el criterio es una repetición de plantilla dentro de la temporada un 60 % menor y ningún texto exacto más de TW_TOPE_TEXTO veces por temporada.
-const TW_BASE_PLANTILLA = 60.2, TW_MEJORA = 0.6, TW_TOPE_TEXTO = 3;   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
+const TW_BASE_PLANTILLA = 60.2, TW_MEJORA = 0.6, TW_TOPE_TEXTO = 3;
+// Redes de la carrera: cada batalla del jugador recibe al menos un tuit y el volumen por batalla crece con la fama (el tercio de batallas con más fama
+// frente al tercio con menos, al menos REDES_CRECE veces más); el feed guardado no pasa de REDES_FEED_MAX del juego.
+const REDES_CRECE = 2;   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
@@ -193,12 +196,13 @@ w.addEventListener('load', () => setTimeout(() => {
   // advance('year'), nextSeason. La poda se desactiva durante la simulación para medir el guardado antes y después, comprobar que
   // historial, títulos, clasificaciones y fatiga de carteles no cambian al podar, y probar la migración dbv 8 → 9. Se restaura el estado.
   function correrMundo(modo) {
-    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
+    const r = { modo, anos: 0, pausas: [], excepciones: [], arranquesMal: [], intlMal: [], filas: [], fama0: null, fama1: null, poco: {}, redes: [], feed: 0, hitos: {}, tw: { n: 0, repTpl: 0, repTxt: 0, maxTxt: 0, textosMas: 0, fuentes: {}, repFuente: {} }, bytesAntes: 0, bytesDespues: 0, bytesMigrado: 0, identicos: null, aligeradas: 0, migra: null, erroresJsdom: 0 };
     const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
     S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
     const errAntes = errores.length;
     try {
+      if (modo === 'carrera') w.eval('var _twBatReal = twCarreraBatalla; var _twBat = []; twCarreraBatalla = function(s, b, fid){ const o = _twBatReal(s, b, fid); _twBat.push({ fama: fby(fid).fama, n: o.length }); return o; };');
       if (modo === 'carrera') { g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Jugador de prueba', country: 'México', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } }); g('nuevaCarrera')(); }
       else { S.company = { modo: 'ceo', name: 'CEO de prueba', stars: 5, infinite: true, money: 0, reputation: 0, dbv: 9, tut: { inf: true, s2: true, intl: true }, spStart: true, spReal: true }; S.freestylers = g('generatePool()'); S.seasons = [g('newSeason')(null)]; }
       // fama media del top 100 por fama y salario medio del top 60 por salario, con y sin la prima de leyenda
@@ -234,6 +238,7 @@ w.addEventListener('load', () => setTimeout(() => {
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
       r.fama1 = medirFama();
+      if (modo === 'carrera') { r.redes = g('_twBat').slice(); const rd = S.company.carrera.redes || {}; r.feed = (rd.feed || []).length; r.hitos = rd.hitos || {}; w.eval('twCarreraBatalla = _twBatReal;'); }
       // guardado antes y después de la poda; el historial, los títulos, las clasificaciones y la fatiga no deben cambiar
       const key = g('storageKey')(); g('save')(); r.bytesAntes = (mem.get(key) || '').length;
       const cerradas = S.seasons.filter(s => s.phase === 'done');
@@ -352,7 +357,12 @@ w.addEventListener('load', () => setTimeout(() => {
       const dFama = c.fama1 && c.fama0 ? c.fama1.fama - c.fama0.fama : NaN, dSal = c.fama1 && c.fama0 ? 100 * (c.fama1.salarioSinPrima / c.fama0.salarioSinPrima - 1) : NaN, dSalPrima = c.fama1 && c.fama0 ? 100 * (c.fama1.salario / c.fama0.salario - 1) : NaN;
       const okFama = Math.abs(dFama) <= FAMA_TOL, okSal = Math.abs(dSal) <= SALARIO_TOL;
       const T = c.tw; const pctTpl = T.n ? 100 * T.repTpl / T.n : 0; const okTw = c.modo !== 'carrera' || (T.n > 0 && (TW_BASE_PLANTILLA === 0 || pctTpl <= TW_BASE_PLANTILLA * (1 - TW_MEJORA)) && T.textosMas === 0);
-      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw;
+      let okRedes = true, redesTxt = '';
+      if (c.modo === 'carrera' && c.redes.length) { const R = c.redes; const min = Math.min(...R.map(x => x.n)); const ord = R.slice().sort((a, b) => a.fama - b.fama); const k = Math.max(1, Math.floor(R.length / 3));
+        const avg = a => a.reduce((x, y) => x + y.n, 0) / a.length; const bajo = ord.slice(0, k), alto = ord.slice(-k); const mb = avg(bajo), ma = avg(alto);
+        okRedes = min >= 1 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
+        redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · tercio de menos fama (≤ ${ord[k - 1].fama}) ${f1b(mb)} por batalla, tercio de más fama (≥ ${ord[R.length - k].fama}) ${f1b(ma)} (al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
+      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes;
       okCarrera = okCarrera && okMundo;
       console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${c.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${c.pausas.length ? ' · ' + c.pausas.join('; ') : ''}${c.excepciones.length ? ' · excepción: ' + c.excepciones.join('; ') : ''}${c.erroresJsdom ? ' · errores de página: ' + c.erroresJsdom : ''}`);
       console.log(`${c.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${c.arranquesMal.length ? ' · ' + c.arranquesMal.join('; ') : ''}`);
@@ -364,6 +374,7 @@ w.addEventListener('load', () => setTimeout(() => {
         console.log(`${okFama ? 'OK  ' : 'FAIL'} fama media del top 100 tras ${c.anos} temporadas: ${f1b(c.fama0.fama)} → ${f1b(c.fama1.fama)} (${sg(dFama)}; límite ±${FAMA_TOL}) · con fama 90 o más: ${c.fama0.n90} → ${c.fama1.n90}`);
         console.log(`${okSal ? 'OK  ' : 'FAIL'} salario medio del top 60 sin prima de leyenda: ${eur(c.fama0.salarioSinPrima)} → ${eur(c.fama1.salarioSinPrima)} (${sg(dSal)} %; límite ±${SALARIO_TOL} %) · con la prima ${eur(c.fama0.salario)} → ${eur(c.fama1.salario)} (${sg(dSalPrima)} %: las leyendas se retiran y ningún novato lo es)`);
         console.log(`INFO poco conocidos (nivel − fama ≥ ${POCO_CONOCIDO}) sin fichar al arrancar la temporada: T5 ${(c.poco[5] || {}).sinFichar} de ${(c.poco[5] || {}).total} · T10 ${(c.poco[10] || {}).sinFichar} de ${(c.poco[10] || {}).total}`);
+        if (redesTxt) console.log(`${okRedes ? 'OK  ' : 'FAIL'} redes de la carrera: ${redesTxt}`);
         if (c.modo === 'carrera' && T.n) console.log(`${okTw ? 'OK  ' : 'FAIL'} tuits: ${T.n} en ${c.anos} temporadas (${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + v).join(', ')}) · misma plantilla dentro de la temporada ${f1b(pctTpl)} % (${TW_BASE_PLANTILLA ? 'límite ' + f1b(TW_BASE_PLANTILLA * (1 - TW_MEJORA)) + ' %, base ' + f1b(TW_BASE_PLANTILLA) + ' %' : 'base por fijar'}; por fuente ${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + f1b(100 * (T.repFuente[k] || 0) / v) + ' %').join(', ')}) · texto exacto repetido ${f1b(100 * T.repTxt / T.n)} %, máximo ${T.maxTxt} veces, ${T.textosMas} textos por encima de ${TW_TOPE_TEXTO}${T.ejemplos ? ' (' + T.ejemplos.slice(0, 3).join(' | ') + ')' : ''}`); }
     });
   }
