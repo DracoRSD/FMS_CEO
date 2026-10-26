@@ -695,6 +695,7 @@ function toggleSign(key, id){
   render();
 }
 function preselectRoster(s, key){
+  if(modoCarrera()) return 0;   // en carrera las plantillas se rehacen por nivel cada año (autoFicharLigas, decisión de C1); renovarlas aquí dejaba solo las plazas de los descensos
   const L=s.leagues[key]; if(!L || L.competitors.length) return 0; let n=0;
   // los jugadores del modo carrera no se renuevan solos: su liga la decide su plan en la pretemporada (antes los volvía a fichar aquí y la elección no contaba)
   (L.prevRoster||[]).filter(id=> fbyActivo(id) && !fby(id).jugador && !L.blocked.includes(id) && !isSpeakerId(s,id) && (isWS(key) || !signedLeagueOf(s,id))).forEach(id=>{
