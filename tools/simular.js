@@ -413,6 +413,30 @@ w.addEventListener('load', () => setTimeout(() => {
   });
   const okCambio = cambioLiga.ceo.ok && cambioLiga.carrera.ok;
   console.log(`${okCambio ? 'OK  ' : 'FAIL'} cambio de liga entre temporadas: la revelación del line up menciona la liga de origen en CEO (${cambioLiga.ceo.ok}, ${cambioLiga.ceo.n} tuits${cambioLiga.ceo.err ? ', error: ' + cambioLiga.ceo.err : ''}) y en carrera (${cambioLiga.carrera.ok}, ${cambioLiga.carrera.n} tuits${cambioLiga.carrera.err ? ', error: ' + cambioLiga.carrera.err : ''})`);
+  // ---- la elección de liga del jugador se respeta (arreglo): en la pretemporada elige una opción distinta de su liga actual (otra oferta o «Seguir libre») y empieza en ella ----
+  const eleccion = { cambios: 0, fallos: [], err: null };
+  { const S = g('state'); const mem = w._mem; const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view };
+    S.company = null; S.freestylers = []; S.seasons = [];
+    try {
+      g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Elige liga', country: 'Perú', style: 'Flow', attrs: { punchline: 60, metrica: 60, flow: 60, impro: 60, mentalidad: 60 } }); g('nuevaCarrera')();
+      const f = g('fby')(S.company.carrera.fid); g('ATTR_KEYS').forEach(k => { f.attrs[k] = 86; }); f.nivel = 86; f.fama = 72; delete f.plan.ofertasYear; g('asegurarOfertas')(g('cur')());
+      for (let t = 1; t <= 5; t++) {
+        const s = g('cur')(); const p = f.plan;
+        if (w.eval('typeof carreraAnos') === 'function' && p.ofertas.length && !p.ofertas.some(o => o.contrato)) g('carreraAnos')(1);   // contratos de un año, para poder cambiar cada verano
+        const anterior = S.seasons.length > 1 ? g('signedLeagueOf')(S.seasons[S.seasons.length - 2], f.id) : null; const opciones = p.ofertas.filter(o => !o.contrato).map(o => o.key);
+        let elegida = opciones.find(k => k !== anterior); if (elegida === undefined) elegida = anterior && opciones.length ? null : (opciones[0] || null);
+        const cambia = (elegida || null) !== (anterior || null) && !p.ofertas.some(o => o.contrato);
+        g('carreraElegirLiga')(elegida); w.document.getElementById('app').innerHTML = g('renderView')();   // clic y repintado, como en el juego
+        g('jugarTemporadaCarrera')(); g('closeModal')();
+        const empieza = g('signedLeagueOf')(s, f.id) || null;
+        if (cambia) { eleccion.cambios++; if (empieza !== (elegida || null)) eleccion.fallos.push(`T${t}: eligió ${elegida || 'libre'} y empezó en ${empieza || 'libre'}`); }
+        g('jugarTemporadaCarrera')(); g('closeModal')(); g('nextSeason')(); g('closeModal')();
+      }
+    } catch (e) { eleccion.err = String(e && e.message || e); }
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view; }
+  const okEleccion = !eleccion.err && eleccion.cambios >= 2 && eleccion.fallos.length === 0;
+  console.log(`${okEleccion ? 'OK  ' : 'FAIL'} la elección de liga se respeta: ${eleccion.cambios} pretemporadas con una opción distinta de la liga anterior y ${eleccion.fallos.length} en las que empezó en otra${eleccion.fallos.length ? ' · ' + eleccion.fallos.join('; ') : ''}${eleccion.err ? ' · error: ' + eleccion.err : ''}`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
   const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0 };
   PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [], batLibre: [], batLiga: [] }; });
@@ -544,5 +568,5 @@ w.addEventListener('load', () => setTimeout(() => {
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas && okCambio ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas && okCambio && okEleccion ? 0 : 1);
 }, 800));

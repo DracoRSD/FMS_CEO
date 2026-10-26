@@ -696,7 +696,8 @@ function toggleSign(key, id){
 }
 function preselectRoster(s, key){
   const L=s.leagues[key]; if(!L || L.competitors.length) return 0; let n=0;
-  (L.prevRoster||[]).filter(id=> fbyActivo(id) && !L.blocked.includes(id) && !isSpeakerId(s,id) && (isWS(key) || !signedLeagueOf(s,id))).forEach(id=>{
+  // los jugadores del modo carrera no se renuevan solos: su liga la decide su plan en la pretemporada (antes los volvía a fichar aquí y la elección no contaba)
+  (L.prevRoster||[]).filter(id=> fbyActivo(id) && !fby(id).jugador && !L.blocked.includes(id) && !isSpeakerId(s,id) && (isWS(key) || !signedLeagueOf(s,id))).forEach(id=>{
     if(L.competitors.length>=10) return; const sal=contractCost(fby(id),key); if(state.company.money<sal) return;
     L.competitors.push(id); L.contracts[id]=sal; state.company.money-=sal; s.fin.salaries+=sal; n++; });
   return n;
