@@ -852,7 +852,7 @@ function startSeason(){
   s.phase='live'; s.day=0; state.ui.calMonth=null;
   rbDraw(s);
   invitacionesExhibicion(s);   // modo carrera: exhibiciones del año según la fama
-  if(modoCarrera()) firmarContratos(s);   // fase D2: contratos de los jugadores fichados
+  if(modoCarrera()){ firmarContratos(s); firmarPatrocinios(s); }   // fase D2: contratos; fase D3: patrocinadores
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
   addLog(s, 0, `Arranca la temporada ${s.year} con ${s.activeKeys.length} liga(s)${s.intlEnabled?' + Internacional':''}.`, 'gold');
   goto(modoCarrera() ? 'carrera' : 'dashboard');
@@ -1091,7 +1091,8 @@ function simulateDay(auto, soloFid){
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
   if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
   // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
-  if(carr) jugadores().forEach(j=>{ const n=batallasDelDia(s, d, j.id).length; if(n){ j.fatiga=clamp((j.fatiga||0)+FATIGA_BATALLA*n,0,100); j.ultBatallaMes=monthOf(y,d); } });   // fase D1: la batalla cansa
+  if(carr) jugadores().forEach(j=>{ const bd=batallasDelDia(s, d, j.id); const n=bd.length; if(n){ j.fatiga=clamp((j.fatiga||0)+FATIGA_BATALLA*n,0,100); j.ultBatallaMes=monthOf(y,d);   // fase D1: la batalla cansa
+    if(spActivo(s, j, 'tecnologia')){ const p=planDe(j); if(!p.spTec || p.spTec.y!==y) p.spTec={y, v:0}; bd.filter(b=>b.m.result.winner===j.id).forEach(()=>{ if(p.spTec.v+SP_AYUDA.tecnologia.famaVictoria<=SP_AYUDA.tecnologia.famaTope){ p.spTec.v+=SP_AYUDA.tecnologia.famaVictoria; addFamaDec(j.id, SP_AYUDA.tecnologia.famaVictoria); } }); } } });   // fase D3: patrocinio de tecnología
   if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } redesEventosDia(s, fid); }
   s.day++;
   if(s.day>=diy) endSeason(s);
@@ -1183,7 +1184,7 @@ function endSeason(s){
     c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, salario, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
   if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
-    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
+    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; cobrarPatrocinios(s, f); if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1473,6 +1474,7 @@ function renderCarrera(){
     ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
     ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
     ${contratoPanel(s, f)}
+    ${s.phase==='pre' ? patrociniosDecision(s, f) : patrociniosPanel(s, f)}
     ${billeteraPanel(s, f)}
     ${redesPanel(f)}
     <div class="step" style="margin-top:16px;">
@@ -1603,7 +1605,7 @@ var TWK={
   },
 };
 function redesDe(){ const c=state.company && state.company.carrera; if(!c) return null; if(!c.redes) c.redes={fans:[], haters:[], racha:0, feed:[], hitos:{}}; const r=c.redes; if(!Array.isArray(r.feed)) r.feed=[]; if(!r.hitos) r.hitos={}; return r; }
-function redesSeguidores(f){ return Math.round(Math.pow(Math.max(5,f.fama),2)*30); }   // fama 20 → 12 k · fama 90 → 243 k
+function redesSeguidores(f){ return Math.round(Math.pow(Math.max(5,f.fama),2)*30*((f.plan&&f.plan.segMult)||1)); }   // fama 20 → 12 k · fama 90 → 243 k
 function redesVolumen(fama, mult){ const base = fama<30 ? 1 : (fama<50 ? rint(2,3) : (fama<70 ? rint(3,5) : (fama<85 ? rint(5,8) : rint(8,12)))); return Math.max(1, Math.round(base*(mult||1))); }
 function redesCuenta(h){ const t=TWITTEROS.find(x=>x.handle===h); return t ? twAcc(t) : null; }
 // Compone una frase de TWK con la voz del autor y la rellena
@@ -2578,6 +2580,47 @@ function cuentasAno(f, y){ const cu=(planDe(f).cuentas||{})[y]||{}; let ing=0, g
 function billeteraPanel(s, f){ const p=planDe(f); const {cu, ing, gas}=cuentasAno(f, s.year);
   const filas=Object.entries(cu).filter(([,v])=>v).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([k,v])=>`<div class="sum-row"><span>${esc(CONCEPTOS[k]||k)}</span><b class="${v>=0?'pos-v':'neg-v'}">${v>=0?'+':'−'}${dineroTxt(Math.abs(v))}</b></div>`).join('');
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Billetera</span><p class="step-note" style="margin:0 0 8px">Saldo: <b>${dineroTxt(p.dinero||0)}</b> · ${s.year}: ingresos ${dineroTxt(ing)}, gastos ${dineroTxt(-gas)}</p>${filas || '<p class="step-note" style="margin:0">Todavía no has cobrado nada este año.</p>'}</div>`; }
+// ---- Patrocinadores del jugador (fase D3, paso 2): ofertas en la pretemporada según la fama, una por categoría y como mucho un contrato vigente por categoría ----
+// Cada categoría da una ayuda mientras está vigente: bebida −5 de fatiga al mes, ropa +5 % de seguidores al año, tecnología +0,5 de fama por victoria (tope al año), otros un 25 % más de pago.
+const SP_CAT = {bebida:['energetica','refresco','refresco_n','isotonica','licor','cerveza'], ropa:['ropa','gorras','tienda','moda','moda2'], tecnologia:['musica','stream','teleco','consola','perifericos','movil']};
+const SP_CAT_NOMBRE = {bebida:'Bebida', ropa:'Ropa', tecnologia:'Tecnología', otros:'Otros'};
+const SP_AYUDA = {bebida:{fatigaMes:5}, ropa:{seguidores:0.05}, tecnologia:{famaVictoria:0.5, famaTope:5}, otros:{pagoMult:1.25}};
+const SP_MAX_VIGENTES = 3, SP_PAGO_MIN = 1000, SP_PAGO_MAX = 15000, SP_FAMA_MIN = 30, SP_FAMA_MAX = 95, SP_PAGO_BAJA = 500,   // calibrado: con 3.000-60.000 el activo pasaba de 1,4 M a los 10 años (la fama del jugador llega pronto a 90-99)
+      SP_ARRAIGO = 10, SP_RUPTURA = 15, SP_OBJ_BONUS = 0.5;
+const SP_OBJETIVOS = [{k:'victorias', n:8, txt:'gana 8 batallas'}, {k:'intl', txt:'llega a una Internacional'}, {k:'titulo', txt:'gana un título'}, {k:'top3', txt:'acaba entre los 3 primeros de tu liga'}];
+function spCategoria(sector){ return Object.keys(SP_CAT).find(c=>SP_CAT[c].includes(sector)) || 'otros'; }
+function spAyudaTxt(cat){ const a=SP_AYUDA[cat]; if(cat==='bebida') return `−${a.fatigaMes} de fatiga al mes`; if(cat==='ropa') return `+${Math.round(a.seguidores*100)} % de seguidores al año`; if(cat==='tecnologia') return `+${String(a.famaVictoria).replace('.',',')} de fama por victoria (hasta +${a.famaTope} al año)`; return `+${Math.round((a.pagoMult-1)*100)} % de pago`; }
+function spFamaEfectiva(s, f){ const p=planDe(f); return f.fama - (p.arraigoHasta && p.arraigoHasta>=s.year ? SP_ARRAIGO : 0); }   // arraigo de D2: 10 menos durante 2 años en un país nuevo
+function spPago(fama, cat){ let v = fama<SP_FAMA_MIN ? SP_PAGO_BAJA : SP_PAGO_MIN+(SP_PAGO_MAX-SP_PAGO_MIN)*Math.pow(clamp((fama-SP_FAMA_MIN)/(SP_FAMA_MAX-SP_FAMA_MIN),0,1),1.6); v*=(SP_AYUDA[cat].pagoMult||1); return Math.round(v/100)*100; }
+function spVigentes(s, f){ return (planDe(f).sponsors||[]).filter(x=>x.hasta>=s.year); }
+function spActivo(s, f, cat){ return spVigentes(s, f).some(x=>x.cat===cat && x.desde<=s.year); }
+// Ofertas de la pretemporada (una vez por año): 1 con fama < 40, 2 con < 70 y 3 desde 70, cada una de una categoría distinta que no tenga contrato vigente y de una marca que no tenga
+function asegurarPatrocinios(s){ if(!modoCarrera() || s.phase!=='pre') return; jugadores().forEach(f=>{ const p=planDe(f); if(p.spYear===s.year) return; p.spYear=s.year;
+  p.sponsors=(p.sponsors||[]).filter(x=>x.hasta>=s.year); const ef=spFamaEfectiva(s, f); const n = ef<40 ? 1 : (ef<70 ? 2 : 3);
+  const ocupadas=new Set(p.sponsors.map(x=>x.cat)); const marcas=new Set(p.sponsors.map(x=>x.marca));
+  const cats=shuffle(['bebida','ropa','tecnologia','otros'].filter(c=>!ocupadas.has(c))).slice(0, Math.max(0, Math.min(n, SP_MAX_VIGENTES-p.sponsors.length)));   // como mucho SP_MAX_VIGENTES contratos a la vez
+  p.spOfertas=cats.map(cat=>{ const opciones=SPONSOR_BRANDS.filter(b=>spCategoria(b[1])===cat && !marcas.has(b[0])); if(!opciones.length) return null; const b=pick(opciones);
+    const objetivos=SP_OBJETIVOS.filter(o=>o.k!=='top3' || p.liga); const obj=pick(objetivos); const pago=spPago(ef, cat);
+    return {marca:b[0], sector:b[1], bg:b[2], fg:b[3], cat, pago, anos:rint(1,2), objetivo:obj.k, objTxt:obj.txt, acepta:true}; }).filter(Boolean); }); }
+// Al empezar la temporada se firman las ofertas aceptadas
+function firmarPatrocinios(s){ jugadores().forEach(f=>{ const p=planDe(f); (p.spOfertas||[]).filter(o=>o.acepta).forEach(o=>{ if(spVigentes(s, f).some(x=>x.cat===o.cat || x.marca===o.marca)) return;
+  p.sponsors=(p.sponsors||[]).concat([{marca:o.marca, cat:o.cat, bg:o.bg, fg:o.fg, pago:o.pago, desde:s.year, hasta:s.year+o.anos-1, famaFirma:f.fama, objetivo:o.objetivo, objTxt:o.objTxt}]); }); p.spOfertas=[]; }); }
+// Cierre del año: pago, prima por título (Under, Red Bull, Plazas, ligas e Internacionales, no locales) y bonus del objetivo; ruptura si la fama cae 15 por debajo de la del día de la firma
+function cobrarPatrocinios(s, f){ const p=planDe(f); const vig=spVigentes(s, f).filter(x=>x.desde<=s.year); if(!vig.length) return;
+  const locales=new Set(LOCAL_DEFS.map(d=>d.name)); const tit=titlesOf(f.id).filter(t=>t.endsWith(' '+s.year) && !locales.has(t.slice(0,-5)));
+  const bat=batallasDe(s, f.id); const lk=signedLeagueOf(s, f.id); const puesto = lk ? s.leagues[lk].finalStandings.indexOf(f.id)+1 : 0;
+  const intl=((s.intl&&s.intl.qualifiers)||[]).includes(f.id) || (rbOn(s) && ((s.rb.inter&&s.rb.inter.qualifiers)||[]).includes(f.id));
+  vig.forEach(x=>{ moverDinero(s, f, x.pago, 'patrocinio', x.marca); if(tit.length) moverDinero(s, f, x.pago, 'patrocinio', `${x.marca}: prima por título`);   // una prima por temporada con título, no una por título
+    const ok = x.objetivo==='victorias' ? bat.filter(b=>b.w===f.id).length>=8 : (x.objetivo==='intl' ? intl : (x.objetivo==='titulo' ? tit.length>0 : (x.objetivo==='top3' ? (puesto>0 && puesto<=3) : false)));
+    if(ok) moverDinero(s, f, Math.round(x.pago*SP_OBJ_BONUS), 'patrocinio', `${x.marca}: objetivo «${x.objTxt}»`);
+    if(SP_AYUDA[x.cat].seguidores) p.segMult=Math.round((p.segMult||1)*(1+SP_AYUDA[x.cat].seguidores)*1000)/1000; });
+  const rotos=p.sponsors.filter(x=>x.hasta>=s.year && f.fama < x.famaFirma-SP_RUPTURA); if(rotos.length){ p.sponsors=p.sponsors.filter(x=>!rotos.includes(x)); if(state.company.carrera && f.id===state.company.carrera.fid) addLog(s, daysInYear(s.year)-1, `💼 ${rotos.map(x=>x.marca).join(' y ')} rompe${rotos.length>1?'n':''} el patrocinio de ${fname(f.id)}: su fama ha caído.`, 'bad'); } }
+function carreraPatrocinio(i){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const o=(planDe(f).spOfertas||[])[i]; if(!o) return; o.acepta=!o.acepta; render(); }
+function spTarjeta(x, extra){ return `<span class="sp-marca" style="background:${x.bg};color:${x.fg}">${esc(x.marca)}</span> <small>${SP_CAT_NOMBRE[x.cat]} · ${dineroTxt(x.pago)} al año · ${esc(spAyudaTxt(x.cat))}${extra||''}</small>`; }
+function patrociniosPanel(s, f){ const vig=spVigentes(s, f); return `<div class="step" style="margin-top:16px;"><span class="field-label">Patrocinadores</span>${vig.length ? vig.map(x=>`<p class="step-note" style="margin:0 0 6px">${spTarjeta(x, ` · hasta ${x.hasta} · objetivo: ${esc(x.objTxt)}`)}</p>`).join('') : '<p class="step-note" style="margin:0">Sin patrocinadores este año.</p>'}</div>`; }
+function patrociniosDecision(s, f){ asegurarPatrocinios(s); const p=planDe(f); const vig=spVigentes(s, f); const ofs=p.spOfertas||[];
+  const botones=ofs.map((o,i)=>`<button class="ltoggle ${o.acepta?'on':''}" onclick="carreraPatrocinio(${i})" aria-pressed="${o.acepta}"><span>${spTarjeta(o, ` · ${o.anos} año${o.anos>1?'s':''} · prima igual al pago si ganas un título · objetivo: ${esc(o.objTxt)} (+50 %)`)}</span></button>`).join('');
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Patrocinadores ${s.year}</span><p class="step-note" style="margin:0 0 10px">${vig.length ? 'Vigentes: '+vig.map(x=>esc(x.marca)+' (hasta '+x.hasta+')').join(', ')+'. ' : ''}${ofs.length ? 'Ofertas de este año: marcadas las que firmas al empezar la temporada.' : 'Ninguna marca nueva este año.'} Se rompe si tu fama cae ${SP_RUPTURA} por debajo de la del día de la firma.</p>${ofs.length ? `<div class="carrera-opts">${botones}</div>` : ''}</div>`; }
 // ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
 // Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
 const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
@@ -2593,6 +2636,7 @@ function puestoEnPais(s, f, key){ const def=ldef(key); if(!def || !def.countries
 // Por defecto el jugador acepta: su liga del año pasado si vuelve a ofrecer y, si no, la primera oferta. Si estaba fichado y su liga no ofrece, p.noRenueva la señala.
 function asegurarOfertas(s){
   if(!modoCarrera() || s.phase!=='pre') return;
+  asegurarPatrocinios(s);   // fase D3
   jugadores().forEach(f=>{ const p=planDe(f); if(p.ofertasYear===s.year) return;
     const antes=p.liga; p.ofertas=[]; p.noRenueva=null; p.ofertasYear=s.year; if(!CONTRATO_ANOS.includes(p.anos)) p.anos=CONTRATO_ANOS_DEF;
     const c=p.contrato; const vigente = c && c.hasta>=s.year && s.activeKeys.includes(c.liga);
@@ -2653,7 +2697,8 @@ function sparringSesion(s, f){ const p=planDe(f); const ops=proponerSparring(s, 
   return {rival:rivalId, gane}; }
 // El plan del mes se ejecuta al cerrar cada mes, en los tres modos de avance; un mes sin batallas descansa solo
 function ejecutarPlanMes(s, f, mes){ const m=planMesDe(f); planDe(f).mesAnterior=JSON.parse(JSON.stringify(m)); Object.entries(m.entreno||{}).forEach(([k,n])=>{ for(let i=0;i<n;i++) aplicarSesion(s,f,'entreno',k); }); for(let i=0;i<(m.sparring||0);i++) aplicarSesion(s,f,'sparring'); for(let i=0;i<(m.descanso||0);i++) aplicarSesion(s,f,'descanso');
-  if(f.ultBatallaMes!==mes) f.fatiga=clamp((f.fatiga||0)-FATIGA_MES_SIN,0,100); }
+  if(f.ultBatallaMes!==mes) f.fatiga=clamp((f.fatiga||0)-FATIGA_MES_SIN,0,100);
+  if(spActivo(s, f, 'bebida')) f.fatiga=clamp((f.fatiga||0)-SP_AYUDA.bebida.fatigaMes,0,100); }   // patrocinio de bebida
 // Cierre del año: racha por atributo con más del 50 % de las sesiones de entreno y resumen para temporadas[]
 function cerrarSesionesAno(f){ const p=planDe(f); planMesDe(f); const a=p.anio; const tot=Object.values(a.entreno).reduce((x,y)=>x+y,0); const top=Object.entries(a.entreno).sort((x,y)=>y[1]-x[1])[0];
   const attr = top && tot>0 && top[1]>tot/2 ? top[0] : null; const r=p.racha||{attr:null, n:0}; p.racha={attr, n: attr ? (r.attr===attr ? r.n+1 : 1) : 0};
