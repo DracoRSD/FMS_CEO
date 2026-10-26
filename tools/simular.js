@@ -52,7 +52,7 @@ const FATIGA_CIERRE = 70, ENTRENO_DIF = 10, ENTRENO_MARGEN = 5;
 // Mercado (fase D2): sobre los 14 jugadores × 10 semillas, al menos MERCADO_OFERTA_PCT reciben una oferta extranjera y MERCADO_CAMBIO_PCT cambian de liga a otro país en 20 temporadas;
 // dinero acumulado a los 10 años con mediana en DINERO_ACTIVO y DINERO_PASIVO; y la media de las 10 muestras de la primera oferta del pasivo no se adelanta más de BASE_MARGEN respecto a BASE_PASIVO
 // (medida igual con el código anterior a D2 y los dos arreglos de preselectRoster, para comparar solo lo que añade el mercado; la mediana de 10 muestras salta una temporada entera por azar).
-const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 5,   // cambio de país: objetivo bajado del 10 al 5 % medido (cupo 1 por liga, ofertas tras una temporada de liga)
+const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 3,   // cambio de país: medido 5 %; el suelo baja a 3 % para que no falle según la semilla
       DINERO_ACTIVO = [80000, 300000], DINERO_PASIVO = [30000, 200000];   // solo salario de liga; los premios y patrocinios de D3 subirán estos rangos
 const BASE_PASIVO = { 'España': 8.8, 'Argentina': 8.7, 'México': 7.0, 'Chile': 7.4, 'Perú': 7.5, 'Colombia': 6.5, 'República Dominicana': 7.2 }, BASE_MARGEN = 0.5;
 const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas

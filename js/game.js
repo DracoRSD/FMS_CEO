@@ -915,7 +915,7 @@ function runLeagueJornada(s, L, d){
   SPK_BH=spkVal(L.key,'bhype'); RIVAL_DEFER=true; round.forEach(m=>{ m.views = (m.postponed||!m.b) ? 0 : Math.round(battleViews(m, vm)*uqViewMult(s,L,m,zk)); }); RIVAL_DEFER=false;
   round.forEach((m,mi)=>{ if(m.views && isRival(m.a,m.b) && Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', key:L.key, j:L.played, mi, a:m.a, b:m.b, w:m.result&&m.result.winner, v:rint(0,13)}); });
   const fx = L.fexhib && L.fexhib[L.played];
-  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); if(fx.invitacion) addFama(m.result.winner, EXHIB_FAMA_PREMIO); }
+  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); if(fx.invitacion){ addFama(m.result.winner, EXHIB_FAMA_PREMIO); [fx.a, fx.b].forEach(id=>{ const j=fby(id); if(j && j.jugador) moverDinero(s, j, EXHIB_PAGO_BASE+Math.round(EXHIB_PAGO_SALARIO*salarioOferta(j, L.key, !ldef(L.key).countries.includes(j.country))), 'exhibicion', `exhibición en ${ldef(L.key).name}`); }); } }
   const ex = L.exhib && L.exhib[L.played];
   if(ex && fby(ex.a) && fby(ex.b)){
     const m=ex.m={id:uid('x'), a:ex.a, b:ex.b, result:null, ex:true};
@@ -995,7 +995,7 @@ function runIntl(s, d){
   { const B=ko.bracket; const chk=(m,ri,mi)=>{ if(!m||!m.result||!isRival(m.a,m.b)) return; const w=m.result.winner, l=m.result.loser; const sd=s.intl.sede;
       const loc=fby(w).country===sd && fby(l).country!==sd; if(loc || Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', comp:'fms', key:INTL.key, ri, mi, a:m.a, b:m.b, w, v: loc?14:rint(0,13)}); };
     B.rounds.forEach((r,ri)=>r.forEach((m,mi)=>chk(m,ri,mi))); chk(B.third,'third',0); } uqLocalismo(s, q.ids, s.intl.sede, 'fms', d, ko.champion); s.intl.played=true; s.intl.qualifiers=q.ids; s.intl.note=q.note;
-  s.intl.champion=ko.champion; s.intl.runnerUp=ko.runnerUp; s.intl.third=ko.third; s.intl.fourth=ko.fourth; try{ icGenerate(s); }catch(e){ console.error(e); }
+  s.intl.champion=ko.champion; s.intl.runnerUp=ko.runnerUp; s.intl.third=ko.third; s.intl.fourth=ko.fourth; premioTorneo(s, 'intl', ko.champion, ko.runnerUp, INTL.name); try{ icGenerate(s); }catch(e){ console.error(e); }
   const avgH = s.activeKeys.reduce((a,k)=>a+s.leagues[k].hype,0)/s.activeKeys.length;
   const prime=isPrimeDay(s.year,d);
   const income=Math.round((40000 + avgFama(q.ids)*400) * (0.5 + avgH/100) * (1+0.12*stars) * (prime?1:WEEKDAY_TICKET) * TICKET_MULT);
@@ -1183,7 +1183,7 @@ function endSeason(s){
     c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, salario, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
   if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
-    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; if(c && lk===c.liga && c.hasta>=s.year){ p.dinero=(p.dinero||0)+c.salario; const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
+    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1473,6 +1473,7 @@ function renderCarrera(){
     ${s.phase==='pre' ? carreraDecisiones(s, f) : carreraPlanResumen(s, f)}
     ${s.phase==='live' ? carreraEnDirecto(s, f) : ''}
     ${contratoPanel(s, f)}
+    ${billeteraPanel(s, f)}
     ${redesPanel(f)}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
@@ -1730,7 +1731,7 @@ function redesFeedHtml(list, vacio){ return `<div class="lu-x redes-x"><div clas
 // Panel «Redes» de Mi carrera: seguidores, fans, haters y los últimos tuits sobre el jugador
 function contratoPanel(s, f){ const p=planDe(f); const c=p.contrato; const vig = c && c.hasta>=s.year; const lk=signedLeagueOf(s,f.id);
   const txt = vig ? `${esc(ldef(c.liga).name)} · ${dineroTxt(c.salario)} al año · hasta ${c.hasta}${c.hasta===s.year ? ' (último año)' : ''}${c.extranjero ? ' · extranjero' : ''}` : (lk ? 'Sin contrato' : 'Libre, sin contrato');
-  return `<div class="step" style="margin-top:16px;"><span class="field-label">Contrato</span><p class="step-note" style="margin:0">${txt} · Dinero acumulado: <b>${dineroTxt(p.dinero||0)}</b></p></div>`; }
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Contrato</span><p class="step-note" style="margin:0">${txt}</p></div>`; }
 function redesPanel(f){ const r=redesDe(); if(!r) return ''; const seg=redesSeguidores(f); const segTxt = seg>=1000 ? (Math.round(seg/100)/10).toLocaleString('es-ES')+' k' : String(seg);
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Redes</span><p class="step-note" style="margin:0 0 10px">${segTxt} seguidores · ${r.fans.length} fans · ${r.haters.length} haters · racha ${r.racha||0}</p>${redesFeedHtml(r.feed.slice(0, REDES_PANEL_MAX), 'Todavía nadie habla de ti. Compite y verás.')}</div>`; }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
@@ -1993,7 +1994,7 @@ function showResumenCarrera(){
     <div class="sum-row"><span>Títulos</span><b>${titulos.length ? titulos.map(t=>esc(t.slice(0,-5))).join(', ') : '—'}</b></div>
     <div class="sum-row"><span>Nivel</span><b>${f.nivel}${dn!=null ? ` <span class="${dn>=0?'pos-v':'neg-v'}">${dn>=0?'▲':'▼'}${Math.abs(dn)}</span>` : ''}</b></div>
     <div class="sum-row"><span>Fama</span><b>${f.fama} <span class="${f.fama-famaPrev>=0?'pos-v':'neg-v'}">${f.fama-famaPrev>=0?'+':''}${f.fama-famaPrev}</span></b></div>
-    <div class="sum-row"><span>Salario del año</span><b>${dineroTxt((c.temporadas.slice(-1)[0]||{}).salario||0)} · acumulado ${dineroTxt(planDe(f).dinero||0)}</b></div>
+    ${(()=>{ const {ing, gas}=cuentasAno(f, s.year); return `<div class="sum-row"><span>Balance del año</span><b class="${ing+gas>=0?'pos-v':'neg-v'}">${ing+gas>=0?'+':'−'}${dineroTxt(Math.abs(ing+gas))} (ingresos ${dineroTxt(ing)}, gastos ${dineroTxt(-gas)}) · saldo ${dineroTxt(planDe(f).dinero||0)}</b></div>`; })()}
     ${entreno ? `<div class="sum-row"><span>Entrenaste</span><b>${esc(entreno)}</b></div>` : ''}
     ${attrBars(f)}
     <div class="sum-sec">Torneos y ligas</div>${torneos}`;
@@ -2563,6 +2564,20 @@ function firmarContratos(s){ jugadores().forEach(f=>{ const p=planDe(f); const l
   if(state.company.carrera && f.id===state.company.carrera.fid && o){ if(extranjero && cambia) twCarreraEvento(s, 'fichajeExtranjero', {liga: ldef(lk).name, pais: (ldef(lk).countries||[''])[0]}); else if(o.renovacion) twCarreraEvento(s, 'renovacion', {liga: ldef(lk).name, t: String(p.contrato.hasta-s.year+1)}); } }); }
 function carreraAnos(n){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre' || !CONTRATO_ANOS.includes(n)) return; planDe(f).anos=n; render(); }
 function dineroTxt(n){ return moneyK(n||0); }
+// ---- Billetera (fase D3): ingresos y gastos del jugador. plan.dinero es el saldo; plan.movimientos los últimos MOVIMIENTOS_MAX; plan.cuentas[año] los totales por concepto ----
+const MOVIMIENTOS_MAX = 60, CUENTAS_ANOS = 3;
+const CONCEPTOS = {salario:'Salario de liga', premio:'Premios', exhibicion:'Exhibiciones', patrocinio:'Patrocinadores', merch:'Merchandising', tienda:'Tienda', clausula:'Cláusulas'};
+// Premios al campeón y al finalista por torneo (docs/modo-carrera.md, 12.3)
+const PREMIOS = {local:[1500, 500], under:[6000, 2000], rb:[15000, 5000], plazas:[8000, 3000], rbint:[60000, 20000], intl:[50000, 15000]};
+const EXHIB_PAGO_BASE = 1000, EXHIB_PAGO_SALARIO = 0.02;   // exhibición por invitación: 1.000 € más el 2 % del salario que esa liga pagaría al jugador
+function moverDinero(s, f, v, concepto, txt){ if(!f || !f.jugador || !v) return; const p=planDe(f); const y=s ? s.year : 0;
+  p.dinero=Math.round((p.dinero||0)+v); if(!Array.isArray(p.movimientos)) p.movimientos=[]; p.movimientos.unshift({y, d: s ? s.day : 0, c:concepto, v:Math.round(v), t:txt||''}); if(p.movimientos.length>MOVIMIENTOS_MAX) p.movimientos.length=MOVIMIENTOS_MAX;
+  if(!p.cuentas) p.cuentas={}; const cu=p.cuentas[y]=p.cuentas[y]||{}; cu[concepto]=Math.round((cu[concepto]||0)+v); Object.keys(p.cuentas).map(Number).sort((a,b)=>b-a).slice(CUENTAS_ANOS).forEach(k=>delete p.cuentas[k]); }
+function premioTorneo(s, tipo, champ, runner, nombre){ const P=PREMIOS[tipo]; if(!P || !modoCarrera()) return; [[champ,P[0],'campeón'],[runner,P[1],'finalista']].forEach(([id,v,q])=>{ const f=fby(id); if(f && f.jugador) moverDinero(s, f, v, 'premio', `${q} de ${nombre}`); }); }
+function cuentasAno(f, y){ const cu=(planDe(f).cuentas||{})[y]||{}; let ing=0, gas=0; Object.values(cu).forEach(v=>{ if(v>0) ing+=v; else gas+=v; }); return {cu, ing, gas}; }
+function billeteraPanel(s, f){ const p=planDe(f); const {cu, ing, gas}=cuentasAno(f, s.year);
+  const filas=Object.entries(cu).filter(([,v])=>v).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([k,v])=>`<div class="sum-row"><span>${esc(CONCEPTOS[k]||k)}</span><b class="${v>=0?'pos-v':'neg-v'}">${v>=0?'+':'−'}${dineroTxt(Math.abs(v))}</b></div>`).join('');
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Billetera</span><p class="step-note" style="margin:0 0 8px">Saldo: <b>${dineroTxt(p.dinero||0)}</b> · ${s.year}: ingresos ${dineroTxt(ing)}, gastos ${dineroTxt(-gas)}</p>${filas || '<p class="step-note" style="margin:0">Todavía no has cobrado nada este año.</p>'}</div>`; }
 // ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
 // Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
 const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
@@ -2973,6 +2988,7 @@ function runRBEvent(s, ev, d){
   if(!s.rb.drawn) rbDraw(s);
   const r=runKnockout(ev.order||shuffle(ev.participants), null, 0.8*0.8*(ev.key===RB_PLZ.key?1:1.1), tourneyJudges(rbdef(ev.key).countries));
   Object.assign(ev, r, {played:true});
+  premioTorneo(s, ev.key===RB_PLZ.key ? 'plazas' : 'rb', r.champion, r.runnerUp, rbdef(ev.key).name);
   if(ev.key===RB_PLZ.key) addFama(r.champion, FAMA_PLAZAS); else { addFama(r.champion, FAMA_RB[0]); addFama(r.runnerUp, FAMA_RB[1]); addFama(r.third, FAMA_RB[2]); }
   const hn=finalHype(r.champion, r.runnerUp, false);
   addLog(s, d, `🔴 <b>${fname(r.champion)}</b> gana la ${rbdef(ev.key).name} ante ${fname(r.runnerUp)} y va al Internacional.${hn}`, 'rb');
@@ -3031,6 +3047,7 @@ function runRBInter(s, d){
   if(!I.voted) rbResolveVote(s, []);
   const r=runKnockout(I.order||shuffle(I.qualifiers), sedeBonus(I.sede), 2.2*0.4, pickJudges(null)); { const fin=r.bracket.rounds[r.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15); }
   Object.assign(I, r, {played:true}); uqViral(s, r.bracket, 'rb', d); uqLocalismo(s, I.qualifiers, I.sede, 'rb', d, r.champion);
+  premioTorneo(s, 'rbint', r.champion, r.runnerUp, RB_INT.name);
   addFama(r.champion, FAMA_RB_INT[0]); addFama(r.runnerUp, FAMA_RB_INT[1]); addFama(r.third, FAMA_RB_INT[2]);
   const hn=finalHype(r.champion, r.runnerUp, true);
   const loc=fby(r.champion).country===I.sede ? ' ¡Gana el local!' : '';
@@ -3951,7 +3968,8 @@ function runUnder(s, ev, d){
   const ids=ev.order && ev.order.length===(ev.size||16) ? ev.order.slice() : underDraw(ev);
   const r=runKnockout(ev.order||shuffle(ids), null, def.local ? 0.08 : 0.15, tourneyJudges(udef(ev.key).countries), def.local ? LOCAL_FAMA_VICTORIA : undefined);
   Object.assign(ev, r, {participants:ids, played:true});
-  if(def.local){ addHype(r.champion, LOCAL_HYPE); addFama(r.champion, LOCAL_FAMA_CAMPEON); addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana ${def.name} (${ids.length}) ante ${fname(r.runnerUp)}.`, 'rb'); return; }
+  if(def.local){ premioTorneo(s, 'local', r.champion, r.runnerUp, def.name); addHype(r.champion, LOCAL_HYPE); addFama(r.champion, LOCAL_FAMA_CAMPEON); addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana ${def.name} (${ids.length}) ante ${fname(r.runnerUp)}.`, 'rb'); return; }
+  premioTorneo(s, 'under', r.champion, r.runnerUp, def.name);
   addHype(r.champion, 5); addFama(r.champion, FAMA_UNDER[0]); addFama(r.runnerUp, FAMA_UNDER[1]); underTutQueue(ev.key, [r.champion]);
   addLog(s, d, `🟢 <b>${fname(r.champion)}</b> gana la ${def.name} ante ${fname(r.runnerUp)} (+5 de hype, +${FAMA_UNDER[0]} de fama).`, 'rb');
 }
