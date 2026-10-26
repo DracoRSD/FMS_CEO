@@ -1183,7 +1183,7 @@ function endSeason(s){
     c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, salario, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
   if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
-    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(c && lk===c.liga && c.hasta>=s.year){ p.dinero=(p.dinero||0)+c.salario; const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
+    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; if(c && lk===c.liga && c.hasta>=s.year){ p.dinero=(p.dinero||0)+c.salario; const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -2521,7 +2521,9 @@ function autoFicharLigas(s){
   let faltan=0;
   natKeys(s).forEach(k=>{
     const L=s.leagues[k]; const def=ldef(k);
-    jugadores().forEach(f=>{ if((f.plan||{}).liga===k && !signedLeagueOf(s,f.id) && L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; } });   // el jugador que aceptó la oferta entra antes que nadie
+    { const acep=jugadores().filter(f=>(f.plan||{}).liga===k && !signedLeagueOf(s,f.id)); let extJ=0;   // el jugador que aceptó la oferta entra antes que nadie; los de fuera, hasta el cupo (los de más nivel)
+      acep.filter(f=>def.countries.includes(f.country)).forEach(f=>{ if(L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; } });
+      acep.filter(f=>!def.countries.includes(f.country)).sort((a,b)=>b.nivel-a.nivel).forEach(f=>{ if(modoCarrera() && extJ>=CUPO_EXTRANJEROS){ f.plan.liga=null; return; } if(L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; extJ++; } else f.plan.liga=null; }); }
     const pool=activos().filter(f=>!f.jugador && !signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
       .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
     if(modoCarrera()){   // fase D2: cupo de extranjeros. 8 locales por nivel y hasta CUPO_EXTRANJEROS extranjeros que superen en EXTRANJERO_MARGEN al octavo local; el resto, locales
@@ -2580,7 +2582,7 @@ function asegurarOfertas(s){
     const antes=p.liga; p.ofertas=[]; p.noRenueva=null; p.ofertasYear=s.year; if(!CONTRATO_ANOS.includes(p.anos)) p.anos=CONTRATO_ANOS_DEF;
     const c=p.contrato; const vigente = c && c.hasta>=s.year && s.activeKeys.includes(c.liga);
     if(vigente){ p.liga=c.liga; p.ofertas=[{key:c.liga, puesto:puestoEnPais(s,f,c.liga), apuesta:false, salario:c.salario, contrato:true}];
-      p.interes = f.fama>=OFERTA_EXT_FAMA ? natKeys(s).filter(k=>k!==c.liga && !ligasDelPais(f).includes(k)).map(k=>({key:k, puesto:puestoComoExtranjero(s,f,k)})).filter(x=>x.puesto && x.puesto<=OFERTA_SEGURA).sort((a,b)=>a.puesto-b.puesto).slice(0, OFERTA_EXT_MAX) : [];
+      p.interes = (f.fama>=OFERTA_EXT_FAMA && (p.ligasJugadas||0)>=1) ? natKeys(s).filter(k=>k!==c.liga && !ligasDelPais(f).includes(k)).map(k=>({key:k, puesto:puestoComoExtranjero(s,f,k)})).filter(x=>x.puesto && x.puesto<=OFERTA_SEGURA).sort((a,b)=>a.puesto-b.puesto).slice(0, OFERTA_EXT_MAX) : [];
       if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.interes.length) twCarreraEvento(s, 'rumor', {liga: ldef(p.interes[0].key).name}); if(c.hasta===s.year && c.desde<s.year) twCarreraEvento(s, 'ultimoAno', {liga: ldef(c.liga).name}); } p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0]; p.mes={entreno:{[p.entreno]:SESIONES_MES-1}, sparring:0, descanso:1}; p.inscrito=[]; torneosDelJugador(s,f).forEach(t=>{ if(torneosDelJugador(s,f).find(x=>x.key===t.key).apto) p.inscrito.push(t.key); }); if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key); return; }   // contrato en vigor: sigue en su liga
     const vencido = c && c.hasta===s.year-1 && c.liga; const puestoMedio = vencido && c.puestos && c.puestos.length ? c.puestos.reduce((a,b)=>a+b,0)/c.puestos.length : null;
     ligasDelPais(f).filter(k=>s.activeKeys.includes(k)).forEach(k=>{ const puesto=puestoEnPais(s,f,k); if(!puesto) return; const ext=!ldef(k).countries.includes(f.country);
@@ -2588,12 +2590,13 @@ function asegurarOfertas(s){
       if(puesto<=OFERTA_SEGURA) p.ofertas.push({key:k, puesto, apuesta:false, salario, renovacion: vencido===k});
       else if(puesto<=OFERTA_APUESTA && Math.random()<OFERTA_APUESTA_PROB) p.ofertas.push({key:k, puesto, apuesta:true, salario, renovacion: vencido===k}); });
     p.interes=[];
-    if(f.fama>=OFERTA_EXT_FAMA){ const ext=[]; natKeys(s).filter(k=>!ligasDelPais(f).includes(k)).forEach(k=>{ const puesto=puestoComoExtranjero(s,f,k); if(!puesto || puesto>OFERTA_APUESTA) return;
+    if(f.fama>=OFERTA_EXT_FAMA && (p.ligasJugadas||0)>=1){ const ext=[]; natKeys(s).filter(k=>!ligasDelPais(f).includes(k)).forEach(k=>{ const puesto=puestoComoExtranjero(s,f,k); if(!puesto || puesto>OFERTA_APUESTA) return;
         const apuesta=puesto>OFERTA_SEGURA; if(apuesta && Math.random()>=OFERTA_APUESTA_PROB) return; ext.push({key:k, puesto, apuesta, salario:salarioOferta(f, k, true, null), extranjero:true}); });
       ext.sort((a,b)=>b.salario-a.salario); p.ofertas.push(...ext.slice(0, OFERTA_EXT_MAX)); }
     p.ofertas.sort((a,b)=>b.salario-a.salario);
     if(antes && !p.ofertas.some(o=>o.key===antes)) p.noRenueva={key:antes, puesto:puestoEnPais(s,f,antes)};
     p.liga = p.ofertas.some(o=>o.key===antes) ? antes : (p.ofertas[0] ? p.ofertas[0].key : null);
+    p._antes=antes;
     if(state.company.carrera && f.id===state.company.carrera.fid){ if(p.noRenueva) twCarreraEvento(s, 'noRenueva', {liga: ldef(p.noRenueva.key).name}); else if(p.ofertas.length && !p.ofertas.some(o=>o.key===antes)) twCarreraEvento(s, 'oferta', {liga: ldef(p.ofertas[0].key).name}); }
     // valores por defecto de la temporada: entrenar el atributo más bajo e inscribirse en todo lo que se pueda
     p.entreno=ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0];
@@ -2601,6 +2604,10 @@ function asegurarOfertas(s){
     p.inscrito=[]; torneosDelJugador(s,f).forEach(t=>{ if(torneosDelJugador(s,f).find(x=>x.key===t.key).apto) p.inscrito.push(t.key); });   // uno a uno: con liga el tope de extras se aplica en orden
     if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
   });
+  // cupo de extranjeros en las ofertas: cada liga ofrece a como mucho CUPO_EXTRANJEROS jugadores de fuera por pretemporada, los de más nivel
+  const porLiga={}; jugadores().forEach(f=>{ (planDe(f).ofertas||[]).forEach(o=>{ if(o.extranjero && !o.contrato) (porLiga[o.key]=porLiga[o.key]||[]).push(f); }); });
+  Object.entries(porLiga).forEach(([k,list])=>{ list.sort((a,b)=>b.nivel-a.nivel).slice(CUPO_EXTRANJEROS).forEach(f=>{ const p=planDe(f); p.ofertas=p.ofertas.filter(o=>o.key!==k); if(p.liga===k) p.liga = p.ofertas.some(o=>o.key===p._antes) ? p._antes : (p.ofertas[0] ? p.ofertas[0].key : null); }); });
+  jugadores().forEach(f=>{ delete planDe(f)._antes; });
 }
 // ---- Sesiones de entrenamiento (fase D1): plan del mes, cuota por sesión aplicada al momento, fatiga ----
 function planMesDe(f){ const p=planDe(f); if(!p.mes || typeof p.mes!=='object' || !p.mes.entreno){ const k=ATTR_KEYS.includes(p.entreno) ? p.entreno : ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0]; p.mes={entreno:{[k]:SESIONES_MES-1}, sparring:0, descanso:1}; } if(!p.anio) p.anio={entreno:{}, sparring:0, descanso:0, sparringGan:0}; return p.mes; }

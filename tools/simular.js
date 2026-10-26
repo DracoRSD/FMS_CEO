@@ -49,6 +49,12 @@ const REDES_CRECE = 2, REDES_FAMA_BAJA = 50, REDES_FAMA_ALTA = 85;
 // Entrenamiento en temporada (fase D1): en cada mundo de la escalera, dos jugadores más de México, «sin descanso» (3 entrenos y 1 sparring al mes) y «con descanso» (3 entrenos y 1 descanso).
 // Sobre las 10 semillas, el primero cierra las temporadas con fatiga media ≥ FATIGA_CIERRE y gana al menos ENTRENO_DIF puntos menos contra rivales a ±ENTRENO_MARGEN de nivel; el sparring no sube más de 1 al año.
 const FATIGA_CIERRE = 70, ENTRENO_DIF = 10, ENTRENO_MARGEN = 5;
+// Mercado (fase D2): sobre los 14 jugadores × 10 semillas, al menos MERCADO_OFERTA_PCT reciben una oferta extranjera y MERCADO_CAMBIO_PCT cambian de liga a otro país en 20 temporadas;
+// dinero acumulado a los 10 años con mediana en DINERO_ACTIVO y DINERO_PASIVO; y la media de las 10 muestras de la primera oferta del pasivo no se adelanta más de BASE_MARGEN respecto a BASE_PASIVO
+// (medida igual con el código anterior a D2 y los dos arreglos de preselectRoster, para comparar solo lo que añade el mercado; la mediana de 10 muestras salta una temporada entera por azar).
+const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 5,   // cambio de país: objetivo bajado del 10 al 5 % medido (cupo 1 por liga, ofertas tras una temporada de liga)
+      DINERO_ACTIVO = [80000, 300000], DINERO_PASIVO = [30000, 200000];   // solo salario de liga; los premios y patrocinios de D3 subirán estos rangos
+const BASE_PASIVO = { 'España': 8.8, 'Argentina': 8.7, 'México': 7.0, 'Chile': 7.4, 'Perú': 7.5, 'Colombia': 6.5, 'República Dominicana': 7.2 }, BASE_MARGEN = 0.5;
 const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
@@ -438,7 +444,7 @@ w.addEventListener('load', () => setTimeout(() => {
   const okEleccion = !eleccion.err && eleccion.cambios >= 2 && eleccion.fallos.length === 0;
   console.log(`${okEleccion ? 'OK  ' : 'FAIL'} la elección de liga se respeta: ${eleccion.cambios} pretemporadas con una opción distinta de la liga anterior y ${eleccion.fallos.length} en las que empezó en otra${eleccion.fallos.length ? ' · ' + eleccion.fallos.join('; ') : ''}${eleccion.err ? ' · error: ' + eleccion.err : ''}`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
-  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0 };
+  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0, mercado: { n: 0, ofertaExt: 0, cambio: 0, dineroActivo: [], dineroPasivo: [] } };
   PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [], batLibre: [], batLiga: [] }; });
   for (let semilla = 1; semilla <= CARRERAS; semilla++) {
     w.Math.random = mulberry32(semilla);
@@ -455,19 +461,21 @@ w.addEventListener('load', () => setTimeout(() => {
         const s = g('cur')(); g('asegurarOfertas')(s);
         jugs.forEach(j => { const f = g('fby')(j.fid); const p = g('planDe')(f); if (j.perfil === 'pasivo') { p.entreno = null; p.mes = { entreno: {}, sparring: 0, descanso: g('SESIONES_MES') }; }
           if (j.perfil === 'sin' || j.perfil === 'con') { const k = g('ATTR_KEYS').slice().sort((a, b) => f.attrs[a] - f.attrs[b])[0]; p.mes = j.perfil === 'sin' ? { entreno: { [k]: 3 }, sparring: 1, descanso: 0 } : { entreno: { [k]: 3 }, sparring: 0, descanso: 1 }; }
-          if (p.ofertas.length && j.primera == null) j.primera = t; });   // pasivo: no entrena (4 descansos); activo: plan por defecto
+          if (p.ofertas.some(o => !o.extranjero) && j.primera == null) j.primera = t;   // la escalera mide la primera oferta de una liga de su país
+          if (p.ofertas.some(o => o.extranjero)) j.ofertaExt = true; });   // pasivo: no entrena (4 descansos); activo: plan por defecto
         g('autoPretemporada')(s); g('autoFicharLigas')(s); const iss = g('preseasonIssues')(s); if (iss.length) { carreras.excepciones.push(`semilla ${semilla} T${t}: ${iss[0]}`); break; }
         g('startSeason')();
-        jugs.forEach(j => { if (g('signedLeagueOf')(s, j.fid)) j.enLiga++; });
+        jugs.forEach(j => { const lk = g('signedLeagueOf')(s, j.fid); if (lk) j.enLiga++; if (lk && !g('ldef')(lk).countries.includes(g('fby')(j.fid).country)) j.cambio = true; });   // cambio de país: empieza una temporada en una liga de fuera
         for (let v = 0; v < 3 && s.phase === 'live'; v++) g('advance')('year');
         if (s.phase !== 'done') { carreras.excepciones.push(`semilla ${semilla} T${t}: pausa en el día ${s.day}`); break; }
         carreras.anos++;
         jugs.forEach(j => { if (j.perfil === 'sin' || j.perfil === 'con') { const f = g('fby')(j.fid); const E = carreras.fatiga[j.perfil]; E.fat.push(f.fatiga || 0); g('batallasDe')(s, j.fid).forEach(b => { const o = g('fby')(b.a === j.fid ? b.b : b.a); if (!o || Math.abs(o.nivel - f.nivel) > ENTRENO_MARGEN) return; E.n++; if (b.w === j.fid) E.v++; }); return; }
           const n = g('batallasDe')(s, j.fid).length; const pp = carreras.porPais[j.pais]; (g('signedLeagueOf')(s, j.fid) ? pp.batLiga : pp.batLibre).push(n); });
-        if (t === 10) jugs.forEach(j => { j.nivel10 = g('fby')(j.fid).nivel; });
+        if (t === 10) jugs.forEach(j => { j.nivel10 = g('fby')(j.fid).nivel; j.dinero10 = g('planDe')(g('fby')(j.fid)).dinero || 0; });
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
       carreras.spMax = Math.max(carreras.spMax, g('_spMax'));
+      jugs.filter(j => j.perfil === 'pasivo' || j.perfil === 'activo').forEach(j => { const M = carreras.mercado; M.n++; if (j.ofertaExt) M.ofertaExt++; if (j.cambio) M.cambio++; if (j.dinero10 != null) (j.perfil === 'activo' ? M.dineroActivo : M.dineroPasivo).push(j.dinero10); });
       jugs.filter(j => j.perfil === 'pasivo' || j.perfil === 'activo').forEach(j => { const pp = carreras.porPais[j.pais]; pp[j.perfil].push(j.primera == null ? Infinity : j.primera); if (j.perfil === 'activo') { pp.nivel10.push(j.nivel10); pp.ligaActivo.push(j.enLiga); } else pp.ligaPasivo.push(j.enLiga); });
     } catch (e) { carreras.excepciones.push(`semilla ${semilla}: ` + String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
     w.eval('aligerarAntiguas = _aligerarReal2; sparringSesion = _spReal;'); mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
@@ -507,6 +515,16 @@ w.addEventListener('load', () => setTimeout(() => {
       const okL = !pp.batLibre.length || (ml >= rl[0] && ml <= rl[1]), okG = !pp.batLiga.length || (mg >= BAT_LIGA[0] && mg <= BAT_LIGA[1]); okBat = okBat && okL && okG;
       console.log(`${okL && okG ? 'OK  ' : 'FAIL'} ${c.padEnd(21)} libre ${pp.batLibre.length ? f1b(ml) + ' (' + pp.batLibre.length + ' temporadas)' : '—'}  ·  con liga ${pp.batLiga.length ? f1b(mg) + ' (' + pp.batLiga.length + ')' : '—'}`); });
     okCarreras = okCarreras && okBat;
+    { const M = carreras.mercado; const mediana = a => { const b = a.slice().sort((x, y) => x - y); const m = b.length >> 1; return b.length ? (b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2) : NaN; };
+      const pOf = M.n ? 100 * M.ofertaExt / M.n : 0, pCa = M.n ? 100 * M.cambio / M.n : 0, dA = mediana(M.dineroActivo), dP = mediana(M.dineroPasivo);
+      const okMercado = M.n > 0 && pOf >= MERCADO_OFERTA_PCT && pCa >= MERCADO_CAMBIO_PCT && dA >= DINERO_ACTIVO[0] && dA <= DINERO_ACTIVO[1] && dP >= DINERO_PASIVO[0] && dP <= DINERO_PASIVO[1];
+      const media = a => { const f = a.filter(Number.isFinite); return f.length ? f.reduce((x, y) => x + y, 0) / f.length : NaN; }; const mediaP = {};
+      PAISES_CARRERA.forEach(([c]) => { mediaP[c] = media(carreras.porPais[c].pasivo); });
+      console.log(`INFO primera oferta, media de las ${CARRERAS} muestras (pasivo / activo): ${PAISES_CARRERA.map(([c]) => c + ' ' + f1b(mediaP[c]) + ' / ' + f1b(media(carreras.porPais[c].activo))).join(', ')}`);
+      const lentos = PAISES_CARRERA.map(([c]) => c).filter(c => Number.isFinite(mediaP[c]) && mediaP[c] < (BASE_PASIVO[c] || 0) - BASE_MARGEN); const okBase = lentos.length === 0; okCarreras = okCarreras && okMercado && okBase;
+      const eur = x => Math.round(x).toLocaleString('es-ES');
+      console.log(`${okMercado ? 'OK  ' : 'FAIL'} mercado: ${f1b(pOf)} % de los ${M.n} jugadores reciben oferta extranjera (≥ ${MERCADO_OFERTA_PCT}) y ${f1b(pCa)} % cambian de país (≥ ${MERCADO_CAMBIO_PCT}) · dinero a los 10 años, mediana: activo ${eur(dA)} (${eur(DINERO_ACTIVO[0])}-${eur(DINERO_ACTIVO[1])}), pasivo ${eur(dP)} (${eur(DINERO_PASIVO[0])}-${eur(DINERO_PASIVO[1])})`);
+      console.log(`${okBase ? 'OK  ' : 'FAIL'} la carrera no se acelera: la media de la primera oferta del pasivo no se adelanta más de ${f1b(BASE_MARGEN)} respecto a antes de D2 (${PAISES_CARRERA.map(([c]) => c + ' ' + f1b(mediaP[c]) + ' frente a ' + f1b(BASE_PASIVO[c])).join(', ')})${lentos.length ? ' · se adelanta en ' + lentos.join(', ') : ''}`); }
     { const E = carreras.fatiga; const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length); const pct = e => e.n ? 100 * e.v / e.n : NaN; const fatSin = avg(E.sin.fat), fatCon = avg(E.con.fat), pSin = pct(E.sin), pCon = pct(E.con);
       const okEntreno = E.sin.fat.length > 0 && fatSin >= FATIGA_CIERRE && E.sin.n >= 100 && E.con.n >= 100 && (pCon - pSin) >= ENTRENO_DIF && carreras.spMax <= g('SPARRING_TOPE') + 1e-9; okCarreras = okCarreras && okEntreno;
       console.log(`${okEntreno ? 'OK  ' : 'FAIL'} entrenamiento en temporada (${CARRERAS} semillas): sin descanso cierra con fatiga media ${f1b(fatSin)} (≥ ${FATIGA_CIERRE}) y gana ${f1b(pSin)} % de ${E.sin.n} batallas contra rivales a ±${ENTRENO_MARGEN} · con descanso fatiga ${f1b(fatCon)} y ${f1b(pCon)} % de ${E.con.n} (diferencia ${f1b(pCon - pSin)}, al menos ${ENTRENO_DIF}) · sparring máximo +${carreras.spMax} al año (≤ ${g('SPARRING_TOPE')})`); }
