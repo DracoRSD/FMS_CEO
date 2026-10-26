@@ -1184,7 +1184,7 @@ function endSeason(s){
     c.temporadas.push({year:s.year, nivel:f.nivel, attrs:{...f.attrs}, fama:f.fama, liga:lk, puesto: lk ? st.indexOf(f.id)+1 : null, entreno:p.entreno, sesiones, fatiga:f.fatiga||0, salario, inscrito:p.inscrito.slice(), ofertas:p.ofertas.map(o=>o.key)});
     redesCierreAno(s, f, nivelPrev); } }
   if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
-    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; cobrarPatrocinios(s, f); if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
+    const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; cobrarPatrocinios(s, f); if(p.merch && p.merch.y===s.year){ moverDinero(s, f, p.merch.v, 'merch', 'merchandising'); delete p.merch; } if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1456,8 +1456,8 @@ function renderCarrera(){
   const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return '<div class="welcome"><p class="step-note">No se encuentra tu freestyler.</p></div>';
   const lk=signedLeagueOf(s,f.id);
   const estado = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='live' ? `Temporada ${s.year} en juego · ${fmtDay(s.year,s.day)}` : `Temporada ${s.year} cerrada`);
-  const boton = s.phase==='pre' ? `<button class="btn primary" onclick="jugarTemporadaCarrera()">Empezar la temporada ${s.year}</button>`
-    : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="abrirPlanMes()">Plan del mes</button><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
+  const boton = s.phase==='pre' ? `<div class="carrera-botones"><button class="btn" onclick="abrirTienda()">Tienda</button><button class="btn primary" onclick="jugarTemporadaCarrera()">Empezar la temporada ${s.year}</button></div>`
+    : (s.phase==='live' ? `<div class="carrera-botones"><button class="btn" onclick="abrirTienda()">Tienda</button><button class="btn" onclick="abrirPlanMes()">Plan del mes</button><button class="btn" onclick="carreraAvanzar('fecha')">Siguiente fecha</button><button class="btn primary" onclick="carreraAvanzar('mia')">Hasta mi próxima batalla</button><button class="btn ghost" onclick="carreraAvanzar('resto')">Saltar el resto del año</button></div>`
     : `<button class="btn" onclick="showResumenCarrera()">Ver mi resumen</button> <button class="btn primary" onclick="nextSeason()">Siguiente temporada</button>`);
   return `<div class="welcome">
     <div class="step"><div class="carrera-ficha">
@@ -2621,6 +2621,32 @@ function patrociniosPanel(s, f){ const vig=spVigentes(s, f); return `<div class=
 function patrociniosDecision(s, f){ asegurarPatrocinios(s); const p=planDe(f); const vig=spVigentes(s, f); const ofs=p.spOfertas||[];
   const botones=ofs.map((o,i)=>`<button class="ltoggle ${o.acepta?'on':''}" onclick="carreraPatrocinio(${i})" aria-pressed="${o.acepta}"><span>${spTarjeta(o, ` · ${o.anos} año${o.anos>1?'s':''} · prima igual al pago si ganas un título · objetivo: ${esc(o.objTxt)} (+50 %)`)}</span></button>`).join('');
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Patrocinadores ${s.year}</span><p class="step-note" style="margin:0 0 10px">${vig.length ? 'Vigentes: '+vig.map(x=>esc(x.marca)+' (hasta '+x.hasta+')').join(', ')+'. ' : ''}${ofs.length ? 'Ofertas de este año: marcadas las que firmas al empezar la temporada.' : 'Ninguna marca nueva este año.'} Se rompe si tu fama cae ${SP_RUPTURA} por debajo de la del día de la firma.</p>${ofs.length ? `<div class="carrera-opts">${botones}</div>` : ''}</div>`; }
+// ---- Tienda (fase D3, paso 3): objetos con efecto acotado. Los de atributo suben al momento con décimas, respetan pot + BOOST_OVER_POT y suman como mucho TIENDA_TOPE_ATTR al año ----
+const TIENDA_TOPE_ATTR = 3, COMPRAS_ANOS = 3;
+const TIENDA = [
+  {k:'beats', nombre:'Pack de beats y productor', attr:'metrica', v:1, precio:8000, max:2},
+  {k:'coach', nombre:'Coach mental', attr:'mentalidad', v:1, precio:10000, max:1},
+  {k:'jam',   nombre:'Viaje a una jam internacional', attr:'impro', v:1, precio:6000, max:1},
+  {k:'viral', nombre:'Vídeo y edit viral', fama:3, seg:0.10, precio:5000, max:1},
+  {k:'merch', nombre:'Merchandising', seg:0.05, merch:2000, precio:3000, max:1},
+];
+function tiendaEfectoTxt(o){ if(o.attr) return `+${o.v} de ${ATTR_LABELS[o.attr].toLowerCase()}`; if(o.k==='viral') return `+${o.fama} de fama y +${Math.round(o.seg*100)} % de seguidores`; return `+${Math.round(o.seg*100)} % de seguidores y ${dineroTxt(o.merch)} de ingresos el año que viene`; }
+function comprasAno(f, y){ const p=planDe(f); if(!p.compras) p.compras={}; return p.compras[y]=p.compras[y]||{}; }
+function attrTiendaAno(f, y){ const c=comprasAno(f, y); return TIENDA.filter(o=>o.attr).reduce((a,o)=>a+(c[o.k]||0)*o.v, 0); }
+// ¿Se puede comprar? Devuelve el motivo si no
+function tiendaMotivo(s, f, o){ const p=planDe(f); const c=comprasAno(f, s.year); if((c[o.k]||0)>=o.max) return `ya lo compraste ${o.max>1?o.max+' veces ':''}este año`;
+  if(o.attr && attrTiendaAno(f, s.year)+o.v>TIENDA_TOPE_ATTR) return `tope de +${TIENDA_TOPE_ATTR} de atributo al año en la tienda`;
+  if(o.attr && attrOf(f,o.attr)>=(f.carrera?f.carrera.pot:POT_CARRERA)+BOOST_OVER_POT) return 'ese atributo ya está en su techo';
+  if((p.dinero||0)<o.precio) return `te faltan ${dineroTxt(o.precio-(p.dinero||0))}`; return null; }
+function comprar(s, f, k){ const o=TIENDA.find(x=>x.k===k); if(!o || tiendaMotivo(s, f, o)) return false; const p=planDe(f);
+  moverDinero(s, f, -o.precio, 'tienda', o.nombre); const c=comprasAno(f, s.year); c[o.k]=(c[o.k]||0)+1; Object.keys(p.compras).map(Number).sort((a,b)=>b-a).slice(COMPRAS_ANOS).forEach(y=>delete p.compras[y]);
+  if(o.attr){ const tope=(f.carrera?f.carrera.pot:POT_CARRERA)+BOOST_OVER_POT; f.attrs[o.attr]=Math.round(Math.min(Math.max(f.attrs[o.attr], tope), f.attrs[o.attr]+o.v)*10)/10; f.nivel=nivelFromAttrs(f.attrs); }
+  if(o.fama) addFama(f.id, o.fama); if(o.seg) p.segMult=Math.round((p.segMult||1)*(1+o.seg)*1000)/1000; if(o.merch) p.merch={y:s.year+1, v:(p.merch && p.merch.y===s.year+1 ? p.merch.v : 0)+o.merch};
+  return true; }
+function tiendaComprar(k){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return; if(comprar(s, f, k)) toast('Comprado.'); abrirTienda(); render(); }
+function abrirTienda(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f) return; const p=planDe(f);
+  const filas=TIENDA.map(o=>{ const mot=tiendaMotivo(s, f, o); const n=comprasAno(f, s.year)[o.k]||0; return `<div class="evol-row"><span class="evol-who">${esc(o.nombre)}</span><span class="evol-sub">${esc(tiendaEfectoTxt(o))} · ${dineroTxt(o.precio)} · ${n}/${o.max} este año${mot ? ' · '+esc(mot) : ''}</span><button class="btn small" onclick="tiendaComprar('${o.k}')" ${mot?'disabled':''}>Comprar</button></div>`; }).join('');
+  openModal(`<h3>Tienda</h3><p class="step-note">Saldo: <b>${dineroTxt(p.dinero||0)}</b>. Los atributos suben al momento y suman como mucho +${TIENDA_TOPE_ATTR} al año entre todos los objetos (este año llevas +${attrTiendaAno(f, s.year)}).</p>${filas}<div class="modal-actions"><button class="btn primary" onclick="closeModal(); render()">Cerrar</button></div>`, true); }
 // ---- Modo carrera: plan del jugador (fase C3b). Vive en el freestyler (f.plan) para que el simulador pueda llevar varios jugadores en un mundo ----
 // Regla de oferta de liga relativa al país (docs/modo-carrera.md, 5.5): puesto por nivel entre los activos del país de la liga
 const OFERTA_SEGURA = 10;           // puesto ≤ 10: la liga ofrece seguro (el auto-fichaje lo ficharía igual)
