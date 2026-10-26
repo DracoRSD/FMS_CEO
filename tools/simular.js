@@ -55,7 +55,8 @@ const FATIGA_CIERRE = 70, ENTRENO_DIF = 10, ENTRENO_MARGEN = 5;
 const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 3,   // cambio de país: medido 5 %; el suelo baja a 3 % para que no falle según la semilla
       DINERO_ACTIVO = [360000, 800000], DINERO_PASIVO = [210000, 340000];   // fase D3 (salario, premios, exhibiciones y patrocinios): medido 448 k y 266 k; suelo por debajo de mediana / 1,2 con margen para la semilla; techos de C5, el del pasivo subido a 340 k
 const BASE_PASIVO = { 'España': 8.4, 'Argentina': 8.9, 'México': 7.0, 'Chile': 7.5, 'Perú': 7.3, 'Colombia': 6.6, 'República Dominicana': 7.3 }, BASE_MARGEN = 0.5, BASE_FASE = 'D3';   // medida con main antes de D3
-const COMPRADOR_MARGEN = 0.5, COMPRADOR_NIVEL_MAX = 90;   // fase D3: el perfil «comprador» (activo de México que gasta en atributos de la tienda) no se adelanta más de 0,5 al activo ni pasa de 90 a los 10 años
+const COMPRADOR_MARGEN = 0.5, COMPRADOR_NIVEL_MAX = 90;   // fase D3: el perfil «comprador» (activo de México que gasta en atributos de la tienda) se compara con su clon, idéntico pero sin comprar:
+// nivel medio a T5 y T10 al menos igual que el clon, primera oferta sin adelantarse más de 0,5 y nivel a los 10 años como mucho 90. El orden de creación se alterna entre mundos porque el puesto en el país desempata por él
 const BAT_LIBRE_UNDER = [9, 14],   // suelo bajado de 10 a 9 en D3: Chile dio 9,9 con la semilla 2
       BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
@@ -446,7 +447,7 @@ w.addEventListener('load', () => setTimeout(() => {
   const okEleccion = !eleccion.err && eleccion.cambios >= 2 && eleccion.fallos.length === 0;
   console.log(`${okEleccion ? 'OK  ' : 'FAIL'} la elección de liga se respeta: ${eleccion.cambios} pretemporadas con una opción distinta de la liga anterior y ${eleccion.fallos.length} en las que empezó en otra${eleccion.fallos.length ? ' · ' + eleccion.fallos.join('; ') : ''}${eleccion.err ? ' · error: ' + eleccion.err : ''}`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
-  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0, mercado: { n: 0, ofertaExt: 0, cambio: 0, dineroActivo: [], dineroPasivo: [] }, comprador: { primera: [], nivel10: [], gastado: [] }, marcas: { revisadas: 0, repetidas: 0 } };
+  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0, mercado: { n: 0, ofertaExt: 0, cambio: 0, dineroActivo: [], dineroPasivo: [] }, comprador: { primera: [], nivel10: [], gastado: [], n5: [], n10: [] }, clon: { primera: [], n5: [], n10: [] }, marcas: { revisadas: 0, repetidas: 0 } };
   PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [], batLibre: [], batLiga: [] }; });
   for (let semilla = 1; semilla <= CARRERAS; semilla++) {
     w.Math.random = mulberry32(semilla);
@@ -458,11 +459,11 @@ w.addEventListener('load', () => setTimeout(() => {
       const jugs = [{ fid: S.company.carrera.fid, pais: PAISES_CARRERA[0][0], perfil: 'pasivo', primera: null, enLiga: 0, nivel10: null }];
       PAISES_CARRERA.forEach(([c], i) => { ['pasivo', 'activo'].forEach(perfil => { if (i === 0 && perfil === 'pasivo') return; const f = g('crearJugadorCarrera')({ name: perfil + ' ' + c, country: c, style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: c, perfil, primera: null, enLiga: 0, nivel10: null }); }); });
       ['sin', 'con'].forEach(perfil => { const f = g('crearJugadorCarrera')({ name: perfil + ' descanso', country: 'México', style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: 'México', perfil, primera: null, enLiga: 0, nivel10: null }); });   // fase D1: fatiga
-      { const f = g('crearJugadorCarrera')({ name: 'comprador México', country: 'México', style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: 'México', perfil: 'comprador', primera: null, enLiga: 0, nivel10: null, gastado: 0 }); }   // fase D3: tienda
+      (semilla % 2 ? ['comprador', 'clon'] : ['clon', 'comprador']).forEach(perfil => { const f = g('crearJugadorCarrera')({ name: perfil + ' México', country: 'México', style: 'Flow', attrs }); f.debut = g('cur')().year; jugs.push({ fid: f.id, pais: 'México', perfil, primera: null, enLiga: 0, nivel10: null, gastado: 0 }); });   // fase D3: tienda; en los mundos pares se crea antes el clon
       w.eval('var _spReal = sparringSesion; var _spMax = 0; sparringSesion = function(s, f){ const o = _spReal(s, f); _spMax = Math.max(_spMax, planDe(f).anio.sparringGan || 0); return o; };');
       for (let t = 1; t <= CARRERA; t++) {
         const s = g('cur')();
-        jugs.filter(j => j.perfil !== 'pasivo' && j.perfil !== 'activo').forEach(j => { g('planDe')(g('fby')(j.fid)).ligasJugadas = 0; });   // las sondas (descanso, comprador) no reciben ofertas de fuera: no compiten con los 14 por las plazas de extranjero
+        jugs.filter(j => j.perfil !== 'pasivo' && j.perfil !== 'activo').forEach(j => { g('planDe')(g('fby')(j.fid)).ligasJugadas = 0; });   // las sondas (descanso, comprador, clon) no reciben ofertas de fuera: no compiten con los 14 por las plazas de extranjero
         g('asegurarOfertas')(s);
         jugs.forEach(j => { const f = g('fby')(j.fid); const p = g('planDe')(f); if (j.perfil === 'pasivo') { p.entreno = null; p.mes = { entreno: {}, sparring: 0, descanso: g('SESIONES_MES') }; }
           if (j.perfil === 'sin' || j.perfil === 'con') { const k = g('ATTR_KEYS').slice().sort((a, b) => f.attrs[a] - f.attrs[b])[0]; p.mes = j.perfil === 'sin' ? { entreno: { [k]: 3 }, sparring: 1, descanso: 0 } : { entreno: { [k]: 3 }, sparring: 0, descanso: 1 }; }
@@ -476,13 +477,14 @@ w.addEventListener('load', () => setTimeout(() => {
         for (let v = 0; v < 3 && s.phase === 'live'; v++) g('advance')('year');
         if (s.phase !== 'done') { carreras.excepciones.push(`semilla ${semilla} T${t}: pausa en el día ${s.day}`); break; }
         carreras.anos++;
-        jugs.forEach(j => { if (j.perfil === 'comprador') return; if (j.perfil === 'sin' || j.perfil === 'con') { const f = g('fby')(j.fid); const E = carreras.fatiga[j.perfil]; E.fat.push(f.fatiga || 0); g('batallasDe')(s, j.fid).forEach(b => { const o = g('fby')(b.a === j.fid ? b.b : b.a); if (!o || Math.abs(o.nivel - f.nivel) > ENTRENO_MARGEN) return; E.n++; if (b.w === j.fid) E.v++; }); return; }
+        jugs.forEach(j => { if (j.perfil === 'comprador' || j.perfil === 'clon') return; if (j.perfil === 'sin' || j.perfil === 'con') { const f = g('fby')(j.fid); const E = carreras.fatiga[j.perfil]; E.fat.push(f.fatiga || 0); g('batallasDe')(s, j.fid).forEach(b => { const o = g('fby')(b.a === j.fid ? b.b : b.a); if (!o || Math.abs(o.nivel - f.nivel) > ENTRENO_MARGEN) return; E.n++; if (b.w === j.fid) E.v++; }); return; }
           const n = g('batallasDe')(s, j.fid).length; const pp = carreras.porPais[j.pais]; (g('signedLeagueOf')(s, j.fid) ? pp.batLiga : pp.batLibre).push(n); });
         if (t === 10) jugs.forEach(j => { j.nivel10 = g('fby')(j.fid).nivel; j.dinero10 = g('planDe')(g('fby')(j.fid)).dinero || 0; });
+        if (t === 5 || t === 10) jugs.filter(j => j.perfil === 'comprador' || j.perfil === 'clon').forEach(j => { const f = g('fby')(j.fid); j['n' + t] = g('ATTR_KEYS').reduce((a, k) => a + g('attrOf')(f, k), 0) / g('ATTR_KEYS').length; });   // nivel con décimas
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
       carreras.spMax = Math.max(carreras.spMax, g('_spMax'));
-      jugs.filter(j => j.perfil === 'comprador').forEach(j => { carreras.comprador.primera.push(j.primera == null ? Infinity : j.primera); carreras.comprador.nivel10.push(j.nivel10); carreras.comprador.gastado.push(j.gastado); });
+      jugs.filter(j => j.perfil === 'comprador' || j.perfil === 'clon').forEach(j => { const K = carreras[j.perfil]; K.primera.push(j.primera == null ? Infinity : j.primera); if (j.n5 != null) K.n5.push(j.n5); if (j.n10 != null) K.n10.push(j.n10); if (j.perfil === 'comprador') { K.nivel10.push(j.nivel10); K.gastado.push(j.gastado); } });
       jugs.filter(j => j.perfil === 'pasivo' || j.perfil === 'activo').forEach(j => { const M = carreras.mercado; M.n++; if (j.ofertaExt) M.ofertaExt++; if (j.cambio) M.cambio++; if (j.dinero10 != null) (j.perfil === 'activo' ? M.dineroActivo : M.dineroPasivo).push(j.dinero10); });
       jugs.filter(j => j.perfil === 'pasivo' || j.perfil === 'activo').forEach(j => { const pp = carreras.porPais[j.pais]; pp[j.perfil].push(j.primera == null ? Infinity : j.primera); if (j.perfil === 'activo') { pp.nivel10.push(j.nivel10); pp.ligaActivo.push(j.enLiga); } else pp.ligaPasivo.push(j.enLiga); });
     } catch (e) { carreras.excepciones.push(`semilla ${semilla}: ` + String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
@@ -533,9 +535,10 @@ w.addEventListener('load', () => setTimeout(() => {
       const eur = x => Math.round(x).toLocaleString('es-ES');
       console.log(`${okMercado ? 'OK  ' : 'FAIL'} mercado: ${f1b(pOf)} % de los ${M.n} jugadores reciben oferta extranjera (≥ ${MERCADO_OFERTA_PCT}) y ${f1b(pCa)} % cambian de país (≥ ${MERCADO_CAMBIO_PCT}) · dinero a los 10 años, mediana: activo ${eur(dA)} (${eur(DINERO_ACTIVO[0])}-${eur(DINERO_ACTIVO[1])}), pasivo ${eur(dP)} (${eur(DINERO_PASIVO[0])}-${eur(DINERO_PASIVO[1])})`);
       console.log(`${okBase ? 'OK  ' : 'FAIL'} la carrera no se acelera: la media de la primera oferta del pasivo, con patrocinadores, no se adelanta más de ${f1b(BASE_MARGEN)} respecto a antes de ${BASE_FASE} (${PAISES_CARRERA.map(([c]) => c + ' ' + f1b(mediaP[c]) + ' frente a ' + f1b(BASE_PASIVO[c])).join(', ')})${lentos.length ? ' · se adelanta en ' + lentos.join(', ') : ''}`);
-      const C = carreras.comprador; const mC = media(C.primera), mA = media(carreras.porPais['México'].activo), nC = mediana(C.nivel10.filter(x => x != null)), gC = mediana(C.gastado);
-      const okComprador = C.primera.length > 0 && Number.isFinite(mC) && mC >= mA - COMPRADOR_MARGEN && nC <= COMPRADOR_NIVEL_MAX; okCarreras = okCarreras && okComprador;
-      console.log(`${okComprador ? 'OK  ' : 'FAIL'} tienda: el comprador de México llega a su primera liga en ${f1b(mC)} de media frente a ${f1b(mA)} del activo (adelanto máximo ${f1b(COMPRADOR_MARGEN)}) · nivel a los 10 años ${nC} (≤ ${COMPRADOR_NIVEL_MAX}) · gasta ${eur(gC)} de mediana en ${CARRERA} temporadas`);
+      const C = carreras.comprador, K = carreras.clon; const mC = media(C.primera), mK = media(K.primera), nC = mediana(C.nivel10.filter(x => x != null)), gC = mediana(C.gastado);
+      const c5 = media(C.n5), k5 = media(K.n5), c10 = media(C.n10), k10 = media(K.n10);
+      const okComprador = C.primera.length > 0 && K.primera.length > 0 && Number.isFinite(mC) && Number.isFinite(mK) && mC >= mK - COMPRADOR_MARGEN && c5 >= k5 && c10 >= k10 && nC <= COMPRADOR_NIVEL_MAX; okCarreras = okCarreras && okComprador;
+      console.log(`${okComprador ? 'OK  ' : 'FAIL'} tienda: el comprador de México frente a su clon sin compras · nivel medio a T5 ${f1b(c5)} frente a ${f1b(k5)} y a T10 ${f1b(c10)} frente a ${f1b(k10)} (al menos igual) · primera liga en ${f1b(mC)} de media frente a ${f1b(mK)} (adelanto máximo ${f1b(COMPRADOR_MARGEN)}) · nivel a los 10 años ${nC} (≤ ${COMPRADOR_NIVEL_MAX}) · gasta ${eur(gC)} de mediana en ${CARRERA} temporadas`);
       const Mk = carreras.marcas; const okMarcas = Mk.revisadas > 0 && Mk.repetidas === 0; okCarreras = okCarreras && okMarcas;
       console.log(`${okMarcas ? 'OK  ' : 'FAIL'} patrocinadores: ninguna marca repetida entre los vigentes ni ofrecida mientras está vigente (${Mk.repetidas} de ${Mk.revisadas} pretemporadas revisadas)`); }
     { const E = carreras.fatiga; const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length); const pct = e => e.n ? 100 * e.v / e.n : NaN; const fatSin = avg(E.sin.fat), fatCon = avg(E.con.fat), pSin = pct(E.sin), pCon = pct(E.con);
