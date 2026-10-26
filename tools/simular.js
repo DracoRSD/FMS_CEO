@@ -45,7 +45,7 @@ const TW_BASE_PLANTILLA = 60.2, TW_MEJORA = 0.6, TW_TOPE_TEXTO = 3;
 // frente a las de menos de REDES_FAMA_BAJA, al menos REDES_CRECE veces más); el feed guardado no pasa de REDES_FEED_MAX del juego.
 const REDES_CRECE = 2, REDES_FAMA_BAJA = 50, REDES_FAMA_ALTA = 85;
 // Más torneos (fase torneos): batallas por temporada de los 14 jugadores de la escalera, libre y con liga, media por país sobre las 10 semillas.
-// Objetivos: libre 10-14 en los países con Under nacional (España, Argentina, México, Chile), 8-12 en los demás, y 13-17 con liga. El modo CEO no tiene torneos locales.
+// Objetivos: libre 9-14 en los países con Under nacional (España, Argentina, México, Chile), 8-12 en los demás, y 13-17 con liga. El modo CEO no tiene torneos locales.
 // Entrenamiento en temporada (fase D1): en cada mundo de la escalera, dos jugadores más de México, «sin descanso» (3 entrenos y 1 sparring al mes) y «con descanso» (3 entrenos y 1 descanso).
 // Sobre las 10 semillas, el primero cierra las temporadas con fatiga media ≥ FATIGA_CIERRE y gana al menos ENTRENO_DIF puntos menos contra rivales a ±ENTRENO_MARGEN de nivel; el sparring no sube más de 1 al año.
 const FATIGA_CIERRE = 70, ENTRENO_DIF = 10, ENTRENO_MARGEN = 5;
@@ -56,7 +56,8 @@ const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 3,   // cambio de país: med
       DINERO_ACTIVO = [360000, 800000], DINERO_PASIVO = [210000, 340000];   // fase D3 (salario, premios, exhibiciones y patrocinios): medido 448 k y 266 k; suelo por debajo de mediana / 1,2 con margen para la semilla; techos de C5, el del pasivo subido a 340 k
 const BASE_PASIVO = { 'España': 8.4, 'Argentina': 8.9, 'México': 7.0, 'Chile': 7.5, 'Perú': 7.3, 'Colombia': 6.6, 'República Dominicana': 7.3 }, BASE_MARGEN = 0.5, BASE_FASE = 'D3';   // medida con main antes de D3
 const COMPRADOR_MARGEN = 0.5, COMPRADOR_NIVEL_MAX = 90;   // fase D3: el perfil «comprador» (activo de México que gasta en atributos de la tienda) no se adelanta más de 0,5 al activo ni pasa de 90 a los 10 años
-const BAT_LIBRE_UNDER = [10, 14], BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
+const BAT_LIBRE_UNDER = [9, 14],   // suelo bajado de 10 a 9 en D3: Chile dio 9,9 con la semilla 2
+      BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
