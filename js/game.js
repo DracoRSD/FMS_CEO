@@ -2695,8 +2695,9 @@ function asegurarOfertas(s){
     if(p.inscrito.includes(rbNacionalDe(f))) p.inscrito=p.inscrito.filter(k=>k!==RB_PLZ.key);   // con nacional no hay Plazas
   });
   // cupo de extranjeros en las ofertas: cada liga ofrece a como mucho CUPO_EXTRANJEROS jugadores de fuera por pretemporada, los de más nivel
-  const porLiga={}; jugadores().forEach(f=>{ (planDe(f).ofertas||[]).forEach(o=>{ if(o.extranjero && !o.contrato) (porLiga[o.key]=porLiga[o.key]||[]).push(f); }); });
-  Object.entries(porLiga).forEach(([k,list])=>{ list.sort((a,b)=>b.nivel-a.nivel).slice(CUPO_EXTRANJEROS).forEach(f=>{ const p=planDe(f); p.ofertas=p.ofertas.filter(o=>o.key!==k); if(p.liga===k) p.liga = p.ofertas.some(o=>o.key===p._antes) ? p._antes : (p.ofertas[0] ? p.ofertas[0].key : null); }); });
+  // las ofertas con cláusula (fase D3) van detrás de las de jugadores sin contrato: solo se quedan la plaza si nadie libre la quiere
+  const porLiga={}; jugadores().forEach(f=>{ (planDe(f).ofertas||[]).forEach(o=>{ if(o.extranjero && !o.contrato) (porLiga[o.key]=porLiga[o.key]||[]).push({f, cl:o.clausula?1:0}); }); });
+  Object.entries(porLiga).forEach(([k,list])=>{ list.sort((a,b)=>a.cl-b.cl || b.f.nivel-a.f.nivel).map(x=>x.f).slice(CUPO_EXTRANJEROS).forEach(f=>{ const p=planDe(f); p.ofertas=p.ofertas.filter(o=>o.key!==k); if(p.liga===k) p.liga = p.ofertas.some(o=>o.key===p._antes) ? p._antes : (p.ofertas[0] ? p.ofertas[0].key : null); }); });
   jugadores().forEach(f=>{ delete planDe(f)._antes; });
 }
 // ---- Sesiones de entrenamiento (fase D1): plan del mes, cuota por sesión aplicada al momento, fatiga ----
@@ -4075,12 +4076,13 @@ function torneosDelJugador(s, f){
 }
 // Jugadores inscritos y aptos hoy para un torneo (la elegibilidad por fama se mira en el sorteo)
 function inscritosEn(s, key){ return jugadores().filter(f=>planDe(f).inscrito.includes(key) && torneosDelJugador(s,f).some(t=>t.key===key && t.apto)); }
-function underDraw(ev){ const def=udef(ev.key); const s=cur(); const fijos=inscritosEn(s, ev.key).map(f=>f.id); const libres=activos().filter(f=>!f.jugador); let ids;   // el jugador inscrito tiene plaza fija; los jugadores no entran en el sorteo
-  if(def.perCountry){ const by={}; const paisesFijos=new Set(fijos.map(id=>fby(id).country)); libres.filter(f=>underEligible(f,def) && !paisesFijos.has(f.country)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
+function underDraw(ev){ const def=udef(ev.key); const s=cur(); let fijos=inscritosEn(s, ev.key).map(f=>f.id); const libres=activos().filter(f=>!f.jugador); let ids;   // el jugador inscrito tiene plaza fija; los jugadores no entran en el sorteo
+  if(def.perCountry){ if(fijos.length>16) fijos=fijos.slice(0,16);   // nunca más plazas fijas que el cuadro (con varios jugadores, como en el simulador)
+    const by={}; const paisesFijos=new Set(fijos.map(id=>fby(id).country)); libres.filter(f=>underEligible(f,def) && !paisesFijos.has(f.country)).forEach(f=>{ (by[f.country]=by[f.country]||[]).push(f); });
     ids=[...fijos, ...shuffle(Object.keys(by)).slice(0,16-fijos.length).map(c=>underPick(by[c],1)[0])];
     if(ids.length<16){ const rest=libres.filter(f=>f.fama<=def.famaMax && !ids.includes(f.id)); ids.push(...underPick(rest,16-ids.length)); } }
   else { const aptos=libres.filter(f=>def.countries.includes(f.country) && underEligible(f,def)); let size=def.size||16; if(def.local && aptos.length+fijos.length<16) size=8;   // sin 16 aptos, el local baja a 8
-    ev.size=size; ids=[...fijos, ...underPick(aptos, size-fijos.length)]; }
+    if(fijos.length>size) fijos=fijos.slice(0,size); ev.size=size; ids=[...fijos, ...underPick(aptos, size-fijos.length)]; }
   const size=ev.size||16; if(ids.length<size){ ids.push(...underPick(libres.filter(f=>!ids.includes(f.id) && f.fama<=def.famaMax), size-ids.length)); }
   ev.participants=ids; return ids;
 }
