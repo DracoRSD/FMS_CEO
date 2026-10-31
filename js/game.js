@@ -2658,9 +2658,11 @@ const OFERTA_APUESTA_PROB = 0.5;
 function jugadores(){ return activos().filter(f=>f.jugador); }
 function planDe(f){ if(!f.plan) f.plan={}; const p=f.plan; if(!Array.isArray(p.inscrito)) p.inscrito=[]; if(!Array.isArray(p.ofertas)) p.ofertas=[]; if(p.entreno===undefined) p.entreno=null; if(p.liga===undefined) p.liga=null; return p; }
 function ligasDelPais(f){ return LEAGUES.filter(L=>L.countries.includes(f.country)).map(L=>L.key); }   // solo las ligas de su país ofrecen
-// Puesto del jugador entre los activos del país de la liga ordenados por nivel (el mismo orden que usa autoFicharLigas); 0 si no es del país
+// Puesto del jugador entre los activos del país de la liga ordenados por nivel (el mismo orden que usa autoFicharLigas); 0 si no es del país.
+// Los empates de nivel se deciden por fama y después por el nivel con décimas: con el orden de creación, el jugador de la carrera, que se crea el último, perdía todos.
+function nivelExacto(f){ return ATTR_KEYS.reduce((a,k)=>a+attrOf(f,k),0)/ATTR_KEYS.length; }
 function puestoEnPais(s, f, key){ const def=ldef(key); if(!def || !def.countries || !def.countries.includes(f.country)) return 0;
-  const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort((a,b)=>b.nivel-a.nivel); return list.findIndex(x=>x.id===f.id)+1; }
+  const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort((a,b)=>b.nivel-a.nivel || (b.fama||0)-(a.fama||0) || nivelExacto(b)-nivelExacto(a)); return list.findIndex(x=>x.id===f.id)+1; }
 // Ofertas de liga de la pretemporada para cada jugador. Se calculan una vez por temporada (p.ofertasYear) al entrar en la pretemporada o al abrir la pantalla.
 // Por defecto el jugador acepta: su liga del año pasado si vuelve a ofrecer y, si no, la primera oferta. Si estaba fichado y su liga no ofrece, p.noRenueva la señala.
 function asegurarOfertas(s){
