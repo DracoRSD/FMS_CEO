@@ -2519,7 +2519,7 @@ function autoPretemporada(s){
   }
   return preseasonIssues(s);
 }
-// Modo carrera: plantillas de las ligas sin CEO ni dinero. Mismo orden que devAutoSign (país de la liga primero, luego nivel),
+// Modo carrera: plantillas de las ligas sin CEO ni dinero. Mismo orden que devAutoSign (país de la liga primero, luego nivel), con los empates de nivel decididos como en puestoEnPais (porNivel),
 // solo activos, respeta descendidos, hosts y ya fichados. Se rehacen por nivel cada año: la regla de ofertas de liga depende de ese orden.
 // Devuelve cuántos faltaron por fichar (0 si todas las ligas quedaron con 10).
 function autoFicharLigas(s){
@@ -2528,9 +2528,9 @@ function autoFicharLigas(s){
     const L=s.leagues[k]; const def=ldef(k);
     { const acep=jugadores().filter(f=>(f.plan||{}).liga===k && !signedLeagueOf(s,f.id)); let extJ=0;   // el jugador que aceptó la oferta entra antes que nadie; los de fuera, hasta el cupo (los de más nivel)
       acep.filter(f=>def.countries.includes(f.country)).forEach(f=>{ if(L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; } });
-      acep.filter(f=>!def.countries.includes(f.country)).sort((a,b)=>b.nivel-a.nivel).forEach(f=>{ if(modoCarrera() && extJ>=CUPO_EXTRANJEROS){ f.plan.liga=null; return; } if(L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; extJ++; } else f.plan.liga=null; }); }
+      acep.filter(f=>!def.countries.includes(f.country)).sort(porNivel).forEach(f=>{ if(modoCarrera() && extJ>=CUPO_EXTRANJEROS){ f.plan.liga=null; return; } if(L.competitors.length<10){ L.competitors.push(f.id); L.contracts[f.id]=0; extJ++; } else f.plan.liga=null; }); }
     const pool=activos().filter(f=>!f.jugador && !signedLeagueOf(s,f.id) && !L.blocked.includes(f.id) && !isSpeakerId(s,f.id))
-      .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
+      .sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || porNivel(a,b));
     if(modoCarrera()){   // fase D2: cupo de extranjeros. 8 locales por nivel y hasta CUPO_EXTRANJEROS extranjeros que superen en EXTRANJERO_MARGEN al octavo local; el resto, locales
       const locales=pool.filter(f=>def.countries.includes(f.country)), fuera=pool.filter(f=>!def.countries.includes(f.country));
       let ext=L.competitors.filter(id=>{ const f=fby(id); return f && !def.countries.includes(f.country); }).length;
@@ -2661,8 +2661,9 @@ function ligasDelPais(f){ return LEAGUES.filter(L=>L.countries.includes(f.countr
 // Puesto del jugador entre los activos del país de la liga ordenados por nivel (el mismo orden que usa autoFicharLigas); 0 si no es del país.
 // Los empates de nivel se deciden por fama y después por el nivel con décimas: con el orden de creación, el jugador de la carrera, que se crea el último, perdía todos.
 function nivelExacto(f){ return ATTR_KEYS.reduce((a,k)=>a+attrOf(f,k),0)/ATTR_KEYS.length; }
+function porNivel(a,b){ return b.nivel-a.nivel || (b.fama||0)-(a.fama||0) || nivelExacto(b)-nivelExacto(a); }
 function puestoEnPais(s, f, key){ const def=ldef(key); if(!def || !def.countries || !def.countries.includes(f.country)) return 0;
-  const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort((a,b)=>b.nivel-a.nivel || (b.fama||0)-(a.fama||0) || nivelExacto(b)-nivelExacto(a)); return list.findIndex(x=>x.id===f.id)+1; }
+  const list=activos().filter(x=>def.countries.includes(x.country) && !isSpeakerId(s,x.id)).sort(porNivel); return list.findIndex(x=>x.id===f.id)+1; }
 // Ofertas de liga de la pretemporada para cada jugador. Se calculan una vez por temporada (p.ofertasYear) al entrar en la pretemporada o al abrir la pantalla.
 // Por defecto el jugador acepta: su liga del año pasado si vuelve a ofrecer y, si no, la primera oferta. Si estaba fichado y su liga no ofrece, p.noRenueva la señala.
 function asegurarOfertas(s){
