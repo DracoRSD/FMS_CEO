@@ -2627,9 +2627,9 @@ function patrociniosDecision(s, f){ asegurarPatrocinios(s); const p=planDe(f); c
 // ---- Tienda (fase D3, paso 3): objetos con efecto acotado. Los de atributo suben al momento con décimas, respetan pot + BOOST_OVER_POT y suman como mucho TIENDA_TOPE_ATTR al año ----
 const TIENDA_TOPE_ATTR = 3, COMPRAS_ANOS = 3;
 const TIENDA = [
-  {k:'beats', nombre:'Pack de beats y productor', attr:'metrica', v:1, precio:8000, max:2},
-  {k:'coach', nombre:'Coach mental', attr:'mentalidad', v:1, precio:10000, max:1},
-  {k:'jam',   nombre:'Viaje a una jam internacional', attr:'impro', v:1, precio:6000, max:1},
+  {k:'beats', nombre:'Pack de beats y productor', attr:'metrica', v:1, precio:12000, max:2},
+  {k:'coach', nombre:'Coach mental', attr:'mentalidad', v:1, precio:15000, max:1},
+  {k:'jam',   nombre:'Viaje a una jam internacional', attr:'impro', v:1, precio:9000, max:1},
   {k:'viral', nombre:'Vídeo y edit viral', fama:3, seg:0.10, precio:5000, max:1},
   {k:'merch', nombre:'Merchandising', seg:0.05, merch:2000, precio:3000, max:1},
 ];
