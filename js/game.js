@@ -1480,6 +1480,7 @@ function renderCarrera(){
     ${s.phase==='pre' ? patrociniosDecision(s, f) : patrociniosPanel(s, f)}
     ${billeteraPanel(s, f)}
     ${redesPanel(f)}
+    ${prensaPanel(s, f)}
     <div class="step" style="margin-top:16px;">
       <span class="field-label">${estado}</span>
       <p class="step-note" style="margin:6px 0 12px">${s.phase==='pre' ? 'Cuando tengas la liga, el entrenamiento y los torneos elegidos, juega la temporada: el resto del mundo corre solo.' : 'Los patrocinadores llegan más adelante.'}</p>
@@ -1551,7 +1552,7 @@ function carreraEnDirecto(s, f){
   const fat=Math.round(f.fatiga||0); const fatTxt = fat>=FATIGA_ALTA ? ` · <span class="neg-v">fatiga ${fat}: llegas cansado</span>` : (fat<=FATIGA_BAJA ? ` · <span class="pos-v">fatiga ${fat}: fresco</span>` : ` · fatiga ${fat}`);
   const prox = px ? `<p class="step-note" style="margin:0"><b>${fmtDay(s.year, px.day)}</b> · ${esc(px.nombre)} · ${rivalTxt}${fatTxt}</p>` : `<p class="step-note" style="margin:0">No te queda ningún compromiso este año${s.day<daysInYear(s.year)?': nada en el calendario donde estés inscrito':''}.</p>`;
   const riv=rivalesDelJugador(fid).slice(0, 8); const rec=batallasDelJugador(fid); const v=rec.filter(b=>b.w===fid).length;
-  const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}${r.sp && !(r.v+r.d) ? ' <span class="rtag">sparring</span>' : ''}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : (r.sp ? `nivel ${fby(r.id)?fby(r.id).nivel:'—'} · ${styleOf(fby(r.id))}` : '')}${r.sp ? ` · sparring ×${r.sp}` : ''}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v+r.d ? r.v+'-'+r.d : '—'}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
+  const filas = riv.length ? riv.map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.id,22)} ${fnameH(r.id)}${r.sp && !(r.v+r.d) ? ' <span class="rtag">sparring</span>' : ''}</span><span class="evol-sub">${r.ultimo ? `última ${r.ultimo.year}: ${r.ultimo.gane?'ganaste':'perdiste'}` : (r.sp ? `nivel ${fby(r.id)?fby(r.id).nivel:'—'} · ${styleOf(fby(r.id))}` : '')}${r.sp ? ` · sparring ×${r.sp}` : ''}${retoPuede(s, f, r.id, true) ? '' : ` <button class="btn small" onclick="retarUI('${r.id}')">🥊 Retar</button>`}</span><b class="${r.v>=r.d?'pos-v':'neg-v'}">${r.v+r.d ? r.v+'-'+r.d : '—'}</b></div>`).join('') : '<p class="step-note" style="margin:0">Todavía no has batallado.</p>';
   const sp=(state.company.carrera.sparrings||[])[0]; const spTxt = sp ? `<p class="step-note" style="margin:8px 0 0">Último sparring: ${sp.gane?'ganaste a':'perdiste con'} <b>${fnameH(sp.rival)}</b> (nivel ${sp.nivel}) el ${fmtDay(sp.y, sp.d)} ${sp.y}.</p>` : '';
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Próximo compromiso</span>${prox}</div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Rivales · récord total ${v}-${rec.length-v}</span>${filas}${spTxt}</div>`;
@@ -1969,6 +1970,36 @@ function retoJugado(s, fx, m){ const f=fby(fx.a); if(!f || !f.jugador) return; c
   if(gane){ if(conFama) prensaFama(s, f, RETO_FAMA_GANA); prensaFans(s, f, 1, 'fans'); prensaSeg(s, f, RETO_SEG); }
   else { if(conFama) prensaFama(s, f, RETO_FAMA_PIERDE); prensaFans(s, f, 1, 'haters'); }
   if(esJugadorCarrera(f)) twCarreraEvento(s, gane ? 'retoGana' : 'retoPierde', {o:fname(fx.b)}); }
+// ---- Interfaz de prensa y retos ----
+function prensaEfectoTxt(tono, it){ const mitad=it && it.peq ? ' (a la mitad: medio pequeño)' : ''; const sig=!(it && it.tipo==='previa');   // la presión de la rueda previa solo cambia textos
+  if(tono==='humilde') return '+1 fan · +1 % de seguidores · puede irse un hater'+mitad;
+  if(tono==='confiado') return '50 % de +1 fan · +2 % de seguidores'+(sig ? ' · si pierdes la siguiente, +1 hater' : '')+mitad;
+  return '+1 o 2 haters · +3 % de seguidores'+(sig ? ' · si pierdes la siguiente, +2 haters y −1 fan; si ganas, +1 fan' : '')+mitad; }
+function prensaContextoTxt(it){ if(it.tipo==='previa') return 'Rueda de prensa antes de jugar. Lo que digas lo recordarán después, pero no cambia la batalla.'; if(it.tipo==='post') return 'Rueda de prensa después de jugar.'; if(it.tipo==='pre') return 'Entrevista de pretemporada.'; return it.peq ? 'Un canal pequeño de tu país quiere hablar contigo.' : 'Entrevista después de tu batalla.'; }
+function abrirPrensa(){ const s=cur(); const f=state.company && state.company.carrera && fby(state.company.carrera.fid); if(!f) return; const P=prensaDe(f); const it=P.pend.find(x=>x.shown) || P.pend[0]; if(!it){ closeModal(); return; } it.shown=true;
+  const tx=prensaTexto(it); const botones=Object.keys(PRENSA_TONOS).map(t=>`<button class="ltoggle" onclick="prensaResponderUI('${it.id}','${t}')"><span><b>${PRENSA_TONOS[t].nombre}</b> · «${esc(tx.r[t])}»<small>${esc(prensaEfectoTxt(t, it))}</small></span></button>`).join('');
+  openModal(`<h3>🎙️ ${esc(it.medio)}</h3><p class="step-note">${esc(prensaContextoTxt(it))}</p><p style="font-size:1.05em; margin:10px 0 14px"><b>«${esc(tx.q)}»</b></p><div class="carrera-opts">${botones}<button class="ltoggle" onclick="prensaResponderUI('${it.id}', null)"><span><b>Sin comentarios</b><small>No dices nada: sin efecto</small></span></button></div>`, true); }
+function prensaResponderUI(id, tono){ const s=cur(); const f=fby(state.company.carrera.fid); const it=f && prensaDe(f).pend.find(x=>x.id===id); closeModal(); if(!it) return; prensaResponder(s, f, it, tono||null); toast(tono ? `Respuesta ${PRENSA_TONOS[tono].nombre.toLowerCase()} publicada.` : 'Sin comentarios.'); render(); }
+// Para el simulador: contesta la primera pregunta enseñada del jugador de la carrera
+function prensaResponderPend(tono){ const s=cur(); const f=fby(state.company.carrera.fid); const it=f && prensaDe(f).pend.find(x=>x.shown); if(it) prensaResponder(s, f, it, tono||null); return !!it; }
+function carreraPrensaOn(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.prensaOn = p.prensaOn===false; render(); }
+function retarUI(oid){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || !oid) return; const mot=retoPuede(s, f, oid); if(mot){ toast('No puedes retar: '+mot+'.'); return; }
+  const r=retar(s, f, oid); closeModal(); toast(r.e==='aceptado' ? `${fname(oid)} acepta: ${retoFechaTxt(s, r)}.` : (r.e==='sinFecha' ? `${fname(oid)} acepta, pero no queda fecha.` : `${fname(oid)} no contesta.`)); render(); }
+function retoRecibidoUI(i, si){ const s=cur(); const f=fby(state.company.carrera.fid); const r=f && retosDe(f)[i]; if(!r || r.e!=='recibido') return; if(si){ if(!retoAceptar(s, f, r)) toast('No queda fecha libre: el reto se cae.'); } else retoIgnorar(s, f, r); render(); }
+function retoBotonFicha(id){ if(!modoCarrera() || !state.company.carrera) return ''; const s=cur(); const f=fby(state.company.carrera.fid); if(!f || id===f.id) return ''; const mot=retoPuede(s, f, id, true);
+  return mot ? '' : `<button class="btn" onclick="retarUI('${id}')">🥊 Retar</button>`; }
+const RETO_ESTADO = {aceptado:'aceptado, por jugar', ignorado:'sin respuesta', recibido:'pendiente de tu respuesta', jugado:'jugado', sinFecha:'sin fecha', cancelado:'cancelado'};
+function prensaPanel(s, f){ const P=prensaDe(f); const R=retosDe(f); const pend = P.pend.length ? `<p class="step-note" style="margin:0 0 8px">🎙️ ${esc(P.pend[0].medio)} espera tu respuesta. <button class="btn small" onclick="abrirPrensa()">Responder</button></p>` : '';
+  const recib=R.map((r,i)=>r.e==='recibido' ? `<div class="evol-row"><span class="evol-who">${miniAvatar(r.o,22)} ${fnameH(r.o)} te reta</span><span class="evol-sub">desde el ${fmtDay(r.y, r.d)}</span><span><button class="btn small" onclick="retoRecibidoUI(${i}, true)">Aceptar</button> <button class="btn small ghost" onclick="retoRecibidoUI(${i}, false)">Ignorar</button></span></div>` : '').join('');
+  let retar='';
+  if(s.phase==='live'){ const c=activos().filter(o=>!o.jugador && o.id!==f.id && Math.abs(o.fama-f.fama)<=RETO_RANGO).sort((a,b)=>Math.abs(a.fama-f.fama)-Math.abs(b.fama-f.fama) || b.nivel-a.nivel).slice(0, 20); const mot=prensaDe(f).retoMes===s.year*12+monthOf(s.year, s.day) ? 'ya retaste a alguien este mes' : null;
+    retar = `<p class="step-note" style="margin:8px 0 6px">Una vez al mes puedes retar a alguien a ±${RETO_RANGO} de tu fama: acepta con un ${Math.round(RETO_P*100)} % (${Math.round(RETO_P_RIVAL*100)} % si es tu rival) y se juega como exhibición en la siguiente jornada libre. ${f.fama<RETO_FAMA ? `Hasta fama ${RETO_FAMA} los retos no mueven tu fama, solo fans, haters y seguidores.` : `Ganar da +${RETO_FAMA_GANA} de fama y perder ${RETO_FAMA_PIERDE} (como mucho +${RETO_FAMA_TOPE} al año).`}</p>`
+      + (mot ? `<p class="step-note" style="margin:0">${mot}.</p>` : (c.length ? `<div class="formrow"><select id="retoSel" style="flex:1">${c.map(o=>`<option value="${o.id}">${esc(o.name)} · ${esc(o.country)} · fama ${o.fama} · nivel ${o.nivel}</option>`).join('')}</select><button class="btn" onclick="retarUI(document.getElementById('retoSel').value)">🥊 Retar</button></div>` : '<p class="step-note" style="margin:0">Nadie a tu alcance de fama ahora mismo.</p>')); }
+  const retos=R.filter(r=>r.y===s.year && r.e!=='recibido').slice(0, 6).map(r=>`<div class="evol-row"><span class="evol-who">${miniAvatar(r.o,22)} ${r.dir==='yo' ? 'Retaste a' : 'Te retó'} ${fnameH(r.o)}</span><span class="evol-sub">${RETO_ESTADO[r.e]||r.e}${r.e==='aceptado' ? ' · '+esc(retoFechaTxt(s, r)) : ''}</span>${r.e==='jugado' ? `<b class="${r.w?'pos-v':'neg-v'}">${r.w?'ganaste':'perdiste'}</b>` : '<span></span>'}</div>`).join('');
+  const hist=P.hist.slice(0, 6).map(h=>{ const tx=prensaTexto({c:h.c, q:h.q, o:h.o, comp:h.comp, dicho:h.di}); return tx ? `<p class="step-note" style="margin:0 0 6px">${fmtDay(h.y, h.d)} ${h.y} · ${esc(h.m||'')}: «${esc(tx.q)}» → ${h.t ? `<b>${PRENSA_TONOS[h.t].nombre}</b>: «${esc(tx.r[h.t])}»` : '<b>Sin comentarios</b>'}</p>` : ''; }).join('');
+  const riv=(planDe(f).rivales||[]).filter(id=>fby(id)); const rivTxt = riv.length ? `<p class="step-note" style="margin:8px 0 0">Rivalidades: ${riv.map(id=>fnameH(id)).join(', ')}.</p>` : '';
+  return `<div class="step" style="margin-top:16px;"><span class="field-label">Prensa y retos</span>${pend}${recib}${retar}${retos}${rivTxt}${hist ? `<div class="sum-sec">Tus declaraciones</div>${hist}` : ''}</div>`; }
+function prensaBoton(p){ const on=p.prensaOn!==false; return `<button class="ltoggle ${on?'on':''}" onclick="carreraPrensaOn()" aria-pressed="${on}"><span>Atender a la prensa<small>${on ? `Entrevistas y ruedas de prensa con pausa, como mucho ${PRENSA_MAX_ANO} al año; lo que no contestes queda en «Sin comentarios»` : 'Sin entrevistas ni ruedas de prensa: no dices nada'}</small></span></button>`; }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
@@ -1985,7 +2016,7 @@ function carreraDecisiones(s, f){
   const exOn=p.exhibiciones!==false; const exBtn=`<button class="ltoggle ${exOn?'on':''}" onclick="carreraExhibiciones()" aria-pressed="${exOn}"><span>Aceptar invitaciones a exhibiciones<small>${f.fama<EXHIB_FAMA_MIN ? 'Con menos de '+EXHIB_FAMA_MIN+' de fama nadie te invita todavía' : (exOn ? 'Las ligas te invitarán a exhibiciones sin puntos según tu fama' : 'Rechazarás todas las invitaciones')}</small></span></button>`;
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Liga ${s.year}</span>${aviso}<div class="carrera-opts">${ofertas}${p.ofertas.some(o=>o.contrato) ? '' : libre}</div>${anos}</div>
     <div class="step" style="margin-top:16px;"><span class="field-label">Entrenamiento</span><p class="step-note" style="margin:0 0 10px">Un atributo por temporada: ${efecto}. Repetirlo tres años seguidos rinde la mitad.</p><div class="carrera-opts">${entreno}</div></div>
-    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}${avBtn}</div></div>`;
+    <div class="step" style="margin-top:16px;"><span class="field-label">Torneos</span><p class="step-note" style="margin:0 0 10px">La inscripción garantiza la plaza. ${p.liga ? `Con liga: tu Red Bull nacional o Plazas, y hasta ${LIGA_TORNEOS_EXTRA} torneos más (Under o locales) que no caigan a ${LIGA_CHOQUE_DIAS} días o menos de una jornada tuya; las fechas de liga se fijan al empezar, así que un choque te deja fuera de ese torneo.` : 'Libre puedes jugarlo todo; Plazas es para quien no juega su nacional.'}</p><div class="carrera-opts">${torneos}${exBtn}${prensaBoton(p)}${avBtn}</div></div>`;
 }
 function carreraExhibiciones(){ const s=cur(); const f=fby(state.company.carrera.fid); if(!f || s.phase!=='pre') return; const p=planDe(f); p.exhibiciones = p.exhibiciones===false; render(); }
 // En directo o cerrada: el plan de la temporada en solo lectura
@@ -2049,6 +2080,7 @@ function carreraAvanzar(modo){
     case 'rb': openRBShow(ev.key); break;
     case 'tuya': abrirTuBatalla(); break;
     case 'mes': abrirPlanMes(ev.mes); break;
+    case 'prensa': abrirPrensa(); break;
     case 'jugado': toast(ev.key===INTL.key ? `Se jugó el ${INTL.name}.` : (isRB(ev.key) ? `Se jugó la ${rbdef(ev.key).name}.` : `Se jugó la jornada de ${ldef(ev.key).name}.`)); break;
     default: toast('La temporada sigue.'); break;
   }
@@ -2499,7 +2531,7 @@ function showFreestyler(id){
     <div class="formrow"><label class="dev-field">Nivel<input id="dev_nivel" type="number" min="1" max="99" value="${f.nivel}"></label><label class="dev-field">Fama<input id="dev_fama" type="number" min="1" max="99" value="${f.fama}"></label><label class="dev-field">Hype<input id="dev_hype" type="number" min="1" max="99" value="${f.hype!=null?Math.round(f.hype):50}"></label><label class="dev-field">Estilo<select id="dev_style">${STYLE_NAMES.map(n=>`<option ${styleOf(f)===n?'selected':''}>${n}</option>`).join('')}</select></label><label class="dev-check" style="width:auto;margin:0 0 8px;"><input id="dev_legend" type="checkbox" ${f.legend?'checked':''}> Leyenda (oculto)</label><button class="btn" onclick="devSaveStats('${id}')">Guardar</button></div></div>`:''}
   <div class="sum-row"><span>Pide por temporada</span><b>${money(salaryOf(f))}</b></div>
   <div class="sum-row"><span>Títulos</span><span>${t.length? t.map(esc).join(', ') : '—'}</span></div>
-  <div class="modal-actions"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+  <div class="modal-actions">${retoBotonFicha(id)}<button class="btn" onclick="closeModal()">Cerrar</button></div>`);
 }
 function renameFreestyler(id){
   const v=(document.getElementById('fs_name').value||'').trim();
@@ -2560,7 +2592,7 @@ function battleClick(m, key, j, mi){ return (m && m.result) ? ` onclick="showBat
 function showBattle(key, j, mi){
   showBattleBase(key, j, mi);
   if(modoCarrera() && state.company.carrera){ const m=battleAt(key, j, mi); const fid=state.company.carrera.fid; if(m && (m.a===fid||m.b===fid)){ const tws=redesDeBatalla(key, j, mi); const mr=document.getElementById('modalRoot'); const act=mr && mr.querySelector('.modal-actions');
-    if(act) act.insertAdjacentHTML('beforebegin', `<div class="sum-sec">Las redes</div>${redesFeedHtml(tws, 'Nadie comentó esta batalla.')}`); } }
+    if(act) act.insertAdjacentHTML('beforebegin', `<div class="sum-sec">Las redes</div>${redesFeedHtml(tws, 'Nadie comentó esta batalla.')}`); if(act && prensaDe(fby(fid)).pend.length) act.insertAdjacentHTML('afterbegin', `<button class="btn primary" onclick="abrirPrensa()">🎙️ Atender a la prensa</button>`); } }
 }
 function showBattleBase(key, j, mi){
   const m=battleAt(key, j, mi); if(!m || !m.result) return;
