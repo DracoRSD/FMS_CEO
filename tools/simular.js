@@ -55,6 +55,15 @@ const FATIGA_CIERRE = 70, ENTRENO_DIF = 10, ENTRENO_MARGEN = 5;
 const MERCADO_OFERTA_PCT = 30, MERCADO_CAMBIO_PCT = 3,   // cambio de país: medido 5 %; el suelo baja a 3 % para que no falle según la semilla
       DINERO_ACTIVO = [360000, 800000], DINERO_PASIVO = [210000, 340000];   // fase D3 (salario, premios, exhibiciones y patrocinios): medido 448 k y 266 k; suelo por debajo de mediana / 1,2 con margen para la semilla; techos de C5, el del pasivo subido a 340 k
 const BASE_PASIVO = { 'España': 8.4, 'Argentina': 8.9, 'México': 7.0, 'Chile': 7.5, 'Perú': 7.3, 'Colombia': 6.6, 'República Dominicana': 7.3 }, BASE_MARGEN = 0.5, BASE_FASE = 'D3';   // medida con main antes de D3
+// Fase D4: mundos aparte de la escalera (CARRERAS mundos de D4_ANOS temporadas, el pasivo de España y tres jugadores de México con 60 en todo y el plan por defecto):
+// el clon (no habla ni reta), el «humilde» (siempre humilde, no reta) y el «bocazas» (siempre polémico, reta cada mes y acepta todos los retos). Van aparte porque dos
+// jugadores más en México mueven la escalera por azar (con la semilla 2, Argentina pasaba de 3 a 1 temporadas de separación sin que el juego cambiara nada).
+// Ninguno puede adelantar la primera liga más de D4_ADELANTO_MAX respecto al clon (el ruido entre perfiles iguales llega a 0,9); prensa y retos no cambian ningún
+// atributo; el bocazas acaba con al menos D4_HATERS_X veces los haters del humilde; ninguno suma más de D4_FAMA_ANO_MAX de fama al año por prensa y retos (el tope del
+// juego es 3); al menos D4_RETOS_BATALLA % de los retos del bocazas acaban en batalla y ninguno queda pendiente al cerrar el año; como mucho PRENSA_PAUSAS_MAX entrevistas
+// y ruedas por temporada. En el recorrido fecha a fecha, el jugador contesta la prensa y reta cada mes: D4 no pasa de D4_GUARDADO_MAX en el guardado, y RUEDA_PRUEBAS
+// batallas repetidas con la misma semilla dan el mismo resultado con y sin rueda de prensa (y con cada tono): la presión no cambia la probabilidad de ganar.
+const D4_ANOS = 10, D4_ADELANTO_MAX = 1, D4_HATERS_X = 2, D4_FAMA_ANO_MAX = 5, D4_RETOS_BATALLA = 60, D4_GUARDADO_MAX = 30 * 1024, RUEDA_PRUEBAS = 400, PRENSA_PAUSAS_MAX = 10;
 const COMPRADOR_MARGEN = 1, COMPRADOR_NIVEL_T5 = 1.5, COMPRADOR_NIVEL_MAX = 91;   // margen subido de 0,5 a 1 (el ruido entre perfiles iguales llega a 0,9); el nivel a T5, que casi no tiene ruido, no pasa del clon más de 1,5   // fase D3: el perfil «comprador» (activo de México que gasta en atributos de la tienda) se compara con su clon, idéntico pero sin comprar:
 // nivel medio a T5 y T10 al menos igual que el clon, a T5 como mucho COMPRADOR_NIVEL_T5 por encima, primera oferta sin adelantarse más de COMPRADOR_MARGEN y nivel a los 10 años como mucho 91 (era 90: con la semilla 1 salió 90, justo en el tope; el comprador queda unos 2 por encima del activo, que acaba en 87-88; con estos cambios, 89)
 const BAT_LIBRE_UNDER = [9, 14],   // suelo bajado de 10 a 9 en D3: Chile dio 9,9 con la semilla 2
@@ -268,7 +277,7 @@ w.addEventListener('load', () => setTimeout(() => {
       const sinImg = (k, v) => (k === 'img' && typeof v === 'string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v;
       const dumpViejo = JSON.stringify({ company: Object.assign({}, S.company, { dbv: 8 }), freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter }, sinImg);
       w.eval('aligerarAntiguas = _aligerarReal;');
-      r.aligeradas = g('aligerarAntiguas')(); g('save')(); r.bytesDespues = (mem.get(key) || '').length;
+      r.aligeradas = g('aligerarAntiguas')(); g('save')(); r.bytesDespues = (mem.get(key) || '').length; r.d4 = ((mem.get(key) || '').match(/"(prensa|retos|rivales|prensaAuto)":/g) || []).length;   // fase D4
       const despues = [foto(), titulos(), clasif(), fatiga(), g('renderHistory')()];
       r.identicos = antes.every((x, i) => x === despues[i]);
       // migración: la misma partida sin podar y en dbv 8 carga, queda en 9 y podada, con los mismos títulos e historial
@@ -380,8 +389,8 @@ w.addEventListener('load', () => setTimeout(() => {
         const avg = a => a.length ? a.reduce((x, y) => x + y.n, 0) / a.length : NaN; const bajo = R.filter(x => x.fama < REDES_FAMA_BAJA), alto = R.filter(x => x.fama >= REDES_FAMA_ALTA); const mb = avg(bajo), ma = avg(alto);
         okRedes = min >= 1 && bajo.length > 0 && alto.length > 0 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
         redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · con fama < ${REDES_FAMA_BAJA}: ${f1b(mb)} por batalla (${bajo.length} batallas), con fama ≥ ${REDES_FAMA_ALTA}: ${f1b(ma)} (${alto.length}; al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
-      const okLocales = c.modo === 'ceo' ? c.locales === 0 : c.locales > 0;
-      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales;
+      const okLocales = c.modo === 'ceo' ? c.locales === 0 : c.locales > 0; const okCeoD4 = c.modo !== 'ceo' || c.d4 === 0;
+      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales && okCeoD4;
       okCarrera = okCarrera && okMundo;
       console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${c.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${c.pausas.length ? ' · ' + c.pausas.join('; ') : ''}${c.excepciones.length ? ' · excepción: ' + c.excepciones.join('; ') : ''}${c.erroresJsdom ? ' · errores de página: ' + c.erroresJsdom : ''}`);
       console.log(`${c.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${c.arranquesMal.length ? ' · ' + c.arranquesMal.join('; ') : ''}`);
@@ -394,6 +403,7 @@ w.addEventListener('load', () => setTimeout(() => {
         console.log(`${okSal ? 'OK  ' : 'FAIL'} salario medio del top 60 sin prima de leyenda: ${eur(c.fama0.salarioSinPrima)} → ${eur(c.fama1.salarioSinPrima)} (${sg(dSal)} %; límite ±${SALARIO_TOL} %) · con la prima ${eur(c.fama0.salario)} → ${eur(c.fama1.salario)} (${sg(dSalPrima)} %: las leyendas se retiran y ningún novato lo es)`);
         console.log(`INFO poco conocidos (nivel − fama ≥ ${POCO_CONOCIDO}) sin fichar al arrancar la temporada: T5 ${(c.poco[5] || {}).sinFichar} de ${(c.poco[5] || {}).total} · T10 ${(c.poco[10] || {}).sinFichar} de ${(c.poco[10] || {}).total}`);
         if (redesTxt) console.log(`${okRedes ? 'OK  ' : 'FAIL'} redes de la carrera: ${redesTxt}`);
+        if (c.modo === 'ceo') console.log(`${okCeoD4 ? 'OK  ' : 'FAIL'} el modo CEO no tiene prensa ni retos: ${c.d4} campos en el guardado`);
         console.log(`${okLocales ? 'OK  ' : 'FAIL'} torneos locales en ${c.anos} temporadas: ${c.locales} (${c.modo === 'ceo' ? 'el modo CEO no tiene' : 'solo en carrera'})`);
         console.log(`INFO extranjeros por liga y temporada (cupo ${g('CUPO_EXTRANJEROS')}, solo en carrera): ${Object.entries(c.extranjeros).map(([k, n]) => g('ldef')(k).short + ' ' + f1b(n / Math.max(1, c.anos))).join(', ')}`);
         if (c.modo === 'carrera' && T.n) console.log(`${okTw ? 'OK  ' : 'FAIL'} tuits: ${T.n} en ${c.anos} temporadas (${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + v).join(', ')}) · misma plantilla dentro de la temporada ${f1b(pctTpl)} % (${TW_BASE_PLANTILLA ? 'límite ' + f1b(TW_BASE_PLANTILLA * (1 - TW_MEJORA)) + ' %, base ' + f1b(TW_BASE_PLANTILLA) + ' %' : 'base por fijar'}; por fuente ${Object.entries(T.fuentes).map(([k, v]) => k + ' ' + f1b(100 * (T.repFuente[k] || 0) / v) + ' %').join(', ')}) · texto exacto repetido ${f1b(100 * T.repTxt / T.n)} %, máximo ${T.maxTxt} veces, ${T.textosMas} textos por encima de ${TW_TOPE_TEXTO}${T.ejemplos ? ' (' + T.ejemplos.slice(0, 3).join(' | ') + ')' : ''}`); }
@@ -447,7 +457,7 @@ w.addEventListener('load', () => setTimeout(() => {
   const okEleccion = !eleccion.err && eleccion.cambios >= 2 && eleccion.fallos.length === 0;
   console.log(`${okEleccion ? 'OK  ' : 'FAIL'} la elección de liga se respeta: ${eleccion.cambios} pretemporadas con una opción distinta de la liga anterior y ${eleccion.fallos.length} en las que empezó en otra${eleccion.fallos.length ? ' · ' + eleccion.fallos.join('; ') : ''}${eleccion.err ? ' · error: ' + eleccion.err : ''}`);
   // ---- carreras del jugador: CARRERAS mundos con 14 jugadores (fase C3b). Va al final para no mover las semillas de los informes anteriores ----
-  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0, mercado: { n: 0, ofertaExt: 0, cambio: 0, dineroActivo: [], dineroPasivo: [] }, comprador: { primera: [], nivel10: [], gastado: [], n5: [], n10: [] }, clon: { primera: [], n5: [], n10: [] }, marcas: { revisadas: 0, repetidas: 0 } };
+  const carreras = { porPais: {}, excepciones: [], anos: 0, fatiga: { sin: { fat: [], v: 0, n: 0 }, con: { fat: [], v: 0, n: 0 } }, spMax: 0, mercado: { n: 0, ofertaExt: 0, cambio: 0, dineroActivo: [], dineroPasivo: [] }, comprador: { primera: [], nivel10: [], gastado: [], n5: [], n10: [] }, clon: { primera: [], n5: [], n10: [] }, d4: { clon: { primera: [], n10: [], anos: [] }, humilde: { primera: [], n10: [], anos: [] }, bocazas: { primera: [], n10: [], anos: [] } }, marcas: { revisadas: 0, repetidas: 0 } };
   PAISES_CARRERA.forEach(([c]) => { carreras.porPais[c] = { pasivo: [], activo: [], nivel10: [], ligaPasivo: [], ligaActivo: [], batLibre: [], batLiga: [] }; });
   for (let semilla = 1; semilla <= CARRERAS; semilla++) {
     w.Math.random = mulberry32(semilla);
@@ -490,6 +500,36 @@ w.addEventListener('load', () => setTimeout(() => {
     } catch (e) { carreras.excepciones.push(`semilla ${semilla}: ` + String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
     w.eval('aligerarAntiguas = _aligerarReal2; sparringSesion = _spReal;'); mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
   }
+  // ---- fase D4: prensa y retos en mundos aparte, para no mover la escalera. Cuenta los cambios de atributo dentro de las funciones de prensa y retos (deben ser 0) ----
+  w.eval('var _d4Attr = 0, _d4Llamadas = 0, _d4Real = {}; ["prensaDia", "retosMes", "prensaPretemporada", "retoJugado"].forEach(function(n){ var real = window[n]; _d4Real[n] = real; window[n] = function(){ var antes = jugadores().map(function(f){ return JSON.stringify(f.attrs); }); var r = real.apply(this, arguments); jugadores().forEach(function(f, i){ if (JSON.stringify(f.attrs) !== antes[i]) _d4Attr++; }); _d4Llamadas++; return r; }; });');
+  for (let semilla = 1; semilla <= CARRERAS; semilla++) {
+    w.Math.random = mulberry32(semilla);
+    const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
+    try {
+      const attrs = Object.fromEntries(g('ATTR_KEYS').map(k => [k, 60]));
+      g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Pasivo España', country: 'España', style: 'Flow', attrs }); g('nuevaCarrera')(); const pasivo = g('fby')(S.company.carrera.fid);
+      const perfiles = ['clon', 'humilde', 'bocazas']; for (let i = 0; i < semilla % 3; i++) perfiles.push(perfiles.shift());   // el orden de creación rota con la semilla
+      const jugs = perfiles.map(perfil => { const f = g('crearJugadorCarrera')({ name: perfil + ' México', country: 'México', style: 'Flow', attrs }); f.debut = g('cur')().year;
+        if (perfil !== 'clon') g('planDe')(f).prensaAuto = perfil === 'bocazas' ? { tono: 'polemico', retar: true, aceptar: true } : { tono: 'humilde', retar: false, aceptar: false };
+        return { fid: f.id, perfil, primera: null, n10: null, anos: [] }; });
+      for (let t = 1; t <= D4_ANOS; t++) {
+        const s = g('cur')();
+        jugs.forEach(j => { g('planDe')(g('fby')(j.fid)).ligasJugadas = 0; });   // como las sondas de la escalera: sin ofertas de fuera
+        g('asegurarOfertas')(s); { const p = g('planDe')(pasivo); p.entreno = null; p.mes = { entreno: {}, sparring: 0, descanso: g('SESIONES_MES') }; }
+        jugs.forEach(j => { if (j.primera == null && g('planDe')(g('fby')(j.fid)).ofertas.some(o => !o.extranjero)) j.primera = t; });
+        g('autoPretemporada')(s); g('autoFicharLigas')(s); const iss = g('preseasonIssues')(s); if (iss.length) { carreras.excepciones.push(`prensa, semilla ${semilla} T${t}: ${iss[0]}`); break; }
+        g('startSeason')();
+        for (let v = 0; v < 3 && s.phase === 'live'; v++) g('advance')('year');
+        if (s.phase !== 'done') { carreras.excepciones.push(`prensa, semilla ${semilla} T${t}: pausa en el día ${s.day}`); break; }
+        jugs.forEach(j => { const f = g('fby')(j.fid); const A = g('prensaAno')(f, s.year); j.anos.push({ fans: A.fans, haters: A.haters, fama: A.fama, n: A.n, retos: A.retos || 0, jug: A.retosJug || 0, pend: A.pendCierre || 0, esc: A.esc || 0 });
+          if (t === 10) j.n10 = g('ATTR_KEYS').reduce((a, k) => a + g('attrOf')(f, k), 0) / g('ATTR_KEYS').length; });
+        g('closeModal')(); g('nextSeason')(); g('closeModal')();
+      }
+      jugs.forEach(j => { const X = carreras.d4[j.perfil]; X.primera.push(j.primera == null ? Infinity : j.primera); if (j.n10 != null) X.n10.push(j.n10); X.anos.push(...j.anos); });
+    } catch (e) { carreras.excepciones.push(`prensa, semilla ${semilla}: ` + String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
+    mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null;
+  }
+  w.eval('Object.keys(_d4Real).forEach(function(n){ window[n] = _d4Real[n]; });');
   let okCarreras = carreras.excepciones.length === 0;
   if (CARRERAS > 0) {
     const mediana = a => { const b = a.slice().sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
@@ -539,6 +579,17 @@ w.addEventListener('load', () => setTimeout(() => {
       const c5 = media(C.n5), k5 = media(K.n5), c10 = media(C.n10), k10 = media(K.n10);
       const okComprador = C.primera.length > 0 && K.primera.length > 0 && Number.isFinite(mC) && Number.isFinite(mK) && mC >= mK - COMPRADOR_MARGEN && c5 >= k5 && c5 <= k5 + COMPRADOR_NIVEL_T5 && c10 >= k10 && nC <= COMPRADOR_NIVEL_MAX; okCarreras = okCarreras && okComprador;
       console.log(`${okComprador ? 'OK  ' : 'FAIL'} tienda: el comprador de México frente a su clon sin compras · nivel medio a T5 ${f1b(c5)} frente a ${f1b(k5)} (al menos igual y como mucho ${f1b(COMPRADOR_NIVEL_T5)} más) y a T10 ${f1b(c10)} frente a ${f1b(k10)} (al menos igual) · primera liga en ${f1b(mC)} de media frente a ${f1b(mK)} (adelanto máximo ${f1b(COMPRADOR_MARGEN)}) · nivel a los 10 años ${nC} (≤ ${COMPRADOR_NIVEL_MAX}) · gasta ${eur(gC)} de mediana en ${CARRERA} temporadas`);
+      { const D = carreras.d4; const mK = media(D.clon.primera), kN = media(D.clon.n10);   // fase D4
+        const r4 = p => { const X = D[p], A = X.anos; const suma = k => A.reduce((a, x) => a + x[k], 0); return { primera: media(X.primera), n10: media(X.n10), haters: suma('haters'), fans: suma('fans'), famaMax: A.length ? Math.max(...A.map(x => x.fama)) : 0, retos: suma('retos'), jug: suma('jug'), pend: suma('pend'), esc: suma('esc'), nMax: A.length ? Math.max(...A.map(x => x.n)) : 0, nMedia: A.length ? suma('n') / A.length : 0, anos: A.length }; };
+        const H = r4('humilde'), B = r4('bocazas'), C = r4('clon'); const pctRetos = B.retos ? 100 * B.jug / B.retos : 0;
+        const okNoAcel = Number.isFinite(H.primera) && Number.isFinite(B.primera) && Number.isFinite(mK) && H.primera >= mK - D4_ADELANTO_MAX && B.primera >= mK - D4_ADELANTO_MAX;
+        const okAttr = g('_d4Attr') === 0 && g('_d4Llamadas') > 0, okHaters = B.haters > 0 && B.haters >= D4_HATERS_X * Math.max(1, H.haters), okFama = Math.max(H.famaMax, B.famaMax) <= D4_FAMA_ANO_MAX;
+        const okRetos = B.retos > 0 && pctRetos >= D4_RETOS_BATALLA && B.pend === 0 && H.pend === 0, okPrensa = H.anos > 0 && Math.max(H.nMax, B.nMax) <= PRENSA_PAUSAS_MAX && H.nMedia > 0 && C.nMax === 0;
+        const okD4 = okNoAcel && okAttr && okHaters && okFama && okRetos && okPrensa; okCarreras = okCarreras && okD4;
+        console.log(`\nPrensa y retos (fase D4): ${CARRERAS} mundos aparte de ${D4_ANOS} temporadas con un clon, un humilde y un bocazas de México`);
+        console.log(`${okNoAcel && okAttr ? 'OK  ' : 'FAIL'} prensa y retos no aceleran ni suben atributos: primera liga del humilde en ${f1b(H.primera)} y del bocazas en ${f1b(B.primera)} frente a ${f1b(mK)} del clon (adelanto máximo ${f1b(D4_ADELANTO_MAX)}) · nivel a T10 ${f1b(H.n10)} y ${f1b(B.n10)} frente a ${f1b(kN)} · ${g('_d4Attr')} cambios de atributo en ${g('_d4Llamadas')} llamadas de prensa y retos`);
+        console.log(`${okHaters && okFama && okPrensa ? 'OK  ' : 'FAIL'} entrevistas: el bocazas suma ${B.haters} haters y el humilde ${H.haters} en ${H.anos} temporadas (al menos ×${D4_HATERS_X}) · fans ${B.fans} y ${H.fans} · fama de prensa y retos como mucho +${Math.max(H.famaMax, B.famaMax)} al año (≤ ${D4_FAMA_ANO_MAX}) · ${f1b(H.nMedia)} y ${f1b(B.nMedia)} entrevistas y ruedas por temporada, como mucho ${Math.max(H.nMax, B.nMax)} (≤ ${PRENSA_PAUSAS_MAX}); el clon ${C.nMax} · ${B.esc} escándalos del bocazas`);
+        console.log(`${okRetos ? 'OK  ' : 'FAIL'} retos: el bocazas lanza ${B.retos} y ${B.jug} acaban en batalla (${f1b(pctRetos)} %, al menos ${D4_RETOS_BATALLA} %) · pendientes al cerrar el año ${B.pend + H.pend}`); }
       const Mk = carreras.marcas; const okMarcas = Mk.revisadas > 0 && Mk.repetidas === 0; okCarreras = okCarreras && okMarcas;
       console.log(`${okMarcas ? 'OK  ' : 'FAIL'} patrocinadores: ninguna marca repetida entre los vigentes ni ofrecida mientras está vigente (${Mk.repetidas} de ${Mk.revisadas} pretemporadas revisadas)`); }
     { const E = carreras.fatiga; const avg = a => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length); const pct = e => e.n ? 100 * e.v / e.n : NaN; const fatSin = avg(E.sin.fat), fatCon = avg(E.con.fat), pSin = pct(E.sin), pCon = pct(E.con);
@@ -548,7 +599,7 @@ w.addEventListener('load', () => setTimeout(() => {
   // ---- temporada fecha a fecha (fase C4): el mismo recorrido que hacen los botones de «Mi carrera», sin pintar ----
   const fechas = { mia: null, resto: null };
   const correrFechas = modo => {
-    const r = { modo, anos: 0, paradas: 0, tuya: 0, batallas: 0, batallasPausadas: 0, pausasRegistradas: 0, ajenas: [], tuyaVacia: 0, porTipo: {}, registroEmpresa: [], calendarioEmpresa: [], excepciones: [] };
+    const r = { modo, anos: 0, prensaAno: [], prensaPrev: 0, retos: 0, retosJug: 0, d4Bytes: 0, bytesFin: 0, rueda: null, paradas: 0, tuya: 0, batallas: 0, batallasPausadas: 0, pausasRegistradas: 0, ajenas: [], tuyaVacia: 0, porTipo: {}, registroEmpresa: [], calendarioEmpresa: [], excepciones: [] };
     w.Math.random = mulberry32(SEMILLA);
     const S = g('state'); const mem = w._mem; S.company = null; S.freestylers = []; S.seasons = [];
     w.eval('var _aligerarReal3 = aligerarAntiguas; aligerarAntiguas = function(){ return 0; };');
@@ -556,14 +607,18 @@ w.addEventListener('load', () => setTimeout(() => {
       g('abrirCrearCarrera')(); Object.assign(S.ui.cc, { name: 'Fecha a fecha', country: 'España', style: 'Flow', attrs: { punchline: 55, metrica: 65, flow: 75, impro: 60, mentalidad: 45 } }); g('nuevaCarrera')();
       const fid = S.company.carrera.fid; const INTLK = g('INTL').key, MFUK = g('MFU').key;
       // resuelve una parada de presentación como lo hace el show correspondiente: marca lo visto; el día se juega en la siguiente llamada
+      let prensaN = 0;   // fase D4: el jugador contesta rotando «Sin comentarios», humilde, confiado y polémico, reta cada mes y acepta los retos que recibe
+      const retarMes = s => { const f = g('fby')(fid); const c = g('activos')().filter(o => !o.jugador && o.id !== f.id && Math.abs(o.fama - f.fama) <= g('RETO_RANGO')).sort((a, b) => Math.abs(a.fama - f.fama) - Math.abs(b.fama - f.fama)); for (const o of c.slice(0, 5)) { if (g('retar')(s, f, o.id)) break; } g('retosDe')(f).filter(x => x.e === 'recibido').forEach(x => g('retoAceptar')(s, f, x)); };
       const resolver = (s, ev) => { const L = s.leagues[ev.key];
         if (ev.pause === 'lineup') { if (ev.key === INTLK) s.intl.lu.shown = true; else L.lu.shown = true; }
         else if (ev.pause === 'pairs') L.pv[ev.j].shown = true;
         else if (ev.pause === 'fms') { if (!L.shown) L.shown = {}; L.shown[L.played] = true; }
         else if (ev.pause === 'under') g('underByDay')(s)[ev.day].presented = true;
         else if (ev.pause === 'rb') { if (ev.key === INTLK) s.intl.presented = true; else g('rbEvent')(s, ev.key).presented = true; }
-        else if (ev.pause === 'tuya') S.ui.tuBatalla = null; };
-      const concierne = (s, ev) => { if (ev.pause === 'mes') return true; if (ev.pause === 'lineup') return ev.key === INTLK ? (s.intl.lu.order || []).includes(fid) : s.leagues[ev.key].competitors.includes(fid);
+        else if (ev.pause === 'tuya') S.ui.tuBatalla = null;
+        else if (ev.pause === 'prensa') g('prensaResponderPend')([null, 'humilde', 'confiado', 'polemico'][prensaN++ % 4]);
+        if (ev.pause === 'mes' && modo === 'mia') retarMes(s); };
+      const concierne = (s, ev) => { if (ev.pause === 'mes' || ev.pause === 'prensa') return true; if (ev.pause === 'lineup') return ev.key === INTLK ? (s.intl.lu.order || []).includes(fid) : s.leagues[ev.key].competitors.includes(fid);
         if (ev.pause === 'pairs') return (s.leagues[ev.key].rounds[ev.j] || []).some(m => m.a === fid || m.b === fid); return g('jugadorJuegaHoy')(s, s.day, fid); };
       for (let t = 1; t <= FECHA_ANOS; t++) {
         const s = g('cur')(); g('asegurarOfertas')(s); g('jugarTemporadaCarrera')(); g('closeModal')();
@@ -577,11 +632,21 @@ w.addEventListener('load', () => setTimeout(() => {
           resolver(s, ev);
         }
         if (s.phase !== 'done') { r.excepciones.push(`T${t}: no cierra (${guard} pasos, última parada ${JSON.stringify(ev)})`); break; }
+        { const A = g('prensaAno')(g('fby')(fid), s.year); r.prensaAno.push((r.porTipo.prensa || 0) - r.prensaPrev); r.prensaPrev = r.porTipo.prensa || 0; r.retos += A.retos || 0; r.retosJug += A.retosJug || 0; }   // fase D4
         r.anos++; r.batallas += g('batallasDe')(s, fid).length; r.pausasRegistradas += (s.pausasJugador || []).reduce((a, p) => a + p.n, 0);
         (s.log || []).forEach(n => { if (REGISTRO_EMPRESA.test(n.text)) r.registroEmpresa.push(n.text.replace(/<[^>]+>/g, '').slice(0, 70)); });
         if (modo === 'mia') for (let mes = 0; mes < 12; mes++) { S.ui.calMonth = mes; const cal = g('renderCalendar')().replace(/<[^>]+>/g, ' '); if (REGISTRO_EMPRESA.test(cal)) r.calendarioEmpresa.push(`T${t} ${mes + 1}: ` + cal.match(REGISTRO_EMPRESA)[0]); }   // el calendario de carrera tampoco habla de empresa
         g('closeModal')(); g('nextSeason')(); g('closeModal')();
       }
+      if (r.anos === FECHA_ANOS) {   // fase D4: lo que ocupa en el guardado y batallas repetidas con y sin rueda de prensa
+        const f = g('fby')(fid); const p = g('planDe')(f); r.d4Bytes = JSON.stringify({ prensa: p.prensa, retos: p.retos, rivales: p.rivales }).length;
+        w.eval('aligerarAntiguas = _aligerarReal3;'); g('aligerarAntiguas')(); g('save')(); r.bytesFin = (mem.get(g('STORAGE_KEY')) || '').length + (mem.get(g('CARRERA_KEY')) || '').length;
+        const s = g('cur')(); const P = g('prensaDe')(f); const bak = { rueda: P.rueda, presion: P.presion }; const J = g('judgesOf')(s.leagues[g('natKeys')(s)[0]]); const riv = g('activos')().filter(o => !o.jugador).sort((a, b) => a.nivel - b.nivel); const rnd = w.Math.random;
+        const q = { iguales: 0, total: 0, conRueda: 0, sinRueda: 0 };
+        for (let i = 0; i < RUEDA_PRUEBAS; i++) { const o = riv[Math.floor(i * riv.length / RUEDA_PRUEBAS)];
+          const res = [null, 'humilde', 'confiado', 'polemico'].map(tono => { P.rueda = tono ? { t: tono, y: s.year, comp: 'prueba' } : null; P.presion = tono ? { t: tono, k: 1 } : null; w.Math.random = mulberry32(90000 + i); const m = { id: 'prueba' + i, a: f.id, b: o.id, result: null }; g('simulateFMSBattle')(m, 0, J); return { w: m.result.winner, firma: JSON.stringify([m.result, m.d && Array.from(m.d.v || [])]) }; });
+          q.total++; if (res.every(x => x.firma === res[0].firma)) q.iguales++; if (res[0].w === f.id) q.sinRueda++; if (res[3].w === f.id) q.conRueda++; }
+        w.Math.random = rnd; Object.assign(P, bak); r.rueda = q; }
     } catch (e) { r.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 2).join(' · ')); }
     w.eval('aligerarAntiguas = _aligerarReal3;'); mem.delete(g('STORAGE_KEY')); mem.delete(g('CARRERA_KEY')); S.ui.cc = null; S.ui.tuBatalla = null;
     return r;
@@ -598,6 +663,12 @@ w.addEventListener('load', () => setTimeout(() => {
     console.log(`${okMia ? 'OK  ' : 'FAIL'} «Hasta mi próxima batalla»: ${m.anos} temporadas, ${m.paradas} paradas (${Object.entries(m.porTipo).map(([k, v]) => k + ' ' + v).join(', ')}), ${m.batallas} batallas del jugador y ${m.batallasPausadas} con su pausa «Tu batalla» (${m.tuya} pausas, ${m.tuyaVacia} vacías), ${m.ajenas.length} paradas ajenas${m.ajenas.length ? ': ' + m.ajenas.slice(0, 3).join('; ') : ''}${m.excepciones.length ? ' · ' + m.excepciones.join('; ') : ''}`);
     console.log(`${okResto ? 'OK  ' : 'FAIL'} «Saltar el resto del año»: ${x.anos} temporadas, ${x.paradas} paradas y ${x.pausasRegistradas} pausas registradas (${x.batallas} batallas del jugador)${x.excepciones.length ? ' · ' + x.excepciones.join('; ') : ''}`);
     console.log(`${okReg ? 'OK  ' : 'FAIL'} registro y calendario de carrera sin textos de empresa: ${m.registroEmpresa.length + x.registroEmpresa.length} entradas del registro y ${m.calendarioEmpresa.length} meses del calendario con taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla${m.registroEmpresa.length ? ' · ' + [...new Set(m.registroEmpresa)].slice(0, 3).join(' | ') : ''}${m.calendarioEmpresa.length ? ' · ' + m.calendarioEmpresa.slice(0, 3).join(' | ') : ''}`);
+    { const Q = m.rueda || { iguales: 0, total: 0, conRueda: 0, sinRueda: 0 }; const pmax = m.prensaAno.length ? Math.max(...m.prensaAno) : 0;   // fase D4
+      const okPrensa = m.porTipo.prensa > 0 && pmax <= PRENSA_PAUSAS_MAX && x.prensaAno.every(n => n === 0), okRueda = Q.total === RUEDA_PRUEBAS && Q.iguales === Q.total, okTam4 = m.d4Bytes > 0 && m.d4Bytes <= D4_GUARDADO_MAX && m.bytesFin > 0 && m.bytesFin <= GUARDADO_MAX;
+      okFechas = okFechas && okPrensa && okRueda && okTam4;
+      console.log(`${okPrensa ? 'OK  ' : 'FAIL'} pausas de prensa: ${m.porTipo.prensa || 0} en ${m.anos} temporadas con «Hasta mi próxima batalla», como mucho ${pmax} en una (≤ ${PRENSA_PAUSAS_MAX}) · ${x.prensaAno.reduce((a, b) => a + b, 0)} con «Saltar el resto» · el jugador lanzó ${m.retos} retos y jugó ${m.retosJug} exhibiciones de reto, contando las que aceptó`);
+      console.log(`${okRueda ? 'OK  ' : 'FAIL'} la rueda de prensa no cambia la probabilidad de ganar: ${Q.iguales} de ${Q.total} batallas repetidas con la misma semilla dan el mismo resultado sin rueda y con cada tono · gana ${f1b(100 * Q.sinRueda / Math.max(1, Q.total))} % sin rueda y ${f1b(100 * Q.conRueda / Math.max(1, Q.total))} % tras una rueda polémica`);
+      console.log(`${okTam4 ? 'OK  ' : 'FAIL'} guardado con prensa y retos: D4 ocupa ${f1b(m.d4Bytes / 1024)} KB (≤ ${D4_GUARDADO_MAX / 1024} KB) y la partida ${f1b(m.bytesFin / 1024)} KB tras ${m.anos} temporadas (≤ ${f1b(GUARDADO_MAX / 1024)} KB)`); }
   }
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
