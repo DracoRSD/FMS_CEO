@@ -915,7 +915,7 @@ function runLeagueJornada(s, L, d){
   SPK_BH=spkVal(L.key,'bhype'); RIVAL_DEFER=true; round.forEach(m=>{ m.views = (m.postponed||!m.b) ? 0 : Math.round(battleViews(m, vm)*uqViewMult(s,L,m,zk)); }); RIVAL_DEFER=false;
   round.forEach((m,mi)=>{ if(m.views && isRival(m.a,m.b) && Math.random()<0.75) uqPush(s, {day:d+1, type:'rival', key:L.key, j:L.played, mi, a:m.a, b:m.b, w:m.result&&m.result.winner, v:rint(0,13)}); });
   const fx = L.fexhib && L.fexhib[L.played];
-  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); if(fx.invitacion){ addFama(m.result.winner, EXHIB_FAMA_PREMIO); [fx.a, fx.b].forEach(id=>{ const j=fby(id); if(j && j.jugador) moverDinero(s, j, EXHIB_PAGO_BASE+Math.round(EXHIB_PAGO_SALARIO*salarioOferta(j, L.key, !ldef(L.key).countries.includes(j.country))), 'exhibicion', `exhibición en ${ldef(L.key).name}`); }); } }
+  if(fx && fby(fx.a) && fby(fx.b)){ const m=fx.m={id:uid('x'), a:fx.a, b:fx.b, result:null, ex:true, forced:true}; simulateFMSBattle(m, (leagueHasFx(L.key,'nivel')?2:0)+spkLv(L.key), judgesOf(L)); m.views=Math.round(battleViews(m, vmBase)*exViewMult(m)); if(fx.reto) retoJugado(s, fx, m); if(fx.invitacion){ addFama(m.result.winner, EXHIB_FAMA_PREMIO); [fx.a, fx.b].forEach(id=>{ const j=fby(id); if(j && j.jugador) moverDinero(s, j, EXHIB_PAGO_BASE+Math.round(EXHIB_PAGO_SALARIO*salarioOferta(j, L.key, !ldef(L.key).countries.includes(j.country))), 'exhibicion', `exhibición en ${ldef(L.key).name}`); }); } }
   const ex = L.exhib && L.exhib[L.played];
   if(ex && fby(ex.a) && fby(ex.b)){
     const m=ex.m={id:uid('x'), a:ex.a, b:ex.b, result:null, ex:true};
@@ -1008,8 +1008,9 @@ function runIntl(s, d){
   addLog(s, d, `🌎 <b>${fname(s.intl.champion)}</b> gana el ${INTL.name}${s.intl.sede?' en '+s.intl.sede:''} ante ${fname(s.intl.runnerUp)}.${modoCarrera()?'':` Taquilla ${moneyK(income)}, ${fmtViews(views)} visitas (${moneyK(viewsIncome)}), +${rep} rep.`}${hypeNote}`, 'gold');
 }
 
-function monthEnd(s, m){
+function monthEnd(s, m, auto){
   if(modoCarrera()) jugadores().forEach(f=>ejecutarPlanMes(s, f, m));   // fase D1: sesiones del mes de cada jugador
+  if(modoCarrera()) jugadores().forEach(f=>retosMes(s, f, m, auto));   // fase D4: retos de las sondas y retos recibidos
   // leyendas que llevan mucho sin batallar: la gente las echa de menos
   const now=s.year*366+dateToDay(s.year,m+1,0);
   state.freestylers.forEach(f=>{ if(!f.legend || f.retirado) return; if(f.lastB==null) f.lastB=now-30; const idle=now-f.lastB; if(idle>=90) addHype(f.id, idle>=180?2:1); });
@@ -1089,7 +1090,7 @@ function simulateDay(auto, soloFid){
   const rev=rbByDay(s)[d];
   if(rev){ if(rev.key===RB_INT.key) runRBInter(s,d); else runRBEvent(s, rbEvent(s,rev.key), d); }
   const uev=underByDay(s)[d]; if(uev && !uev.played) runUnder(s, uev, d);
-  if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d));
+  if(d===diy-1 || monthOf(y,d+1)!==monthOf(y,d)) monthEnd(s, monthOf(y,d), auto);
   // modo carrera: si hoy batallé y no se está saltando el año, queda pendiente la pausa «Tu batalla» (el simulador cuenta s.pausasJugador)
   if(carr) jugadores().forEach(j=>{ const bd=batallasDelDia(s, d, j.id); const n=bd.length; if(n){ j.fatiga=clamp((j.fatiga||0)+FATIGA_BATALLA*n,0,100); j.ultBatallaMes=monthOf(y,d);   // fase D1: la batalla cansa
     if(spActivo(s, j, 'tecnologia')){ const p=planDe(j); if(!p.spTec || p.spTec.y!==y) p.spTec={y, v:0}; bd.filter(b=>b.m.result.winner===j.id).forEach(()=>{ if(p.spTec.v+SP_AYUDA.tecnologia.famaVictoria<=SP_AYUDA.tecnologia.famaTope){ p.spTec.v+=SP_AYUDA.tecnologia.famaVictoria; addFamaDec(j.id, SP_AYUDA.tecnologia.famaVictoria); } }); } } });   // fase D3: patrocinio de tecnología
@@ -1923,6 +1924,51 @@ function prensaCierre(s, f){ prensaCaducarTodo(s, f); const P=prensaDe(f); P.rue
   prensaAno(f, s.year).pendCierre=R.filter(r=>r.y===s.year && r.e==='aceptado').length;
   R.forEach(r=>{ if(r.y!==s.year) return; if(r.e==='recibido') r.e='ignorado'; else if(r.e==='aceptado') r.e='cancelado'; });
   if(P.cruces) Object.keys(P.cruces).forEach(k=>{ P.cruces[k]=P.cruces[k].filter(y=>y>=s.year); if(!P.cruces[k].length) delete P.cruces[k]; }); }
+// ---- Retos públicos ----
+// Primera jornada libre de cualquier liga desde pasado mañana, sin chocar con nada del jugador (a LIGA_CHOQUE_DIAS) ni con una batalla del rival ese día
+function retoFecha(s, f, oid){ const libres=[];
+  natKeys(s).forEach(k=>{ const L=s.leagues[k]; if(L.finished) return; L.dates.forEach((d,j)=>{ if(j>=L.played && d>=s.day+2 && !(L.fexhib && L.fexhib[j])) libres.push({k, j, d}); }); });
+  libres.sort((a,b)=>a.d-b.d); const exh=exhibicionesDe(s, f.id);
+  const rivalOcupado=d=>natKeys(s).some(k=>{ const L=s.leagues[k]; const j=L.dates.indexOf(d); return (j>=0 && (L.rounds[j]||[]).some(m=>m.a===oid||m.b===oid)) || Object.entries(L.fexhib||{}).some(([jj,x])=>L.dates[+jj]===d && (x.a===oid||x.b===oid)); });
+  const yoOcupado=d=>{ if(exh.some(x=>Math.abs(x.day-d)<=LIGA_CHOQUE_DIAS)) return true; for(let x=d-LIGA_CHOQUE_DIAS; x<=d+LIGA_CHOQUE_DIAS; x++) if(x>=s.day && jugadorEnDia(s, x, f.id)) return true; return false; };
+  return libres.find(x=>!rivalOcupado(x.d) && !yoOcupado(x.d)) || null; }
+// ¿Se puede retar? Devuelve el motivo si no. rapido: sin buscar fecha (para pintar botones)
+function retoPuede(s, f, oid, rapido){ if(!modoCarrera() || s.phase!=='live') return 'solo durante la temporada'; const o=fby(oid);
+  if(!o || o.retirado || o.jugador || o.id===f.id) return 'no se le puede retar'; if(Math.abs(o.fama-f.fama)>RETO_RANGO) return `solo a ±${RETO_RANGO} de tu fama`;
+  if(prensaDe(f).retoMes===s.year*12+monthOf(s.year, s.day)) return 'ya retaste a alguien este mes';
+  if(retosDe(f).some(r=>r.y===s.year && r.o===oid && (r.e==='aceptado' || r.e==='recibido'))) return 'ya hay un reto pendiente';
+  if(!rapido && !retoFecha(s, f, oid)) return 'no queda fecha libre este año'; return null; }
+function retoPush(f, r){ const R=retosDe(f); R.unshift(r); if(R.length>RETO_HIST) R.length=RETO_HIST; return r; }
+// Programa la batalla como exhibición de reto en una jornada libre (reutiliza L.fexhib, como las invitaciones)
+function retoProgramar(s, f, r){ const fx=retoFecha(s, f, r.o); if(!fx){ r.e='sinFecha'; return false; } const L=s.leagues[fx.k]; if(!L.fexhib) L.fexhib={}; L.fexhib[fx.j]={a:f.id, b:r.o, reto:true}; r.e='aceptado'; r.k=fx.k; r.j=fx.j; return true; }
+// Si un imprevisto de la liga ocupa la jornada de una exhibición de reto, se busca otra fecha (o se queda sin fecha)
+function retoReubicar(s, fx){ const f=fby(fx.a); const r=f && retosDe(f).find(x=>x.y===s.year && x.e==='aceptado' && x.o===fx.b); if(r) retoProgramar(s, f, r); }
+function retoFechaTxt(s, r){ const L=r.k && s.leagues[r.k]; return L ? `${ldef(r.k).name} J${r.j+1}, ${fmtDay(s.year, L.dates[r.j])}` : ''; }
+function retar(s, f, oid){ if(retoPuede(s, f, oid)) return null; const yo=esJugadorCarrera(f); prensaDe(f).retoMes=s.year*12+monthOf(s.year, s.day);
+  const r=retoPush(f, {y:s.year, d:s.day, o:oid, dir:'yo', e:'ignorado'}); const A=prensaAno(f, s.year); A.retos=(A.retos||0)+1;
+  if(yo) twCarreraEvento(s, 'retoLanza', {o:fname(oid)});
+  if(Math.random() < (prensaRival(f, oid) ? RETO_P_RIVAL : RETO_P)){ retoProgramar(s, f, r); if(yo && r.e==='aceptado'){ addLog(s, s.day, `🥊 <b>${fname(oid)}</b> acepta el reto de ${fname(f.id)}: exhibición en ${retoFechaTxt(s, r)}.`, 'gold'); twCarreraEvento(s, 'retoAcepta', {o:fname(oid)}); } }
+  else if(yo){ addLog(s, s.day, `🥊 ${fname(oid)} no contesta al reto de <b>${fname(f.id)}</b>.`); twCarreraEvento(s, 'retoIgnora', {o:fname(oid)}); }   // quien ignora no pierde nada: solo hablan las redes
+  return r; }
+function retoAceptar(s, f, r){ if(!r || r.e!=='recibido') return false; const ok=retoProgramar(s, f, r);
+  if(ok && esJugadorCarrera(f)){ addLog(s, s.day, `🥊 <b>${fname(f.id)}</b> acepta el reto de ${fname(r.o)}: exhibición en ${retoFechaTxt(s, r)}.`, 'gold'); twCarreraEvento(s, 'retoSi', {o:fname(r.o)}); } return ok; }
+function retoIgnorar(s, f, r){ if(!r || r.e!=='recibido') return; r.e='ignorado'; if(esJugadorCarrera(f)) twCarreraEvento(s, 'retoEsquiva', {o:fname(r.o)}); }
+// Al cerrar cada mes: las sondas retan, y alguien del país puede retar al jugador (solo si contesta alguien: fuera de «Saltar el resto»)
+function retosMes(s, f, m, auto){ const p=planDe(f); const quien=prensaQuien(f, auto); if(!quien) return;
+  if(quien==='auto' && p.prensaAuto.retar && prensaDe(f).retoMes!==s.year*12+m){ const c=activos().filter(o=>!o.jugador && o.id!==f.id && Math.abs(o.fama-f.fama)<=RETO_RANGO).sort((a,b)=>Math.abs(a.fama-f.fama)-Math.abs(b.fama-f.fama)).slice(0, 5); if(c.length) retar(s, f, pick(c).id); }
+  const A=prensaAno(f, s.year); if((A.recibidos||0)>=RETO_RECIBIDOS_MAX || Math.random()>=RETO_RECIBIDO_P) return;
+  const cands=activos().filter(o=>!o.jugador && o.id!==f.id && o.country===f.country && Math.abs(o.fama-f.fama)<=RETO_RANGO); if(!cands.length) return;
+  const cruces=prensaDe(f).cruces||{}; const pref=cands.filter(o=>prensaRival(f, o.id) || (cruces[o.id]||[]).length); const o=pick(pref.length && Math.random()<0.6 ? pref : cands);
+  if(retosDe(f).some(r=>r.y===s.year && r.o===o.id && (r.e==='aceptado' || r.e==='recibido')) || !retoFecha(s, f, o.id)) return;
+  A.recibidos=(A.recibidos||0)+1; const r=retoPush(f, {y:s.year, d:s.day, o:o.id, dir:'el', e:'recibido'});
+  if(quien==='auto'){ if(p.prensaAuto.aceptar) retoAceptar(s, f, r); else r.e='ignorado'; return; }
+  addLog(s, s.day, `🥊 <b>${fname(o.id)}</b> reta a ${fname(f.id)}. Acéptalo o ignóralo en «Mi carrera» en los próximos ${RETO_CADUCA} días.`, 'gold'); twCarreraEvento(s, 'retoRecibe', {o:fname(o.id)}); }
+// Exhibición de reto jugada (desde la jornada de liga): fama solo con 50 o más, fans, haters y seguidores
+function retoJugado(s, fx, m){ const f=fby(fx.a); if(!f || !f.jugador) return; const r=retosDe(f).find(x=>x.y===s.year && x.e==='aceptado' && x.o===fx.b); if(!r) return;
+  const gane=m.result.winner===f.id; r.e='jugado'; r.w=gane?1:0; const A=prensaAno(f, s.year); A.retosJug=(A.retosJug||0)+1; const conFama=f.fama>=RETO_FAMA;
+  if(gane){ if(conFama) prensaFama(s, f, RETO_FAMA_GANA); prensaFans(s, f, 1, 'fans'); prensaSeg(s, f, RETO_SEG); }
+  else { if(conFama) prensaFama(s, f, RETO_FAMA_PIERDE); prensaFans(s, f, 1, 'haters'); }
+  if(esJugadorCarrera(f)) twCarreraEvento(s, gane ? 'retoGana' : 'retoPierde', {o:fname(fx.b)}); }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
@@ -4530,7 +4576,7 @@ function uqSetUnavail(evId, guestId, day, silent){
   if(!silent && uqExhibRefuses(s, g)){ toast(`${g.name} no está interesado en hacer una exhibición.`); state.ui.uqGuest=null; showUQ(ev); return; }
   const cost=exhibCost(g, ev.key);
   state.company.money-=cost; s.fin.salaries+=cost; state.ui.uqGuest=null; state.ui.uqDay=null; state.ui.uqQ='';
-  if(!L.fexhib) L.fexhib={}; L.fexhib[ev.j]={a:ev.rival, b:guestId, missing:ev.fid, cost};
+  if(!L.fexhib) L.fexhib={}; const retoPrevio=L.fexhib[ev.j]; L.fexhib[ev.j]={a:ev.rival, b:guestId, missing:ev.fid, cost}; if(retoPrevio && retoPrevio.reto) retoReubicar(s, retoPrevio);   // fase D4: el reto busca otra jornada
   const m=L.rounds[ev.j][ev.mi]; m.recupDay=+day;
   uqPush(s, {day:+day, type:'recup', key:ev.key, j:ev.j, mi:ev.mi});
   ev.done=true; if(!silent){ closeModal(); toast(`${fname(ev.rival)} hará exhibición contra ${g.name}. Recuperativa el ${fmtDay(s.year,+day)}.`); render(); }
