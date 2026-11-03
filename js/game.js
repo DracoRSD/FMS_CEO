@@ -1704,10 +1704,10 @@ function twCarreraEvento(s, tipo, datos){
   const ref='ev:'+tipo+':'+s.year; const out=[]; const usados=new Set();
   const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country).map(twAcc), todos=TWITTEROS.filter(t=>!t.special).map(twAcc);
   const libre=pool=>{ const c=pool.filter(a=>!usados.has(a.handle)); const a=c.length?pick(c):null; if(a) usados.add(a.handle); return a; };
-  const dia=twDia(f.country); const sent = /noRenueva|nivelBaja/.test(tipo) ? -1 : 1;
+  const dia=twDia(f.country); const neg=PRENSA_TW_NEG.has(tipo); const sent = (neg || /noRenueva|nivelBaja/.test(tipo)) ? -1 : 1;   // fase D4: lo negativo de prensa y retos lo dicen los haters
   const frase=acc=>{ const grupo=twDia(acc.country)==='es'?'es':'la'; const core=twElige(s, TWE[grupo][tipo]||TWE[grupo].oferta); const pre = Math.random()<0.35 ? twElige(s, TWX_PRE[twDia(acc.country)]||TWX_PRE.neu) : '';
     let t = pre ? pre+' '+core : core.charAt(0).toUpperCase()+core.slice(1); if(hito && Math.random()<0.5) t+=' 🔥'; t=t.replace(/\{(\w+)\}/g,(m,x)=>d[x]!=null?d[x]:m); return twUnico(s, t, acc.country); };
-  const fans=r.fans.map(redesCuenta).filter(Boolean); const nf=Math.min(fans.length, Math.round(n*0.4));
+  const fans=(neg ? r.haters : r.fans).map(redesCuenta).filter(Boolean); const nf=Math.min(fans.length, Math.round(n*0.4));
   for(let i=0;i<nf;i++){ const a=libre(fans); if(a) out.push(redesPush(s, a, frase(a), sent, ref)); }
   while(out.length<n){ const a=libre((Math.random()<0.7?mios:todos)); if(!a) break; out.push(redesPush(s, a, frase(a), sent, ref)); }
   if(hito || tipo==='titulo' || tipo==='intl' || f.fama>=50){ const med=MEDIOS_PAIS[dia]||MEDIOS_PAIS.neu; const a=Object.assign({verified:true}, pick(med)); out.push(redesPush(s, a, frase(a), 0, ref)); }
@@ -1738,6 +1738,116 @@ function contratoPanel(s, f){ const p=planDe(f); const c=p.contrato; const vig =
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Contrato</span><p class="step-note" style="margin:0">${txt}</p></div>`; }
 function redesPanel(f){ const r=redesDe(); if(!r) return ''; const seg=redesSeguidores(f); const segTxt = seg>=1000 ? (Math.round(seg/100)/10).toLocaleString('es-ES')+' k' : String(seg);
   return `<div class="step" style="margin-top:16px;"><span class="field-label">Redes</span><p class="step-note" style="margin:0 0 10px">${segTxt} seguidores · ${r.fans.length} fans · ${r.haters.length} haters · racha ${r.racha||0}</p>${redesFeedHtml(r.feed.slice(0, REDES_PANEL_MAX), 'Todavía nadie habla de ti. Compite y verás.')}</div>`; }
+// ---- Prensa y retos (fase D4): entrevistas, ruedas de prensa y retos públicos. Mueven fans, haters, seguidores y, con los retos, la fama; nunca atributos ni la probabilidad de ganar ----
+// plan.prensa = {hist:[≤PRENSA_HIST declaraciones], pend:[pendientes], ano:{y, n, ent, fans, haters, seg, fama, retos, retosJug, recibidos, pendCierre}, presion, rueda, seguidas, escandalo, cruces:{id:[años]}, nt, primeraV, previa, retoMes, preY}
+// plan.retos = [≤RETO_HIST {y, d, o, dir:'yo'|'el', e:'aceptado'|'ignorado'|'recibido'|'jugado'|'sinFecha'|'cancelado', k, j, w}] · plan.rivales = [≤RIVALES_MAX ids] · plan.prensaOn (interruptor de la pretemporada)
+// plan.prensaAuto = {tono, retar, aceptar}: solo lo usan las sondas del simulador. En el juego no existe: lo que el jugador no contesta queda en «Sin comentarios» y no tiene efecto.
+const PRENSA_FAMA = 40, PRENSA_P = 0.30, PRENSA_P_PEQ = 0.10;          // entrevista tras batalla: 30 % con fama ≥ 40; por debajo, un medio pequeño en el 10 % con los efectos a la mitad
+const PRENSA_MAX_ANO = 10, PRENSA_ENT_MAX = 6, PRENSA_HIST = 40;      // como mucho 10 pausas de prensa por temporada (entrevistas y ruedas), 6 de ellas entrevistas
+const PRENSA_TOPE = {fans:6, haters:6, seg:0.08};                     // topes por temporada de fans, haters y seguidores que mueven prensa y retos
+const PRENSA_TONOS = {
+  humilde:  {nombre:'Humilde',  fans:1, pFans:1,   quitaHater:0.25, seg:0.01},
+  confiado: {nombre:'Confiado', fans:1, pFans:0.5, seg:0.02, presion:{pierde:{haters:1}}},
+  polemico: {nombre:'Polémico', haters:[1,2], seg:0.03, presion:{pierde:{haters:2, fans:-1}, gana:{fans:1}}},
+};
+const RETO_RANGO = 10, RETO_FAMA = 50, RETO_P = 0.8, RETO_P_RIVAL = 0.95;   // se reta a quien esté a ±10 de fama; antes de fama 50 los retos no mueven la fama
+const RETO_FAMA_GANA = 2, RETO_FAMA_PIERDE = -1, RETO_FAMA_TOPE = 3, RETO_SEG = 0.02;   // la fama que suman los retos no pasa de +3 por temporada
+const RETO_RECIBIDO_P = 0.15, RETO_RECIBIDOS_MAX = 2, RETO_CADUCA = 14, RETO_HIST = 20;
+const RIVALES_MAX = 10, RIVALIDAD_CRUCES = 3;                         // tres cruces en dos temporadas crean rivalidad
+const ESCANDALO_SEGUIDAS = 3, ESCANDALO_FAMA = -5, ESCANDALO_HATERS = 4;   // tres respuestas polémicas seguidas, cada una con derrota en la batalla siguiente
+var CANALES_BARRIO = {es:'Micro Abierto TV', ar:'La Plaza Freestyle', mx:'Barrio Rimas MX', cl:'Cypher Sur', pe:'Esquina Freestyle', co:'Parche Freestyle', car:'Callejón Rap', neu:'Underground Live'};
+var PRENSA_DICHO = {humilde:['iba a disfrutar y a aprender','ibas a disfrutar y a aprender'], confiado:['venía a ganar','venías a ganar'], polemico:['los demás tenían que prepararse','los demás tenían que prepararse']};
+// Preguntas por contexto. {o} rival · {comp} competición o título · {liga} · {dicho} lo que dijo en la rueda previa. Cada pregunta trae una respuesta por tono.
+var PRENSA_PREG = {
+  victoria:[
+    {q:'Ganaste a {o}. ¿Qué te llevas de esta batalla?', r:{humilde:'Que {o} me obligó a dar lo mejor. Aprendo de cada rival.', confiado:'Que estoy donde tengo que estar. Esto es solo el principio.', polemico:'Que {o} no estaba a mi altura. Que vaya pidiendo otra.'}},
+    {q:'¿Te esperabas ganar a {o} así?', r:{humilde:'Para nada, vine a disfrutar y salió bien.', confiado:'Sí. Entrené para esto y se notó.', polemico:'Claro. Lo raro es que alguien lo dudara.'}},
+    {q:'La gente empieza a hablar de ti. ¿Te pesa?', r:{humilde:'Me hace ilusión, pero sigo con los pies en el suelo.', confiado:'Que hablen. Les voy a dar motivos.', polemico:'Llegan tarde. Yo ya sabía lo que había.'}},
+  ],
+  derrota:[
+    {q:'Perdiste con {o}. ¿Qué pasó?', r:{humilde:'{o} fue mejor hoy. Toca volver a entrenar.', confiado:'Un mal día. La próxima vez será distinta.', polemico:'Los jueces sabrán. Yo la gané.'}},
+    {q:'¿Fue justa la decisión de los jueces?', r:{humilde:'Sí, lo respeto. Me quedo con lo bueno.', confiado:'Ajustada, pero no me escondo. Vuelvo más fuerte.', polemico:'Justa no. Que la vuelvan a ver.'}},
+    {q:'¿Cómo te levantas de esta?', r:{humilde:'Paso a paso, como siempre.', confiado:'Como hacen los grandes: ganando la siguiente.', polemico:'No me tengo que levantar de nada. {o} tuvo suerte.'}},
+  ],
+  titulo:[
+    {q:'Campeón de {comp}. ¿A quién se lo dedicas?', r:{humilde:'A mi gente y a todos los que me enfrenté por el camino.', confiado:'A mí, por creérmelo cuando nadie lo hacía.', polemico:'A los que decían que no podía. Ahí lo tienen.'}},
+    {q:'¿Es {comp} el título más importante de tu carrera?', r:{humilde:'Por ahora sí, y lo disfruto muchísimo.', confiado:'Es el primero de muchos.', polemico:'Es lo mínimo que merecía.'}},
+    {q:'¿Qué viene después de {comp}?', r:{humilde:'Seguir aprendiendo y disfrutar.', confiado:'Ir a por algo más grande.', polemico:'Quitarle el sitio a quien lo tenga.'}},
+  ],
+  primera:[
+    {q:'Primera victoria. ¿Qué se siente?', r:{humilde:'Una alegría enorme. Gracias a quien me ha apoyado.', confiado:'Que llegaba tarde. Vendrán más.', polemico:'Nada especial. Era cuestión de tiempo.'}},
+    {q:'Mucha gente no te conocía. ¿Quién eres?', r:{humilde:'Alguien que ama esto y quiere mejorar.', confiado:'El nombre que van a escuchar mucho.', polemico:'El próximo problema de todos.'}},
+  ],
+  previa:[
+    {q:'Llega {comp}. ¿Cómo te ves?', r:{humilde:'Con ganas. Hay mucho nivel y voy a disfrutarlo.', confiado:'Preparado para ganarlo.', polemico:'Que se preparen los demás.'}},
+    {q:'¿A quién temes en {comp}?', r:{humilde:'A todos. Cualquiera te puede ganar.', confiado:'A nadie. Respeto, pero no miedo.', polemico:'Miedo deberían tenerme a mí.'}},
+    {q:'¿Qué esperas de {comp}?', r:{humilde:'Aprender y dejar buena imagen.', confiado:'Volver con el título.', polemico:'Que hablen de mí durante meses.'}},
+  ],
+  postGana:[
+    {q:'Antes de {comp} dijiste que {dicho}. ¿Lo cumpliste?', r:{humilde:'Lo intenté y hoy me salió todo.', confiado:'Dije lo que iba a pasar y pasó.', polemico:'Siempre cumplo. Que tomen nota.'}},
+    {q:'Gran papel en {comp}. ¿Qué ha cambiado?', r:{humilde:'Trabajo y gente que me ayuda.', confiado:'Que ya me lo creo.', polemico:'Nada, siempre fui así. Ahora se ve.'}},
+    {q:'¿Cómo te viste en {comp}?', r:{humilde:'Mejor de lo que esperaba. Toca seguir.', confiado:'Como me veo siempre: arriba.', polemico:'Por encima de todos, como dije.'}},
+  ],
+  postPierde:[
+    {q:'Antes de {comp} dijiste que {dicho}. ¿Qué falló?', r:{humilde:'Me tocó un rival mejor. Lo dije de corazón.', confiado:'No salió, pero lo volvería a decir.', polemico:'Nada mío. Que miren a los jueces.'}},
+    {q:'Te vas de {comp} antes de lo que querías. ¿Cómo estás?', r:{humilde:'Tocado, pero agradecido por estar aquí.', confiado:'Con rabia. El año que viene vuelvo.', polemico:'Bien. Al que me ganó le queda mucho.'}},
+    {q:'¿Qué te llevas de {comp}?', r:{humilde:'Experiencia. De esto se aprende.', confiado:'Ganas de volver y ganarlo.', polemico:'Que el nivel está sobrevalorado.'}},
+  ],
+  oferta:[
+    {q:'{liga} te quiere. ¿Qué vas a hacer?', r:{humilde:'Es un honor. Lo pensaré con calma.', confiado:'Me lo he ganado. Estoy listo.', polemico:'Ya era hora de que se dieran cuenta.'}},
+    {q:'¿Estás preparado para {liga}?', r:{humilde:'Voy a aprender de todos.', confiado:'Más que nunca.', polemico:'La liga es la que tiene que estar preparada.'}},
+  ],
+  pais:[
+    {q:'Te llaman de {liga}. ¿Te irías de tu país?', r:{humilde:'Sería un aprendizaje enorme.', confiado:'Donde haya batallas, ahí estaré.', polemico:'Aquí ya no me queda nada que demostrar.'}},
+    {q:'¿Te ves en {liga}, lejos de casa?', r:{humilde:'Con respeto y con ganas de aprender.', confiado:'Me veo ganándola.', polemico:'Me veo poniéndola patas arriba.'}},
+  ],
+};
+// Tuits de prensa y retos, iguales para los dos grupos de voz (sin vosotros ni ustedes). {n} jugador · {o} rival · {medio} · {dicho} · {t} competición
+var PRENSA_TW = {
+  entHumilde:['{n} siempre tan humilde, así da gusto','qué bien habla {n}, con los pies en el suelo','{n} en {medio}: cero ego, mucho respeto','me cae cada vez mejor {n}, vaya entrevista','{n} hablando con respeto de {o}, eso es nivel','la entrevista de {n} en {medio} es una lección','{n} no se lo cree y eso le hace grande','{n} da las gracias a todos, qué crack'],
+  entConfiado:['{n} viene con todo, se nota en {medio}','{n} se lo cree y me gusta','qué seguridad la de {n} en la entrevista','{n} dice que esto es solo el principio, veremos','{n} confía en sí mismo, como debe ser','a {n} no le tiembla la voz en {medio}','{n} habla como un campeón','{n} tiene clarísimo a dónde quiere llegar'],
+  entPolemico:['lo de {n} en {medio} sobra','a {n} se le fue la lengua en {medio}','qué falta de respeto la de {n}','{n} hablando así, a ver si luego lo demuestra','{n} encendió las redes con lo que dijo','la entrevista de {n} va a traer cola','{n} sin filtro en {medio}, palomitas','{n} con esos humos, ya veremos en la próxima'],
+  ruedaCumple:['{n} dijo que {dicho} y lo cumplió','{n} avisó en la rueda de prensa y cumplió','{n} prometió y cumplió en {t}','lo que dijo {n} antes de {t} se hizo realidad','{n} habló y luego lo demostró en {t}','{n} en {t}: palabra cumplida','{n} dijo que {dicho}, y vaya si lo hizo','{n} cumple lo que dijo antes de {t}'],
+  ruedaFalla:['{n} dijo que {dicho} y se va de {t}','{n} habló mucho antes de {t}','lo de {n} en la rueda de prensa no envejeció bien','{n} prometió en {t} y no cumplió','{n} se queda corto tras lo que dijo','{n} dijo que {dicho}, no fue para tanto','a {n} le pesó lo que dijo antes de {t}','{n} y la rueda de prensa de {t}, para olvidar'],
+  retoLanza:['{n} reta a {o} en público, esto se pone bueno','{n} contra {o}: el reto está lanzado','{n} le tiró el guante a {o}','¿aceptará {o} el reto de {n}?','{n} quiere batalla con {o} y lo dice en voz alta','reto de {n} a {o}, que alguien ponga fecha','{n} señala a {o}: quiere batalla','{o}, te llaman: {n} te reta'],
+  retoAcepta:['{o} acepta el reto de {n}, habrá batalla','hay {n} contra {o}, confirmado','{o} recoge el guante de {n}','{n} y {o} se verán las caras','{o} no se esconde: acepta a {n}','reto aceptado: {n} vs {o}','{o} dice que sí, {n} vs {o} va','ya hay fecha para {n} contra {o}'],
+  retoIgnora:['{o} ni contesta a {n}','silencio de {o} ante el reto de {n}','{o} pasa de {n}, sin más','{n} retó a {o} y nada','{o} deja en visto a {n}','parece que {o} no tiene tiempo para {n}','{n} se queda esperando a {o}','ni caso de {o} al reto de {n}'],
+  retoRecibe:['{o} reta a {n}, ¿aceptará?','{o} le tira el guante a {n}','{o} quiere batalla con {n}','reto de {o} a {n}, esto se calienta','{o} señala a {n}','{n}, te llaman: {o} te reta','{o} contra {n}, ¿habrá batalla?','{o} pide a {n} en público'],
+  retoSi:['{n} acepta el reto de {o}, habrá batalla','{n} recoge el guante de {o}','{n} no se esconde: acepta a {o}','reto aceptado: {o} vs {n}','{n} dice que sí a {o}','{n} y {o} se verán las caras','{n} contra {o}, confirmado','{n} responde a {o}: batalla'],
+  retoEsquiva:['{n} no contesta a {o}, ¿miedo?','{n} esquiva el reto de {o}','{o} retó a {n} y nada','{n} deja en visto a {o}','silencio de {n} ante {o}','{n} pasa del reto de {o}','{o} sigue esperando respuesta de {n}','¿{n} tiene miedo de {o}?'],
+  retoGana:['{n} cumple: gana el reto a {o}','reto ganado por {n} ante {o}','{n} se lleva el cara a cara con {o}','{n} le gana a {o} el reto, sin discusión','{o} aceptó y {n} ganó','lo de {n} contra {o} acabó como quería {n}','{n} gana el reto y calla bocas','reto saldado: {n} ante {o}'],
+  retoPierde:['{n} pierde el reto con {o}, toma ya','{o} le gana el reto a {n}','{n} retó y perdió con {o}','el reto le sale mal a {n}: gana {o}','{o} cierra bocas ante {n}','{n} buscó a {o} y lo encontró','reto para {o} ante {n}','{n} pedirá revancha a {o}, seguro'],
+  rivalidad:['{n} y {o} ya son rivales de verdad','otra vez {n} contra {o}: esto es una rivalidad','{n} vs {o}, el clásico que viene','{n} y {o} no se pueden ver','tercera vez {n} contra {o}, rivalidad oficial','{n} y {o} tienen cuentas pendientes','{n} contra {o} ya es un clásico','la rivalidad entre {n} y {o} engancha'],
+  escandalo:['escándalo con {n}: sus palabras le pasan factura','{n} se metió en un lío','lo de {n} ya es un escándalo','{n} paga caro lo que dijo','{n} pierde apoyos tras sus declaraciones','las palabras de {n} le cuestan caro','{n} en el ojo del huracán','{n} y su boca, otra vez'],
+};
+Object.entries(PRENSA_TW).forEach(([k,v])=>{ TWE.es[k]=v; TWE.la[k]=v; });
+const PRENSA_TW_NEG = new Set(['entPolemico','ruedaFalla','retoEsquiva','retoPierde','escandalo']);   // estos los dicen los haters y van en negativo
+function prensaDe(f){ const p=planDe(f); if(!p.prensa) p.prensa={hist:[], pend:[]}; const P=p.prensa; if(!Array.isArray(P.hist)) P.hist=[]; if(!Array.isArray(P.pend)) P.pend=[]; return P; }
+function prensaAno(f, y){ const P=prensaDe(f); if(!P.ano || P.ano.y!==y) P.ano={y, n:0, ent:0, fans:0, haters:0, seg:0, fama:0}; return P.ano; }
+function retosDe(f){ const p=planDe(f); if(!Array.isArray(p.retos)) p.retos=[]; return p.retos; }
+function esJugadorCarrera(f){ const c=state.company && state.company.carrera; return !!(c && f && f.id===c.fid); }
+function prensaRival(f, oid){ return isRival(f.id, oid) || (planDe(f).rivales||[]).includes(oid); }
+// ¿Quién contesta? 'yo' (el jugador de la carrera fuera de «Saltar el resto» y con la prensa activada), 'auto' (sondas del simulador) o null: entonces no se genera nada y no se gasta azar
+function prensaQuien(f, auto){ const p=planDe(f); if(p.prensaAuto) return 'auto'; return (!auto && esJugadorCarrera(f) && p.prensaOn!==false) ? 'yo' : null; }
+// Fans o haters (campo) dentro del tope del año; en el jugador de la carrera también entran o salen cuentas de sus redes. Solo se quita lo que hay:
+// en el jugador, las cuentas de su lista; en las sondas, lo sumado este año
+function prensaFans(s, f, d, campo){ const A=prensaAno(f, s.year); const tope=PRENSA_TOPE[campo]; const r0=esJugadorCarrera(f) && redesDe(); if(d<0) d=-Math.min(-d, r0 ? r0[campo].length : Math.max(0, A[campo]));
+  const real=clamp(A[campo]+d, -tope, tope)-A[campo]; if(!real) return 0; A[campo]+=real;
+  const r=esJugadorCarrera(f) && redesDe(); if(r){ const lista=r[campo], otra=r[campo==='fans'?'haters':'fans'], max = campo==='fans' ? REDES_FANS_MAX : REDES_HATERS_MAX;
+    if(real>0){ const mios=TWITTEROS.filter(t=>!t.special && t.country===f.country), todos=TWITTEROS.filter(t=>!t.special);
+      for(let i=0;i<real && lista.length<max;i++){ const pool=(Math.random()<0.7?mios:todos).filter(t=>!lista.includes(t.handle) && !otra.includes(t.handle)); if(!pool.length) break; lista.push(pick(pool).handle); } }
+    else lista.splice(0, Math.min(lista.length, -real)); }
+  return real; }
+function prensaSeg(s, f, x){ const A=prensaAno(f, s.year); const real=Math.round(Math.min(x, PRENSA_TOPE.seg-A.seg)*1000)/1000; if(real<=0) return 0; A.seg=Math.round((A.seg+real)*1000)/1000; const p=planDe(f); p.segMult=Math.round((p.segMult||1)*(1+real)*1000)/1000; return real; }
+// Fama de retos (subidas con tope RETO_FAMA_TOPE al año) y del escándalo
+function prensaFama(s, f, d){ if(!d) return 0; if(d>0){ const A=prensaAno(f, s.year); d=Math.min(d, RETO_FAMA_TOPE-A.fama); if(d<=0) return 0; A.fama+=d; } const antes=f.fama; addFama(f.id, d); return f.fama-antes; }
+function prensaMedio(f, peq, fijo){ const dia=twDia(f.country); if(peq) return CANALES_BARRIO[dia]||CANALES_BARRIO.neu; const m=MEDIOS_PAIS[dia]||MEDIOS_PAIS.neu; return (fijo!=null ? m[fijo%m.length] : pick(m)).name; }
+function titulosAno(s, id){ const t=[]; if(s.phase==='pre') return t;
+  s.activeKeys.forEach(k=>{ const L=s.leagues[k]; if(L.finished && L.finalStandings[0]===id) t.push(ldef(k).name); });
+  if(s.intl.champion===id) t.push(INTL.name);
+  if(rbOn(s)){ s.rb.events.forEach(e=>{ if(e.champion===id) t.push(rbdef(e.key).name); }); if(s.rb.inter.champion===id) t.push(RB_INT.name); }
+  (s.under||[]).forEach(e=>{ if(e.champion===id) t.push(udef(e.key).name); });
+  return t; }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
@@ -2247,17 +2357,7 @@ function renderFreestylers(){
     <div style="min-width:0;"><div class="fname">${nameH(f)}</div><div class="fcountry">${esc(f.country)}${d?` <span class="tag-mini" style="background:${d.badge};color:${d.fg}">${d.short}</span>`:''}${f.retirado?' <span class="ret-tag">Retirado</span>':(f.debut?` <span class="ret-tag nov">Debut ${f.debut}</span>`:'')}</div></div>
     <div class="pick-stats">Nivel <b>${f.nivel}</b><br>Fama <b>${f.fama}</b><br>Hype <b>${f.hype!=null?Math.round(f.hype):'—'}</b><br><span class="sal">${moneyK(salaryOf(f))}</span></div></div>`; }).join('')}</div>`;
 }
-function titlesOf(id){
-  const t=[];
-  state.seasons.forEach(s=>{
-    if(s.phase==='pre') return;
-    s.activeKeys.forEach(k=>{ const L=s.leagues[k]; if(L.finished && L.finalStandings[0]===id) t.push(`${ldef(k).name} ${s.year}`); });
-    if(s.intl.champion===id) t.push(`${INTL.name} ${s.year}`);
-    if(rbOn(s)){ s.rb.events.forEach(e=>{ if(e.champion===id) t.push(`${rbdef(e.key).name} ${s.year}`); }); if(s.rb.inter.champion===id) t.push(`${RB_INT.name} ${s.year}`); }
-    (s.under||[]).forEach(e=>{ if(e.champion===id) t.push(`${udef(e.key).name} ${s.year}`); });
-  });
-  return t;
-}
+function titlesOf(id){ return state.seasons.flatMap(s=>titulosAno(s, id).map(n=>`${n} ${s.year}`)); }
 function showFreestyler(id){
   const f=fby(id); const s=cur(); const lk=signedLeagueOf(s,id); const t=titlesOf(id);
   openModal(`<div class="profile-top" style="margin-bottom:10px;">
