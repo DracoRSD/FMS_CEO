@@ -852,7 +852,7 @@ function startSeason(){
   s.phase='live'; s.day=0; state.ui.calMonth=null;
   rbDraw(s);
   invitacionesExhibicion(s);   // modo carrera: exhibiciones del año según la fama
-  if(modoCarrera()){ firmarContratos(s); firmarPatrocinios(s); }   // fase D2: contratos; fase D3: patrocinadores
+  if(modoCarrera()){ firmarContratos(s); firmarPatrocinios(s); jugadores().forEach(f=>prensaCaducarTodo(s, f)); }   // fase D2: contratos; fase D3: patrocinadores; fase D4: la entrevista de pretemporada sin contestar queda en «Sin comentarios»
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
   addLog(s, 0, `Arranca la temporada ${s.year} con ${s.activeKeys.length} liga(s)${s.intlEnabled?' + Internacional':''}.`, 'gold');
   goto(modoCarrera() ? 'carrera' : 'dashboard');
@@ -1094,6 +1094,7 @@ function simulateDay(auto, soloFid){
   if(carr) jugadores().forEach(j=>{ const bd=batallasDelDia(s, d, j.id); const n=bd.length; if(n){ j.fatiga=clamp((j.fatiga||0)+FATIGA_BATALLA*n,0,100); j.ultBatallaMes=monthOf(y,d);   // fase D1: la batalla cansa
     if(spActivo(s, j, 'tecnologia')){ const p=planDe(j); if(!p.spTec || p.spTec.y!==y) p.spTec={y, v:0}; bd.filter(b=>b.m.result.winner===j.id).forEach(()=>{ if(p.spTec.v+SP_AYUDA.tecnologia.famaVictoria<=SP_AYUDA.tecnologia.famaTope){ p.spTec.v+=SP_AYUDA.tecnologia.famaVictoria; addFamaDec(j.id, SP_AYUDA.tecnologia.famaVictoria); } }); } } });   // fase D3: patrocinio de tecnología
   if(carr && state.company.carrera){ const fid=state.company.carrera.fid; const bat=batallasDelDia(s, d, fid); if(bat.length){ bat.forEach(b=>twCarreraBatalla(s, b, fid)); if(!auto){ (s.pausasJugador=s.pausasJugador||[]).push({day:d, n:bat.length}); state.ui.tuBatalla={day:d}; } } redesEventosDia(s, fid); }
+  if(carr) prensaDia(s, d, auto);   // fase D4: entrevistas, ruedas posteriores y retos recibidos que caducan
   s.day++;
   if(s.day>=diy) endSeason(s);
   return ev||rev||null;
@@ -1185,6 +1186,7 @@ function endSeason(s){
     redesCierreAno(s, f, nivelPrev); } }
   if(modoCarrera()) jugadores().forEach(f=>{ if(!state.company.carrera || f.id!==state.company.carrera.fid) cerrarSesionesAno(f);
     const p=planDe(f); const lk=signedLeagueOf(s, f.id); const c=p.contrato; if(lk) p.ligasJugadas=(p.ligasJugadas||0)+1; cobrarPatrocinios(s, f); if(p.merch && p.merch.y===s.year){ moverDinero(s, f, p.merch.v, 'merch', 'merchandising'); delete p.merch; } if(c && lk===c.liga && c.hasta>=s.year){ moverDinero(s, f, c.salario, 'salario', ldef(lk).name); const st=s.leagues[lk].finalStandings; const pu=st.indexOf(f.id)+1; if(pu>0) (c.puestos=c.puestos||[]).push(pu); } });   // fase D2: cobra el salario del año
+  if(modoCarrera()) jugadores().forEach(f=>prensaCierre(s, f));   // fase D4: lo pendiente queda en «Sin comentarios» y ningún reto se queda colgado
   // relevo generacional: retiros y nuevos talentos
   const retirados=retirarFreestylers(s); const novatos=generarNovatos(s, retirados);
   s.summary = {
@@ -1848,6 +1850,79 @@ function titulosAno(s, id){ const t=[]; if(s.phase==='pre') return t;
   if(rbOn(s)){ s.rb.events.forEach(e=>{ if(e.champion===id) t.push(rbdef(e.key).name); }); if(s.rb.inter.champion===id) t.push(RB_INT.name); }
   (s.under||[]).forEach(e=>{ if(e.champion===id) t.push(udef(e.key).name); });
   return t; }
+// Evento importante del jugador el día d (antes de jugarlo): Internacional, Red Bull o la última jornada de su liga
+function eventoImportante(s, d, fid){ if(s.intl && s.intl.date===d && !s.intl.played) return INTL.name; const rb=rbOn(s) && rbByDay(s)[d]; if(rb) return rb.key===RB_INT.key ? RB_INT.name : rbdef(rb.key).name;
+  const lk=signedLeagueOf(s, fid); if(lk){ const L=s.leagues[lk]; if(!L.finished && L.dates[L.dates.length-1]===d) return ldef(lk).name; } return null; }
+function batallaImportante(s, f, b){ if(b.key==='intl' || b.key==='rbinter' || b.key.startsWith('rb:')) return true; if(b.mi==='ex' || b.mi==='fex') return false; const L=s.leagues[b.key]; return !!(L && signedLeagueOf(s, f.id)===b.key && +b.j===L.dates.length-1); }
+// Texto de una pregunta y sus respuestas con los datos del momento
+function prensaTexto(it){ const L=(PRENSA_PREG[it.c]||[])[it.q]; if(!L) return null; const rep=t=>t.replace(/\{(\w+)\}/g,(m,x)=>x==='o' ? (it.o ? fname(it.o) : 'tu rival') : (x==='comp'||x==='liga' ? (it.comp||'') : (x==='dicho' ? (it.dicho||'') : m)));
+  return {q:rep(L.q), r:Object.fromEntries(Object.keys(PRENSA_TONOS).map(t=>[t, rep(L.r[t])]))}; }
+// Nueva entrevista o rueda: queda pendiente para el jugador o la contesta la sonda en el momento. Devuelve null si el año ya llegó al tope.
+function prensaNueva(s, f, quien, datos){ const A=prensaAno(f, s.year); if(A.n>=PRENSA_MAX_ANO || (datos.tipo==='entrevista' && A.ent>=PRENSA_ENT_MAX)) return null;
+  const lista=PRENSA_PREG[datos.c]; const qs=lista.map((x,i)=>i).filter(i=>datos.dicho || !/\{dicho\}/.test(lista[i].q));
+  const it=Object.assign({id:`${s.year}-${s.day}-${A.n}`, y:s.year, d:s.day, q: datos.qFija!=null ? qs[datos.qFija%qs.length] : pick(qs)}, datos); delete it.qFija;
+  A.n++; if(it.tipo==='entrevista') A.ent++;
+  if(quien==='auto'){ prensaResponder(s, f, it, planDe(f).prensaAuto.tono||null); return it; }
+  prensaDe(f).pend.push(it); return it; }
+// Respuesta: tono null es «Sin comentarios». La presión de una entrevista cuenta en la batalla siguiente; la de la rueda previa solo cambia textos.
+function prensaResponder(s, f, it, tono){ const P=prensaDe(f); P.pend=P.pend.filter(x=>x.id!==it.id); const T=tono ? PRENSA_TONOS[tono] : null; const k=it.peq ? 0.5 : 1; const e={};
+  if(T){ if(T.pFans && Math.random()<T.pFans*k) e.f=prensaFans(s, f, T.fans, 'fans');
+    if(T.haters){ const h = k===1 ? rint(T.haters[0], T.haters[1]) : (Math.random()<0.75 ? 1 : 0); if(h) e.h=prensaFans(s, f, h, 'haters'); }
+    if(T.quitaHater && Math.random()<T.quitaHater*k) e.h=(e.h||0)+prensaFans(s, f, -1, 'haters');
+    e.s=prensaSeg(s, f, T.seg*k); }
+  if(it.tipo==='previa') P.rueda={t:tono||null, y:s.year, comp:it.comp};
+  else { P.presion = (T && T.presion) ? {t:tono, k} : null; if(tono!=='polemico') P.seguidas=0; }
+  P.hist.unshift({y:s.year, d:s.day, tp:it.tipo, c:it.c, q:it.q, o:it.o||null, comp:it.comp||null, di:it.dicho||null, m:it.medio, t:tono||null, e}); if(P.hist.length>PRENSA_HIST) P.hist.length=PRENSA_HIST;
+  if(T && esJugadorCarrera(f)) twCarreraEvento(s, 'ent'+tono.charAt(0).toUpperCase()+tono.slice(1), {medio:it.medio, o:it.o ? fname(it.o) : 'su rival'});
+  return e; }
+// Lo que se queda sin contestar: «Sin comentarios», sin efecto y sin entrar en el historial
+function prensaCaduca(s, f, it){ const P=prensaDe(f); P.pend=P.pend.filter(x=>x.id!==it.id); if(it.tipo==='previa') P.rueda={t:null, y:s.year, comp:it.comp}; else { P.presion=null; P.seguidas=0; } }
+// Resultado de la batalla siguiente a una entrevista: la presión suma haters o fans, y tres polémicas seguidas con derrota abren el escándalo
+function prensaTrasResultado(s, f, gane){ const P=prensaDe(f); const pr=P.presion; if(!pr) return; P.presion=null; const T=PRENSA_TONOS[pr.t]; const ef=T && T.presion && (gane ? T.presion.gana : T.presion.pierde);
+  if(ef && Math.random()<(pr.k||1)){ if(ef.fans) prensaFans(s, f, ef.fans, 'fans'); if(ef.haters) prensaFans(s, f, ef.haters, 'haters'); }
+  if(pr.t==='polemico'){ if(gane) P.seguidas=0; else if((P.seguidas=(P.seguidas||0)+1)>=ESCANDALO_SEGUIDAS){ P.seguidas=0; prensaEscandalo(s, f); } } }
+function prensaEscandalo(s, f){ const P=prensaDe(f); if(P.escandalo===s.year) return; P.escandalo=s.year; prensaAno(f, s.year).esc=1; prensaFama(s, f, ESCANDALO_FAMA); prensaFans(s, f, ESCANDALO_HATERS, 'haters');
+  const p=planDe(f); const sp=(p.sponsors||[]).find(x=>x.hasta>=s.year && (x.cat==='ropa' || x.cat==='bebida')); if(sp) p.sponsors=p.sponsors.filter(x=>x!==sp);
+  if(esJugadorCarrera(f)){ addLog(s, s.day, `🔥 Escándalo: tres declaraciones polémicas seguidas de derrota pasan factura a <b>${fname(f.id)}</b> (−${-ESCANDALO_FAMA} de fama${sp ? ' y '+esc(sp.marca)+' se va' : ''}).`, 'bad'); twCarreraEvento(s, 'escandalo'); } }
+// Cruces para la rivalidad: tres en dos temporadas con la misma persona
+function retoCruce(s, f, oid, quien){ if(!oid) return; const P=prensaDe(f); if(!P.cruces) P.cruces={}; const l=P.cruces[oid]=(P.cruces[oid]||[]).filter(y=>y>=s.year-1); l.push(s.year);
+  if(l.length<RIVALIDAD_CRUCES || prensaRival(f, oid)) return; const p=planDe(f); p.rivales=(p.rivales||[]).concat(oid).slice(-RIVALES_MAX);
+  if(quien==='yo'){ addLog(s, s.day, `⚔️ <b>${fname(f.id)}</b> y ${fname(oid)} ya son rivales: ${l.length} cruces en dos temporadas.`, 'gold'); twCarreraEvento(s, 'rivalidad', {o:fname(oid)}); } }
+// Tras las batallas del día de un jugador: presión pendiente, cruces y, si toca, entrevista o rueda posterior
+function prensaTrasBatallas(s, f, bat, auto){ const P=prensaDe(f); const ult=bat[bat.length-1]; const gane=ult.m.result.winner===f.id; const quien=prensaQuien(f, auto);
+  prensaTrasResultado(s, f, bat[0].m.result.winner===f.id);
+  bat.forEach(b=>retoCruce(s, f, b.m.a===f.id ? b.m.b : b.m.a, quien));
+  const tit=titulosAno(s, f.id); const titulo = (P.nt && P.nt.y===s.year) ? tit.length>P.nt.n : tit.length>0; P.nt={y:s.year, n:tit.length};
+  const primera = gane && !P.primeraV; if(gane) P.primeraV=1;
+  if(!quien) return;
+  const peq=f.fama<PRENSA_FAMA; const o=ult.m.a===f.id ? ult.m.b : ult.m.a; const comp=etiquetaBatalla(ult).split(' · ')[0];
+  if(batallaImportante(s, f, ult)){ const medio='Rueda de prensa · '+comp;
+    if(quien==='auto' && !(P.rueda && P.rueda.y===s.year && P.rueda.comp===comp)) prensaNueva(s, f, 'auto', {tipo:'previa', c:'previa', comp, medio});
+    const R=(P.rueda && P.rueda.y===s.year && P.rueda.comp===comp) ? P.rueda : null; P.rueda=null;
+    if(R && R.t && R.t!=='humilde' && quien==='yo') twCarreraEvento(s, gane ? 'ruedaCumple' : 'ruedaFalla', {dicho:PRENSA_DICHO[R.t][0], t:comp});   // la presión de la rueda solo se nota en los textos
+    prensaNueva(s, f, quien, {tipo:'post', c: gane ? 'postGana' : 'postPierde', o, comp, medio, dicho: R && R.t ? PRENSA_DICHO[R.t][1] : null}); return; }
+  if(!titulo && !primera && Math.random()>=(peq ? PRENSA_P_PEQ : PRENSA_P)) return;
+  prensaNueva(s, f, quien, {tipo:'entrevista', c: titulo ? 'titulo' : (primera ? 'primera' : (gane ? 'victoria' : 'derrota')), o, comp: titulo ? tit[tit.length-1] : comp, peq, medio:prensaMedio(f, peq)}); }
+// Cada día en carrera (desde simulateDay): retos recibidos que caducan y prensa tras las batallas de cada jugador
+function prensaDia(s, d, auto){ jugadores().forEach(f=>{ (planDe(f).retos||[]).forEach(r=>{ if(r.e==='recibido' && d-r.d>RETO_CADUCA){ r.e='ignorado'; if(!auto && esJugadorCarrera(f)) twCarreraEvento(s, 'retoEsquiva', {o:fname(r.o)}); } });
+  const bat=batallasDelDia(s, d, f.id); if(bat.length) prensaTrasBatallas(s, f, bat, auto); }); }
+// Pretemporada: entrevista si hay oferta de liga (de fuera, si la oferta es extranjera). La pregunta y el medio no gastan azar.
+function prensaPretemporada(s){ if(!modoCarrera() || s.phase!=='pre') return; jugadores().forEach(f=>{ const P=prensaDe(f); if(P.preY===s.year) return; const quien=prensaQuien(f, false); if(!quien) return;
+  const o=planDe(f).ofertas.find(x=>!x.contrato); if(!o) return; P.preY=s.year;
+  prensaNueva(s, f, quien, {tipo:'pre', c: o.extranjero ? 'pais' : 'oferta', comp:ldef(o.key).name, medio:prensaMedio(f, false, s.year), qFija:s.year}); }); }
+// Lo pendiente se queda en «Sin comentarios» (al empezar la temporada, al saltar el resto y al cerrar el año)
+function prensaCaducarTodo(s, f){ if(!f) return; const P=prensaDe(f); P.pend.slice().forEach(x=>prensaCaduca(s, f, x)); }
+// Pausa de prensa en «Siguiente fecha» y «Hasta mi próxima batalla»: lo que se enseñó y no se contestó caduca; después, lo pendiente o la rueda previa del día
+function prensaPausa(s, fid){ const f=fby(fid); if(!f) return null; const P=prensaDe(f);
+  P.pend.filter(x=>x.shown).forEach(x=>prensaCaduca(s, f, x));
+  if(P.pend.length){ P.pend[0].shown=true; return {pause:'prensa'}; }
+  const comp=eventoImportante(s, s.day, fid); const marca=s.year*1000+s.day;
+  if(comp && P.previa!==marca && planDe(f).prensaOn!==false && jugadorJuegaHoy(s, s.day, fid)){ P.previa=marca; const it=prensaNueva(s, f, 'yo', {tipo:'previa', c:'previa', comp, medio:'Rueda de prensa · '+comp}); if(it){ it.shown=true; return {pause:'prensa'}; } }
+  return null; }
+function prensaCierre(s, f){ prensaCaducarTodo(s, f); const P=prensaDe(f); P.rueda=null; const R=retosDe(f);
+  prensaAno(f, s.year).pendCierre=R.filter(r=>r.y===s.year && r.e==='aceptado').length;
+  R.forEach(r=>{ if(r.y!==s.year) return; if(r.e==='recibido') r.e='ignorado'; else if(r.e==='aceptado') r.e='cancelado'; });
+  if(P.cruces) Object.keys(P.cruces).forEach(k=>{ P.cruces[k]=P.cruces[k].filter(y=>y>=s.year); if(!P.cruces[k].length) delete P.cruces[k]; }); }
 // Pretemporada de carrera: liga (ofertas), atributo a entrenar y torneos. Los valores por defecto los pone asegurarOfertas.
 function carreraDecisiones(s, f){
   asegurarOfertas(s); const p=planDe(f);
@@ -1904,6 +1979,7 @@ function pasoCarrera(modo){
   const s=cur(); if(s.phase!=='live') return null; const fid=state.company.carrera.fid; let guard=0;
   while(s.phase==='live' && guard++<400){
     if(modo!=='resto'){ const f=fby(fid); const mes=monthOf(s.year, s.day); if(f && planDe(f).avisoMes!==false && (s.day===0 || monthOf(s.year, s.day-1)!==mes) && s.mesAvisado!==mes){ s.mesAvisado=mes; return {pause:'mes', mes}; } }   // fase D1: plan del mes
+    if(modo!=='resto'){ const pz=prensaPausa(s, fid); if(pz) return pz; } else prensaCaducarTodo(s, fby(fid));   // fase D4: entrevistas y ruedas de prensa; al saltar el resto, nadie habla por ti
     const ev = modo==='resto' ? simulateDay(true) : simulateDay(false, modo==='mia' ? fid : null);
     if(ev && ev.pause) return ev;
     if(state.ui.tuBatalla) return {pause:'tuya', day:state.ui.tuBatalla.day};
@@ -2802,6 +2878,7 @@ function asegurarOfertas(s){
   const porLiga={}; jugadores().forEach(f=>{ (planDe(f).ofertas||[]).forEach(o=>{ if(o.extranjero && !o.contrato) (porLiga[o.key]=porLiga[o.key]||[]).push({f, cl:o.clausula?1:0}); }); });
   Object.entries(porLiga).forEach(([k,list])=>{ list.sort((a,b)=>a.cl-b.cl || b.f.nivel-a.f.nivel).map(x=>x.f).slice(CUPO_EXTRANJEROS).forEach(f=>{ const p=planDe(f); p.ofertas=p.ofertas.filter(o=>o.key!==k); if(p.liga===k) p.liga = p.ofertas.some(o=>o.key===p._antes) ? p._antes : (p.ofertas[0] ? p.ofertas[0].key : null); }); });
   jugadores().forEach(f=>{ delete planDe(f)._antes; });
+  prensaPretemporada(s);   // fase D4: entrevista si hay oferta de liga
 }
 // ---- Sesiones de entrenamiento (fase D1): plan del mes, cuota por sesión aplicada al momento, fatiga ----
 function planMesDe(f){ const p=planDe(f); if(!p.mes || typeof p.mes!=='object' || !p.mes.entreno){ const k=ATTR_KEYS.includes(p.entreno) ? p.entreno : ATTR_KEYS.slice().sort((a,b)=>attrOf(f,a)-attrOf(f,b))[0]; p.mes={entreno:{[k]:SESIONES_MES-1}, sparring:0, descanso:1}; } if(!p.anio) p.anio={entreno:{}, sparring:0, descanso:0, sparringGan:0}; return p.mes; }
