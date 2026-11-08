@@ -30,6 +30,8 @@ Si en vez de eso descargas el código del repositorio, abre su `index.html`: car
 
 > Si tienes el móvil en vertical, el juego te pedirá que lo gires.
 
+👉 **Tutorial paso a paso para iPhone / iPad:** [IOS.md](IOS.md)
+
 ## 💾 Partidas
 - La partida se guarda sola.
 - Desde el juego puedes **exportar** la partida a un archivo e **importarla** en otro ordenador o navegador.

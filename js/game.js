@@ -770,22 +770,22 @@ function autoCalendar(){
     for(let d=a; d<=b; d++){ if(!free(d,key)) continue; const sc=Math.abs(d-target)+(wkend(d)?0:5); if(sc<bs){ bs=sc; best=d; } } return best; };
   const nat=natKeys(s); const hasWS=s.activeKeys.includes(WS.key); const intl=!!s.intlEnabled;
   const wsMonth = hasWS ? 5 : -1;   // junio: mitad de temporada
-  // meses disponibles para las nacionales
-  const lastM = intl ? 10 : 11;     // con Internacional, diciembre queda para él
-  const M=[]; for(let m=0;m<=lastM;m++) if(m!==wsMonth) M.push(m);
-  const NJ=nat.length?nJ(nat[0]):JORNADAS; const maxOff=Math.max(0, M.length-NJ);
-  const plan={};   // mes -> [claves]
-  nat.forEach((k,i)=>{ const off = nat.length>1 ? Math.round(i*maxOff/(nat.length-1)) : 0;
-    for(let j=0;j<NJ;j++){ const m=M[Math.min(off+j, M.length-1)]; (plan[m]||(plan[m]=[])).push(k); } });
-  // World Series: 5 fechas repartidas en su mes
-  if(hasWS){ const a=mStart(wsMonth), b=mEnd(wsMonth), W=s.leagues[WS.key]; const step=(b-a)/WS_JORNADAS;
+  // World Series: 5 fechas en su mes (entre su J1 y su J5 no puede haber nacionales)
+  if(hasWS){ const a=mStart(wsMonth), b=mEnd(wsMonth)-6, W=s.leagues[WS.key]; const step=(b-a)/WS_JORNADAS;
     for(let j=0;j<WS_JORNADAS;j++){ const d=pick(Math.round(a+step*(j+0.5)), a, b, WS.key); if(d!=null){ W.dates.push(d); used.add(d); } } }
-  // nacionales: en cada mes, las ligas repartidas a lo largo del mes
-  Object.keys(plan).map(Number).sort((a,b)=>a-b).forEach(m=>{ const ks=plan[m]; const a=mStart(m), b=mEnd(m); const step=(b-a+1)/ks.length;
-    ks.forEach((k,r)=>{ const d=pick(Math.round(a+step*(r+0.5)), a, b, k); if(d!=null){ s.leagues[k].dates.push(d); used.add(d); } }); });
-  // si algo no cupo en su mes (muy raro), al primer hueco libre después de la última fecha de esa liga
-  nat.forEach(k=>{ const L=s.leagues[k]; let guard=0; while(L.dates.length<nJ(k) && guard++<40){ const last=Math.max(LU_RESERVED, ...L.dates); const r=wsRange(s);
-    let d=null; for(let x=last+2; x<diy; x++){ if(r && x>=r[0] && x<=r[1]) continue; if(free(x,k)){ d=x; break; } } if(d==null) break; L.dates.push(d); used.add(d); } });
+  // nacionales: repartidas de forma continua por todo el año (desde enero), saltándose la World Series y dejando hueco al final
+  // para la FMS Under y el Internacional. Cada liga, desfasada un poco respecto a las demás.
+  const r=wsRange(s); const endNat = intl ? Math.min(capEnd, dateToDay(y,11,1)-1-(fuOn(s)?10:0)) : capEnd;
+  const line=[]; for(let d=LU_RESERVED; d<=endNat; d++){ if(r && d>=r[0]-1 && d<=r[1]+1) continue; line.push(d); }
+  const NJ=nat.length?nJ(nat[0]):JORNADAS; const T=line.length; const slot=T/NJ;
+  for(let j=0;j<NJ;j++) nat.forEach((k,i)=>{ const pos=Math.min(T-1, Math.floor((j+(i+0.5)/nat.length)*slot)); const target=line[pos];
+    const lo=line[Math.max(0, Math.floor(j*slot))], hi=line[Math.min(T-1, Math.ceil((j+1)*slot)-1)];
+    let d=pick(target, lo, hi, k); if(d!=null && r && d>=r[0] && d<=r[1]) d=null; if(d!=null){ s.leagues[k].dates.push(d); used.add(d); } });
+  // si algo no cupo en su hueco (muy raro): el día libre más alejado de las demás jornadas de esa liga
+  nat.forEach(k=>{ const L=s.leagues[k]; let guard=0; while(L.dates.length<nJ(k) && guard++<40){ let best=null, bs=-1;
+      for(const x of line){ if(!free(x,k)) continue; const g=L.dates.length ? Math.min(...L.dates.map(q=>Math.abs(q-x))) : 999; const sc=g*2+(wkend(x)?1:0); if(sc>bs){ bs=sc; best=x; } }
+      if(best==null){ const last=Math.max(LU_RESERVED, ...L.dates); for(let x=last+2; x<diy; x++){ if(r && x>=r[0] && x<=r[1]) continue; if(free(x,k)){ best=x; break; } } }
+      if(best==null) break; L.dates.push(best); used.add(best); } });
   // FMS Under: unos días después de la última jornada de cada liga
   if(fuOn(s)) nat.forEach(k=>{ const L=s.leagues[k]; if(!L.dates.length) return; const last=Math.max(...L.dates); let d=null;
     for(const [t,a,b] of [[last+7,last+3,last+40],[last+3,last+2,diy-1],[last+2,last+1,diy-1]]){ d=pick(t, a, Math.min(diy-1,b), null); if(d!=null) break; }
@@ -1080,6 +1080,7 @@ function startSeason(){
   try{ teamRQSelect(s); }catch(e){ console.error(e); }
   rbDraw(s);
   try{ under2Generate(s, 0); }catch(e){ console.error(e); }
+  try{ teamRQFixDay(s); }catch(e){ console.error(e); }
   invitacionesExhibicion(s);   // modo carrera: exhibiciones del año según la fama
   if(modoCarrera()){ firmarContratos(s); firmarPatrocinios(s); jugadores().forEach(f=>prensaCaducarTodo(s, f)); }   // fase D2: contratos; fase D3: patrocinadores; fase D4: la entrevista de pretemporada sin contestar queda en «Sin comentarios»
   s.repStart=state.company.reputation; s.starsStart=state.company.stars;
@@ -5084,8 +5085,11 @@ function wsPairingEditor(s, key){
   if(L.confirmed[L.played]) return `<div class="banner" style="margin-top:14px;">Cruces de la J${jn} (${fmtDay(s.year,L.dates[L.played])}) elegidos.&nbsp;<button class="btn small" onclick="wsUnconfirm('${key}')">Cambiar</button></div>`;
   const d=wsDraft(key); const st=wsState(L);
   const chips=L.competitors.map(id=>{ const n=wsNeed(L,d,id); if(n<=0) return '';
-    const isSel=d.sel===id; const blocked = d.slot==null ? (d.sel && d.sel!==id && st.used.has(pairKey(d.sel,id))) : st.ep.has(id);
-    return `<button class="pair-chip ${isSel?'sel':''} ${blocked?'blocked':''}" onclick="wsTap('${key}','${id}')">${miniAvatar(id,22)}<span>${fnameH(id)}</span><small>${n}/2</small></button>`; }).join('');
+    const isSel=d.sel===id; const blocked = d.slot==null ? (d.sel && d.sel!==id && (st.used.has(pairKey(d.sel,id)) || d.pairs.some(p=>pairKey(p[0],p[1])===pairKey(d.sel,id)))) : st.ep.has(id);
+    const epc0=d.eps.map(x=>x.c).filter(Boolean);
+    const nofit = !blocked && (d.slot==null ? (d.sel && d.sel!==id && pairNoFit(key, ()=>!wsFeasible(L, [...d.pairs,[d.sel,id]], epc0), [d.sel,id,d.pairs,epc0]))
+      : (!d.eps.some((x,i)=>i!==d.slot && x.c===id) && pairNoFit(key, ()=>!wsFeasible(L, d.pairs, d.eps.map((x,i)=>i===d.slot?id:x.c).filter(Boolean)), ['ep',d.slot,id,d.pairs,epc0])));
+    return `<button class="pair-chip ${isSel?'sel':''} ${blocked?'blocked':''} ${nofit?'nofit':''}" onclick="wsTap('${key}','${id}')">${miniAvatar(id,22)}<span>${fnameH(id)}</span><small>${n}/2</small></button>`; }).join('');
   const epCard=(e,i)=>`<div class="ws-ep ${d.slot===i?'on':''}" onclick="wsSlot('${key}',${i})">
       <div class="ws-ep-h">Extraplayer ${i+1}</div>
       <div class="ex-row">${e.c?`${miniAvatar(e.c,24)} ${fnameH(e.c)}`:'<span class="step-note">Competidor…</span>'} <span class="vs">vs</span> ${e.x?`${fnameH(e.x)} ${miniAvatar(e.x,24)}<small class="step-note">${moneyK(wsEpFee(fby(e.x),key))}</small>`:'<span class="step-note">Extraplayer…</span>'}</div>
@@ -5191,7 +5195,7 @@ const UQ_UNAV = {   // no pueden venir a la jornada (lead: días de antelación 
   'Frescolate':{p:0.05, lead:9, notFirst:true, why:'hizo un backflip en la pasada jornada, le salió mal y te presenta la baja laboral para esta'},
   'Ricto':{p:0.20, first:false, why:'no le han dado el día libre en el trabajo'}, 'Arkano':{p:0.25, first:true, why:'coincide con su participación en Supervivientes'},
   'Mowlihawk':{p:0.15, notLast:true, why:'tiene que grabar un Batmowli'},
-  'Errecé':{p:0.10, first:false, why:'se ha ido a Bali a reflexionar sobre la vida'},
+  'Errecé':{p:0.10, first:false, noPandemic:true, why:'se ha ido a Bali a reflexionar sobre la vida'},   // en Pandemia no se puede viajar
   'Éxodo Lirical':{p:0.20, first:false, why:'no puede viajar: la visa no le permite entrar al país'},
 };
 function uqPush(s, ev){ if(!s.uq) s.uq=[]; ev.id=uid('u'); ev.done=false; s.uq.push(ev); return ev; }
@@ -5347,7 +5351,7 @@ function uqAuto(s, ev){
 function uqCheckUnavailable(s, L, nd, lead){
   const round=L.rounds[L.played]; if(!round) return; lead=lead||5;
   const epIds=new Set(round.filter(m=>m.ep).map(m=>m.a));   // quien tiene batalla contra un extraplayer esa jornada nunca falta
-  round.forEach((m,mi)=>{ if(m.postponed || m.ep) return; [m.a,m.b].forEach(id=>{ if(epIds.has(id)) return; const f=fby(id); const u=f&&UQ_UNAV[f.name]; if(!u || (u.lead||5)!==lead || (u.first && L.played!==0) || (u.notFirst && L.played===0) || (u.notLast && L.played>=nJ(L.key)-1)) return;
+  round.forEach((m,mi)=>{ if(m.postponed || m.ep) return; [m.a,m.b].forEach(id=>{ if(epIds.has(id)) return; const f=fby(id); const u=f&&UQ_UNAV[f.name]; if(!u || (u.noPandemic && isPandemic()) || (u.lead||5)!==lead || (u.first && L.played!==0) || (u.notFirst && L.played===0) || (u.notLast && L.played>=nJ(L.key)-1)) return;
     if(round.some(x=>x.postponed)) return;
     let why = typeof u.why==='function' ? u.why() : u.why;
     if(u.opts){ const used=new Set((s.uq||[]).filter(x=>x.type==='unavail' && x.fid===id).map(x=>x.why)); const left=u.opts.filter(o=>!used.has(o)); if(!left.length) return; why=pick(left); }
@@ -5366,7 +5370,7 @@ function uqSetUnavail(evId, guestId, day, silent){
   if(!guestId || day==null){ toast('Elige el invitado de la exhibición y la fecha de la recuperativa.'); return; }
   const L=s.leagues[ev.key]; const g=fby(guestId);
   if(!silent && uqExhibRefuses(s, g)){ toast(refuseMsg(g,'hacer una exhibición')); state.ui.uqGuest=null; showUQ(ev); return; }
-  if(exNoPair(ev.rival, guestId)){ if(silent) return; toast('Papo y La Joaqui no quieren hacer una exhibición entre ellos.'); state.ui.uqGuest=null; showUQ(ev); return; }
+  if(exNoPair(ev.rival, guestId)){ if(silent) return; toast(exNoPairMsg(ev.rival, guestId)); state.ui.uqGuest=null; showUQ(ev); return; }
   const cost=exhibCost(g, ev.key);
   state.company.money-=cost; s.fin.salaries+=cost; state.ui.uqGuest=null; state.ui.uqDay=null; state.ui.uqQ='';
   if(!L.fexhib) L.fexhib={}; const retoPrevio=L.fexhib[ev.j]; L.fexhib[ev.j]={a:ev.rival, b:guestId, missing:ev.fid, cost, used:exOfferUse([g])}; if(retoPrevio && retoPrevio.reto) retoReubicar(s, retoPrevio);   // fase D4: el reto busca otra jornada
@@ -5631,7 +5635,7 @@ const EXH_UNKNOWN=60, EXH_FAMOUS=80;   // fama por debajo = desconocido · fama 
 function exhibCost(f, key){ const y=cur()&&cur().year; const disc=(exOfferActive(f,y) && UQ_REFUSE[f.name]) ? (UQ_REFUSE[f.name].exDisc||0) : 0; return Math.max(100, Math.round(contractCost(f,key)*0.025*(1-disc)*(1-fxVal(key,'exfee'))/100)*100); }
 function exhibBusy(s){ const set=new Set(); s.activeKeys.forEach(k=>{ const L=s.leagues[k]; Object.entries(L.exhib||{}).forEach(([j,x])=>{ if(+j>=L.played){ set.add(x.a); set.add(x.b); } }); }); return set; }
 function isJudgeOf(s, id, key){ const f=fby(id); return !!(f && key && jdList(s,key).some(n=>nrm(n)===nrm(f.name))); }   // es jurado de ESA liga
-function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&s.leagues[key]?s.leagues[key].competitors:[]); return activos().filter(f=>!own.has(f.id) && !busy.has(f.id) && !(key ? isJudgeOf(s,f.id,key) : isJudgeId(s,f.id)) && !isSpeakerId(s,f.id)); }
+function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&s.leagues[key]?s.leagues[key].competitors:[]); const pf=isPandemic() && key; return activos().filter(f=>!own.has(f.id) && !busy.has(f.id) && !(pf && isForeignTo(key,f)) && !(key ? isJudgeOf(s,f.id,key) : isJudgeId(s,f.id)) && !isSpeakerId(s,f.id)); }
 function renderExhib(s, L, key, j){
   const ex=L.exhib && L.exhib[j];
   if(ex && ex.m && ex.m.result){ const m=ex.m, r=m.result, p=ptbOf(m);
@@ -5660,7 +5664,8 @@ function exPick(key, id){ const a='exA_'+key, b='exB_'+key;
 function organizeExhib(key){
   const s=cur(); const L=s.leagues[key]; const a=state.ui['exA_'+key], b=state.ui['exB_'+key];
   if(!a||!b||a===b) return; const el=new Set(exhibEligible(s, key).map(f=>f.id)); if(!el.has(a)||!el.has(b)){ toast('Alguno de los dos ya no está disponible.'); return; }
-  if(exNoPair(a,b)){ toast('Papo y La Joaqui no quieren hacer una exhibición entre ellos.'); return; }
+  if(exNoPair(a,b)){ toast(exNoPairMsg(a,b)); return; }
+  if(isPandemic() && [a,b].some(id=>isForeignTo(key,fby(id)))){ toast('En Pandemia no se puede viajar: las exhibiciones son solo con competidores del país de la liga.'); return; }
   for(const id of [a,b]){ if(uqExhibRefuses(s, fby(id))){ toast(refuseMsg(fby(id),'hacer una exhibición')); return; } }
   const cost=exhibCost(fby(a),key)+exhibCost(fby(b),key);
   if(state.company.money<cost){ toast(`No te llega: la exhibición cuesta ${money(cost)}.`); return; }
@@ -5893,6 +5898,9 @@ function draftOf(key){
   if(!d || d.round!==L.played){ d=state.ui[k]={round:L.played, pairs:(()=>{ const fx=(L.tiago && L.tiago.j===L.played) ? [L.tiago.a,L.tiago.b] : ((L.gall && L.gall.j===L.played) ? [L.gall.a,L.gall.b] : null); return (fx && fx.every(id=>L.competitors.includes(id)) && solveRounds(L.competitors, playedPairsOf(L), [fx], nJ(key)-L.played)) ? [fx] : []; })(), sel:null}; }
   return d;
 }
+// caché de "este cruce no cuadra con el resto de la jornada" (para no recalcular en cada render)
+var PAIR_NOFIT={};
+function pairNoFit(key, fn, sig){ const s=cur(); const k=key+'|'+(s?s.year+'_'+(s.leagues[key]||{}).played:'')+'|'+JSON.stringify(sig); if(!(k in PAIR_NOFIT)){ if(Object.keys(PAIR_NOFIT).length>3000) PAIR_NOFIT={}; try{ PAIR_NOFIT[k]=!!fn(); }catch(e){ PAIR_NOFIT[k]=false; } } return PAIR_NOFIT[k]; }
 function renderPairingEditor(s,key){
   if(isWSF(key)) return wsPairingEditor(s,key);
   const L=s.leagues[key]; const jn=L.played+1;
@@ -5907,7 +5915,8 @@ function renderPairingEditor(s,key){
     <p class="step-note" style="margin-bottom:10px;">${fmtDay(s.year,L.dates[L.played])}. Toca dos freestylers para enfrentarlos. Los que ya se han enfrentado esta temporada no se pueden repetir.</p>
     <div class="pair-free">${free.map(id=>{
       const isSel=d.sel===id; const blocked = d.sel && d.sel!==id && used.has(pairKey(d.sel,id));
-      return `<button class="pair-chip ${isSel?'sel':''} ${blocked?'blocked':''}" onclick="tapPair('${key}','${id}')" ${blocked?'aria-disabled="true"':''}>${miniAvatar(id,22)}<span>${fnameH(id)}</span><small>${fby(id).nivel}</small></button>`; }).join('') || '<span class="step-note">Todos emparejados.</span>'}</div>
+      const nofit = d.sel && d.sel!==id && !blocked && pairNoFit(key, ()=>!solveRounds(L.competitors, used, [...d.pairs,[d.sel,id]], nJ(key)-L.played), [d.sel,id,d.pairs]);   // aún no se han enfrentado, pero no cuadra con el resto de cruces
+      return `<button class="pair-chip ${isSel?'sel':''} ${blocked?'blocked':''} ${nofit?'nofit':''}" onclick="tapPair('${key}','${id}')" ${blocked?'aria-disabled="true"':''}>${miniAvatar(id,22)}<span>${fnameH(id)}</span><small>${fby(id).nivel}</small></button>`; }).join('') || '<span class="step-note">Todos emparejados.</span>'}</div>
     ${d.pairs.length?`<div class="matches-grid" style="margin-top:12px;">${d.pairs.map((p,i)=>`<div class="match" style="min-height:0;"><div class="match-head">
       <div class="match-side left">${miniAvatar(p[0],22)}<span class="side-name">${fnameH(p[0])}</span></div><div class="vs">vs</div>
       <div class="match-side right"><span class="side-name">${fnameH(p[1])}</span>${miniAvatar(p[1],22)}</div></div>
@@ -6685,7 +6694,6 @@ function luGenerate(s, k){
     if(nw.special==='mcn') text=`🚨 ${dname} ${s.year} ${lf} 🚨\n\n${shuffle(ids).map(id=>`${flagOf(fby(id).country)} ${fname(id).toUpperCase()}`).join('\n')}\n\n#fms${tag}${isI?'':' #fmsinternacional'}`;
     else { const T2=x=>x.charAt(0).toUpperCase()+x.slice(1); text=`¡Temporada ${s.year} - ${liga} ${lf}!\n\n${shuffle(ids).map(id=>`- ${nrm(fname(id)).toUpperCase()}${local(id)?'':' '+flagOf(fby(id).country)}`).join('\n')}\n\n#FMS${T2(tag)} ${lf}`; }
     add(acc, text, 0, END+1, {news:true}); }
-  tw.sort((a,b)=>a.at-b.at || Math.random()-0.5);
   // Vida o muerte: el puesto del play off sale como "?" y la gente opina
   if(!isI) poList(L).filter(poActiveP).forEach(P=>{ const A=P.a, B=P.b; const at=order.indexOf(A); const lk=(acc,id)=>(acc.fav||[]).some(n=>nrm(n)===nrm(fname(id))), ht=(acc,id)=>(acc.hate||[]).some(n=>nrm(n)===nrm(fname(id)));
     const PO={fav:['Ojalá gane {x} el Vida o muerte. Lo quiero ver toda la temporada','Vamos {x}, que ese puesto es tuyo','{x} tiene que ganar el play off sí o sí','Todo mi apoyo a {x} en el Vida o muerte contra {o}'],
@@ -6693,6 +6701,7 @@ function luGenerate(s, k){
       gen:['{a} vs {b} por un puesto en {liga}. Vida o muerte 🔥','El ? del line up se decide en la J1: {a} o {b}','Vida o muerte {a} vs {b}. Esto va a estar caliente']};
     let n=0; shuffle(accs).forEach(acc=>{ if(n>=4) return; for(const [x,o] of [[A,B],[B,A]]){ if(lk(acc,x)){ add(acc, fill(pk(PO.fav),{x:fname(x),o:fname(o)}), 1, at); n++; return; } if(ht(acc,x)){ add(acc, fill(pk(PO.hate),{x:fname(x),o:fname(o)}), -1, at); n++; return; } } });
     const g=pick(accs); add(g, fill(pk(PO.gen),{a:fname(A),b:fname(B),liga}), 1, at); });
+  tw.sort((a,b)=>a.at-b.at || Math.random()-0.5);   // después del Vida o muerte: Info Freestyle/McNoticias siempre el último
   // efecto: hype de la liga y de los mencionados
   const S=tw.reduce((a,t)=>a+t.sent,0); const delta=clamp(Math.round(S*1.5),-12,12);
   if(!isI) L.hype=clamp(L.hype+delta,5,100);
@@ -7432,7 +7441,11 @@ function pvGenerate(s, k, j){
   const L=s.leagues[k]; const liga=ldef(k).name; const round=L.rounds[j]||[];
   const items=[];
   [L.exhib&&L.exhib[j], L.fexhib&&L.fexhib[j]].forEach(x=>{ if(x && x.a && x.b) items.push({a:x.a, b:x.b, ex:true}); });
-  round.slice().sort((x,y)=>(hypeOf(x.a)+hypeOf(x.b||x.a))-(hypeOf(y.a)+hypeOf(y.b||y.a))).forEach(m=>{ if(m.a && m.b) items.push({a:m.a, b:m.b, ep:!!m.ep}); });
+  // Vida o muerte (J1): va primero; en el resto de cruces el que se juega el puesto sale como "Ganador del V/M"
+  const poP = (j===0) ? poList(L).filter(poActiveP) : []; const poA=new Set(poP.map(P=>P.a));
+  round.slice().sort((x,y)=>(hypeOf(x.a)+hypeOf(x.b||x.a))-(hypeOf(y.a)+hypeOf(y.b||y.a))).forEach(m=>{ if(!m.a || !m.b) return; const isPo=poP.some(P=>m.ep && m.a===P.a && m.b===P.b);
+    if(isPo) return; items.push({a:m.a, b:m.b, ep:!!m.ep, vmA:poA.has(m.a), vmB:poA.has(m.b)}); });
+  poP.slice().reverse().forEach(P=>items.unshift({a:P.a, b:P.b, po:true}));
   const real=TWITTEROS.filter(t=>!t.special).map(twAcc); const accs=shuffle(real);
   const lc = isWS(k) ? null : ldef(k).countries; const isLocal=a=> !lc || (a.country && lc.includes(a.country));
   const pk=list=>twElige(s, list);
@@ -7443,7 +7456,10 @@ function pvGenerate(s, k, j){
   const tw=[]; const add=(acc, text, sent, at)=>{ text=twUnico(s, text, acc.country); tw.push({h:acc.handle, n:acc.name, c:acc.country||null, v:!!acc.verified, img:acc.img||null, text, sent, at, likes:Math.round(Math.pow(Math.random(),2)*3000)+rint(3,60), rts:rint(0,300), cm:rint(0,70)}); };
   const used=new Set(); const free=()=>{ const pool=accs.filter(x=>!used.has(x.handle)); const loc=pool.filter(isLocal); const a=(loc.length && Math.random()<0.8 ? pick(loc) : pick(pool.length?pool:accs)); used.add(a.handle); return a; };
   const like=(a,id)=>(a.fav||[]).some(n=>nrm(n)===nrm(fname(id))), dis=(a,id)=>(a.hate||[]).some(n=>nrm(n)===nrm(fname(id)));
+  const isVm=it=>!!(it.vmA||it.vmB);
   items.forEach((it,i)=>{ const A=fname(it.a), B=fname(it.b); let nb=0; const lovers=new Set();
+    if(isVm(it)){ const o=fname(it.vmA?it.b:it.a); const g=['{o} espera rival: le toca el ganador del Vida o muerte','Al ganador del Vida o muerte le toca {o} en la J1. Vaya estreno','{o} contra el que salga vivo del Vida o muerte 👀'];
+      if(Math.random()<0.7){ const a=free(); add(a, fill(pk(g),{o}), 1, i); } return; }   // el que se juega el puesto aún no se sabe: no se le nombra
     accs.forEach(a=>{ if(nb>=4) return; const la=like(a,it.a), lb=like(a,it.b), da=dis(a,it.a), db=dis(a,it.b); if(!(la||lb||da||db)) return;
       const hate=(da||db) && !(la||lb); const p=(isLocal(a)?0.7:(a.country?0.2:0.35))*(hate?1.45:1); if(nb>=3 && !hate) return; if(Math.random()>p) return;   // es Twitter: el hate sale más
       let cat, sent, o={a:A,b:B};
@@ -7453,6 +7469,7 @@ function pvGenerate(s, k, j){
       else if(la||lb){ cat='fav'; sent=1; if(lb) o={a:B,b:A}; }
       else return;
       used.add(a.handle); add(a, fill(P(a,cat),o), sent, i); nb++; });
+    if(it.po){ const g=['{a} vs {b} por un puesto en {liga}. Vida o muerte 🔥','Abre la J1 el Vida o muerte: {a} o {b}. Uno se queda fuera','Vida o muerte {a} vs {b}. Esto va a estar caliente','Que empiece ya el Vida o muerte entre {a} y {b} 🔥']; const a=free(); add(a, fill(pk(g),{a:A,b:B,liga}), 1, i); }
     const st=it.ex? 0 : pairStreak(it.a,it.b);
     if(st>=3 && Math.random()<0.35){ const a=accs.find(x=>!used.has(x.handle) && isLocal(x) && !lovers.has(x.handle) && !(like(x,it.a)&&like(x,it.b))) || free(); used.add(a.handle); add(a, fill(P(a,'rep'),{a:A,b:B,k:st}), -1, i); }
     if(isRival(it.a,it.b)){ const a=free(); add(a, fill(P(a,'rival'),{a:A,b:B}), 1, i); }
@@ -7475,7 +7492,7 @@ function pvGenerate(s, k, j){
   // padrinos: Quesada y Gazir, como mucho un tuit cada uno por jornada
   { const Q=TWITTEROS.find(t=>t.special==='quesada'); const q=Q&&twAcc(Q); const gz=activos().find(f=>f.name==='Gazir');
     const inC=(list,id)=>list.some(n=>nrm(n)===nrm(fname(id)));
-    const one=(list, exclude, bothList)=>{ const ix=items.map((it,i)=>({it,i})).filter(x=>!x.it.ex && x.it.a!==exclude && x.it.b!==exclude); const bl=bothList||list;
+    const one=(list, exclude, bothList)=>{ const ix=items.map((it,i)=>({it,i})).filter(x=>!x.it.ex && !x.it.po && !isVm(x.it) && x.it.a!==exclude && x.it.b!==exclude); const bl=bothList||list;
       const both=shuffle(ix.filter(x=>inC(bl,x.it.a)&&inC(bl,x.it.b))); if(both.length) return {...both[0], both:true};
       const single=shuffle(ix.filter(x=>inC(list,x.it.a)||inC(list,x.it.b))); return single.length ? {...single[0], both:false} : null; };
     if(q && Math.random()<0.5){ const x=one(RQ_CREW, null, RQ_TRUE); if(x){ if(x.both) add(q, fill(pk(PATRON_TX.quesadaBoth),{a:fname(x.it.a), b:fname(x.it.b)}), 1, x.i);
@@ -7520,20 +7537,20 @@ function pvGenerate(s, k, j){
   if(j>=1 && Math.random()<0.35){ const jl=jdList(s,k).map(jdBy).filter(x=>x && !x.quiet); if(jl.length){ const jj=pick(jl); const a=free(); add(a, fill(jdTw('bad',a.country),{n:jj.name}), -1, items.length); } }
   // Navas prepara el beef con su rival de la jornada (no siempre)
   const nv=activos().find(f=>f.name==='Navas');
-  if(nv){ const ix=items.findIndex(it=>!it.ex && (it.a===nv.id || it.b===nv.id));
+  if(nv){ const ix=items.findIndex(it=>!it.ex && !it.po && !isVm(it) && (it.a===nv.id || it.b===nv.id));
     if(ix>=0 && Math.random()<0.65){ const it=items[ix]; const o=fby(it.a===nv.id?it.b:it.a); const own=NAVAS_TW[o.name];
       add({handle:twHandle(nv.name), name:nv.name, country:nv.country, verified:true, img:photoOf(nv)}, fill(pick(own||NAVAS_TW._),{h:twHandle(o.name)}), 0, ix); } }
   // uno o dos competidores calientan su batalla (nunca entre rivales con mala sangre; Navas va por su cuenta)
-  shuffle(items.filter(it=>!it.ex && !isRival(it.a,it.b) && !(nv && (it.a===nv.id || it.b===nv.id)))).slice(0,rint(1,2)).forEach(it=>{ const me=Math.random()<0.5?it.a:it.b, other=me===it.a?it.b:it.a; const f=fby(me);
+  shuffle(items.filter(it=>!it.ex && !it.po && !isVm(it) && !isRival(it.a,it.b) && !(nv && (it.a===nv.id || it.b===nv.id)))).slice(0,rint(1,2)).forEach(it=>{ const me=Math.random()<0.5?it.a:it.b, other=me===it.a?it.b:it.a; const f=fby(me);
     add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(Math.random()<0.6 ? twCompone(s,'comp',twDia(f.country)) : pk(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
   // resumen oficial: Info Freestyle o McNoticias (50/50)
   { const jn=j+1, last=jn===nJ(k), lf=leagueFlag(k); const nat=id=> !isWS(k) && lc.includes(fby(id).country); const order=items.filter(x=>!x.ex).concat(items.filter(x=>x.ex));
     const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; let text;
     if(nw.special==='info'){ const adj=isWS(k)?'FMS World Series':(PV_ADJ[k]||liga);
       const intro = jn===1 ? `Arranca la ${adj}: estos son los primeros enfrentamientos de la temporada. 🎤` : (last ? (()=>{ const st=computeStandings(L); return st.length>1 && st[0].pts-st[1].pts>3 ? `Llega la última jornada de la ${adj}, con ${fname(st[0].id)} ya proclamado campeón. 🏆` : `Hoy viviremos la última jornada de la ${adj}, donde conoceremos al campeón del torneo. 🏆`; })() : pick([`Nueva jornada de la ${adj}. Estos son los enfrentamientos:`,`La ${adj} sigue: así quedan los cruces de la jornada ${jn}.`,`Vuelve la ${adj} con una nueva jornada.`]));
-      const nm=id=>nrm(fname(id)).toUpperCase()+(nat(id)?'':' '+flagOf(fby(id).country));
-      text=`¡Oficial! - Jornada ${jn} de ${liga} ${lf}\n\n${intro}\n\n${order.map(x=>`- ${nm(x.a)} vs ${nm(x.b)}${x.ex?'(Exhibición)':(x.ep?' (Extraplayer)':'')}`).join('\n')}`; }
-    else text=`${liga.toUpperCase()} - JORNADA ${jn} ${lf}\n\n${order.map(x=>`${flagOf(fby(x.a).country)} ${fname(x.a)} 🆚 ${fname(x.b)} ${flagOf(fby(x.b).country)}`).join('\n')}`;
+      const nm=(id,vm)=>vm?'GANADOR DEL VIDA O MUERTE':nrm(fname(id)).toUpperCase()+(nat(id)?'':' '+flagOf(fby(id).country));
+      text=`¡Oficial! - Jornada ${jn} de ${liga} ${lf}\n\n${intro}\n\n${order.map(x=>`- ${nm(x.a,x.vmA)} vs ${nm(x.b,x.vmB)}${x.po?' (Vida o muerte)':(x.ex?'(Exhibición)':(x.ep?' (Extraplayer)':''))}`).join('\n')}`; }
+    else text=`${liga.toUpperCase()} - JORNADA ${jn} ${lf}\n\n${order.map(x=>`${x.vmA?'❓ Ganador V/M':flagOf(fby(x.a).country)+' '+fname(x.a)} 🆚 ${x.vmB?'Ganador V/M ❓':fname(x.b)+' '+flagOf(fby(x.b).country)}${x.po?' (Vida o muerte)':''}`).join('\n')}`;
     add(acc, text, 0, items.length+1); }
   tw.sort((a,b)=>a.at-b.at || Math.random()-0.5);
   const S=tw.reduce((a,t)=>a+t.sent,0); const delta=clamp(Math.round(S*0.8),-6,6);
@@ -7545,8 +7562,10 @@ var PV_ANIM=null;
 function openPairs(key, j){
   const s=cur(); const L=s.leagues[key]; if(j==null) j=L.played; const pv=L.pv&&L.pv[j]; if(!pv) return; document.body.classList.add('noscroll');
   const replay=pv.shown; pv.shown=true; save(); const def=ldef(key); const tok={}; PV_ANIM=tok;
-  const cards=pv.items.map((it,i)=>`<div class="pv-card" id="pvc${i}">${it.ex?'<span class="pv-tag">Exhibición</span>':''}${it.ep?'<span class="pv-tag ep">Extraplayer</span>':''}
-      <div class="pv-side">${fmFace(it.a)}<b>${fnameH(it.a)}</b></div><span class="pv-vs">VS</span><div class="pv-side r"><b>${fnameH(it.b)}</b>${fmFace(it.b)}</div></div>`).join('');
+  const vmF='<span class="fm-face" style="display:inline-flex;align-items:center;justify-content:center;font-weight:900;background:#2a2a33">?</span>';
+  const pvL=(id,vm)=> vm ? `${vmF}<b>Ganador del V/M</b>` : `${fmFace(id)}<b>${fnameH(id)}</b>`, pvR=(id,vm)=> vm ? `<b>Ganador del V/M</b>${vmF}` : `<b>${fnameH(id)}</b>${fmFace(id)}`;
+  const cards=pv.items.map((it,i)=>`<div class="pv-card${it.po?' po':''}" id="pvc${i}">${it.po?'<span class="pv-tag po">Vida o muerte</span>':''}${it.ex&&!it.po?'<span class="pv-tag">Exhibición</span>':''}${it.ep&&!it.po?'<span class="pv-tag ep">Extraplayer</span>':''}
+      <div class="pv-side">${pvL(it.a,it.vmA)}</div><span class="pv-vs">VS</span><div class="pv-side r">${pvR(it.b,it.vmB)}</div></div>`).join('');
   openModal(`<h3 class="lu-title">${leagueHeadLogo(key)} Enfrentamientos · ${esc(def.name)} J${j+1}${venueName(L,j)?' · FMS '+esc(venueName(L,j)):''}</h3>
     <div class="lu-wrap"><div class="pv-list">${cards}</div>
       <div class="lu-x"><div class="lu-xhead"><span class="lu-xlogo">𝕏</span> Tendencias · <b>#${esc(def.short||def.name).replace(/\s+/g,'')}J${j+1}</b></div><div class="lu-feed" id="luFeed"></div></div></div>
@@ -9008,8 +9027,10 @@ function waInit(ev){ if(ev.chats) return; const s=cur(); const f=fby(ev.fid); co
   else if(ev.type==='ortiz'){ msgs=[S(`📰 Ortiz le ganó a Gazir y Gazir le ha despedido como editor de sus vídeos.`), T('Jefe, me he quedado sin el curro de editor por ganarle a Gazir 😅'), T(`Necesito que me subáis el sueldo un 15% (${money(ortizExtra(s,ev))} más) para compensarlo.`)]; }
   else if(ev.type==='tension'){ msgs=[T('Tenemos que hablar.'), T(`Desde la batalla de ${ev.since||'la temporada pasada'} con ${fname(ev.rival)} la cosa está muy mal.`), T(`Yo con ${fname(ev.rival)} no quiero compartir line up. Decide: entre él y yo.`)]; }
   else if(ev.type==='jincho'){ msgs=[T('Jefe, tengo un problema serio…'), T('Me van a meter en prisión por un tema de sustancias.'), T(`Si la empresa me paga la fianza (${money(jinchoBail(s,ev))}) puedo seguir en ${liga}.`)]; }
-  else if(ev.type==='joaqui'){ msgs = (fby(ev.fid)||{}).name==='Papo' ? [T('Papo tiene que decirte una cosa.'), T('Papo no comparte line up con La Joaqui.'), T('O ella o Papo. Tú decides 🃏')]
-      : [T('Hola, te escribo por lo del line up.'), T(`No voy a competir en ${liga} si está Papo.`), T('Elige: o él o yo.')]; }
+  else if(ev.type==='joaqui'){ const rv=fname(ev.rival), el=isWoman(ev.rival)?'ella':'él';
+    msgs = (fby(ev.fid)||{}).name==='Papo' ? [T('Papo tiene que decirte una cosa.'), T(`Papo no comparte line up con ${rv}.`), T(`O ${el} o Papo. Tú decides 🃏`)]
+      : (fby(ev.fid)||{}).name==='Mr. Ego' ? [T('Oye, tenemos un problema.'), T(`Yo no comparto liga con ${rv}. Ni de coña.`), T(`O ${el} o yo, tú verás.`)]
+      : [T('Hola, te escribo por lo del line up.'), T(`No voy a competir en ${liga} si está ${rv}.`), T(`Elige: o ${el} o yo.`)]; }
   ev.chats=[{fid:ev.fid, msgs}]; ev.ci=0; }
 function waAfterFine(ev, fine, angry, f, v, pct, L){ waInit(ev); const M=ev.chats[0].msgs; const amt=Math.round((L.contracts[ev.fid]||0)*pct);
   if(fine){ M.push({w:'me', t:`Esto no puede volver a pasar. Te multamos con el ${Math.round(pct*100)}% de tu sueldo (${money(amt)}).`});
@@ -9077,10 +9098,14 @@ function poRefuseRoll(s){ if(state.company.infinite) return; natKeys(s).forEach(
     uqPush(s, {day:s.day, type:'porefuse', key:k, fid:P.b, rival:P.a, kind:r.kind||'no'}); addLog(s, s.day, `⚔️ ${f.name} se baja del Vida o muerte de ${ldef(k).name}: ${fname(P.a)} se queda en la liga.`, 'bad'); }); }); }
 
 /* ---------- Papo y La Joaqui no comparten line up (día 3 de la temporada; no en sandbox) ---------- */
-function exNoPair(a, b){ const n=[fby(a),fby(b)].map(f=>f&&f.name); return n.includes('Papo') && n.includes('La Joaqui'); }
-function joaquiSeasonStart(s){ if(isSandbox()) return; const pa=activos().find(f=>f.name==='Papo'), jq=activos().find(f=>f.name==='La Joaqui'); if(!pa || !jq) return;
-  s.activeKeys.forEach(k=>{ const L=s.leagues[k]; if(!L.competitors.includes(pa.id) || !L.competitors.includes(jq.id)) return;
-    const sp=Math.random()<0.5?pa.id:jq.id; uqPush(s, {day:s.day+3, type:'joaqui', key:k, fid:sp, rival:sp===pa.id?jq.id:pa.id}); }); }
+// parejas que no comparten line up ni hacen exhibiciones entre sí
+var NO_PAIRS=[['Papo','La Joaqui'],['Mr. Ego','Swit Eme']];
+function exNoPair(a, b){ const n=[fby(a),fby(b)].map(f=>f&&f.name); return NO_PAIRS.some(([x,y])=>n.includes(x) && n.includes(y)); }
+function exNoPairMsg(a, b){ return `${fname(a)} y ${fname(b)} no quieren hacer una exhibición entre ellos.`; }
+function joaquiSeasonStart(s){ if(isSandbox()) return;
+  NO_PAIRS.forEach(([x,y])=>{ const pa=activos().find(f=>!f.custom && f.name===x), jq=activos().find(f=>!f.custom && f.name===y); if(!pa || !jq) return;
+    s.activeKeys.forEach(k=>{ const L=s.leagues[k]; if(!L.competitors.includes(pa.id) || !L.competitors.includes(jq.id)) return;
+      const sp=Math.random()<0.5?pa.id:jq.id; uqPush(s, {day:s.day+3, type:'joaqui', key:k, fid:sp, rival:sp===pa.id?jq.id:pa.id}); }); }); }
 function uqJoaqui(id, choice, silent){ const s=cur(); const ev=(s.uq||[]).find(x=>x.id===id); if(!ev || ev.done) return; const L=s.leagues[ev.key]; const f=fby(ev.fid), o=fby(ev.rival); waInit(ev); const M=ev.chats[0].msgs; const liga=ldef(ev.key).name;
   if(choice==='swap'){ M.push({w:'me', t:`Entendido. ${o.name} no estará esta temporada.`}, {w:'them', t: f.name==='Papo' ? 'Papo sabía que lo entenderías 😎' : 'Gracias, de verdad 🙏'});
     uqRemove(s, L, o.id); uqBan(s, o, `por sacarle de ${liga} por ${f.name}`); ev.after='replace';
@@ -9101,8 +9126,11 @@ function rqMark(id){ return isTeamRQ(id) ? ' <span class="rq-mark" title="Team R
 function teamRQSelect(s){ if(s.teamRQ || ascOf(s).mode!=='rank') return; const nat=natKeys(s).filter(k=>!isWS(k));
   const ok=TEAM_RQ_POOL.map(n=>activos().find(f=>!f.custom && f.name===n)).filter(f=>f && nat.includes(ascLeagueOf(f)) && !signedLeagueOf(s,f.id) && !isJudgeId(s,f.id) && !isSpeakerId(s,f.id) && !isBanned(f));
   if(!ok.length) return; const ids=shuffle(ok).slice(0, 4).map(f=>f.id); s.teamRQ={ids, shown:false};
-  const first=(s.under||[]).filter(e=>e.key!==MFU.key && !e.played).sort((a,b)=>a.day-b.day)[0];
-  uqPush(s, {day:first ? Math.max(1, first.day-1) : 1, type:'teamrq', key:nat[0]}); }
+  uqPush(s, {day:teamRQDay(s), type:'teamrq', key:nat[0]}); }
+// se anuncia antes de la primera competición en la que influye (Under o Red Bull nacional)
+function teamRQDay(s){ const days=[...(s.under||[]).filter(e=>e.key!==MFU.key && !e.played).map(e=>e.day), ...(rbOn(s)? (s.rb.events||[]).map(e=>e.day) : [])].filter(d=>d!=null && d>0);
+  return days.length ? Math.max(1, Math.min(...days)-1) : 1; }
+function teamRQFixDay(s){ const ev=(s.uq||[]).find(x=>x.type==='teamrq' && !x.done); if(ev) ev.day=Math.min(ev.day, teamRQDay(s)); }
 function rqUnderInject(ev, def, ids){ const s=cur(); if(!s || !s.teamRQ || !def || def.key===MFU.key) return;
   s.teamRQ.ids.forEach(id=>{ const f=fby(id); if(!f || ids.includes(id)) return; if(!def.perCountry && !(def.countries||[]).includes(fHome(f))) return; if(Math.random()>=RQ_UNDER_P) return;
     if(def.perCountry && ids.some(x=>isTeamRQ(x) && (fby(x)||{}).country===f.country)) return;   // BDM: uno por país
@@ -9228,5 +9256,5 @@ var TW_CHOUT={
 };
 
 /* ---- versión del juego (esquina inferior derecha) ---- */
-var GAME_VERSION='1.2.1';
+var GAME_VERSION='1.2.2';
 (function(){ try{ const v=document.createElement('div'); v.id='verTag'; v.textContent=GAME_VERSION; document.body.appendChild(v); }catch(e){} })();
