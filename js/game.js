@@ -30,6 +30,8 @@ const LEAGUES = [
   {key:'fms_peru',      name:'FMS Perú',      short:'PER', countries:['Perú'],      badge:'#E53935', fg:'#fff'},
   {key:'fms_colombia',  name:'FMS Colombia',  short:'COL', countries:['Colombia'],  badge:'#FFC107', fg:'#1a1a1a'},
   {key:'fms_caribe',    name:'FMS Caribe',    short:'CAR', countries:['Caribe','Venezuela','Cuba','Puerto Rico','República Dominicana','Panamá','Costa Rica','Guatemala','Honduras','El Salvador','Nicaragua','Centroamérica','EEUU'], badge:'#8BC34A', fg:'#1a1a1a'},
+  {key:'fms_venezuela', name:'FMS Venezuela', short:'VEN', countries:['Venezuela'], badge:'#7B1E3A', fg:'#fff', sbx:true},   // solo Sandbox (de prueba)
+  {key:'fms_uruguay',   name:'FMS Uruguay',   short:'URU', countries:['Uruguay'], noTravel:['Argentina'], badge:'#2E8C8F', fg:'#fff', sbx:true},   // solo Sandbox; los argentinos no cobran viaje
 ];
 const INTL = {key:'fms_internacional', name:'FMS Internacional', short:'INTL', badge:'#D4AF37', fg:'#1a1a1a'};
 const LEAGUE_THEME = {
@@ -37,6 +39,8 @@ const LEAGUE_THEME = {
   fms_chile:{red:'#1A3FA0', bright:'#3D5FC7', dark:'#0D2160'},
   fms_mexico:{red:'#1B6B3A', bright:'#2E8F50', dark:'#0D3D20'},
   fms_caribe:{red:'#00A8A2', bright:'#2BD6CE', dark:'#00645F'},
+  fms_venezuela:{red:'#8B2346', bright:'#B23A60', dark:'#4E1027'},
+  fms_uruguay:{red:'#2E8C8F', bright:'#4FB8BA', dark:'#185254'},
   fms_colombia:{red:'#C99A12', bright:'#F2C230', dark:'#7A5D08'},
   fms_peru:{red:'#C0392B', bright:'#E85A45', dark:'#7A1F14'},
   fms_internacional:{red:'#B8932A', bright:'#EFCB5E', dark:'#6E5714'},
@@ -69,7 +73,7 @@ const START_MONEY = 250000;
 var PAND_SPON=1.2, PAND_PROD=1.1, PAND_HYPE=70, PAND_TOL=0.4, PAND_BIGLOSS=0.75;   // TOL: pérdidas toleradas (sobre lo gastado) para subir; BIGLOSS: pérdidas con las que bajas
 const SANDBOX_MONEY = 999999999999;
 const JORNADAS = 9;
-function maxLeagues(stars){ return modoCarrera() ? LEAGUES.length : Math.min(6, stars+1); }   // en carrera el mundo tiene las 7 ligas
+function maxLeagues(stars){ if(modoCarrera()) return LEAGUES.filter(l=>!l.sbx).length; if(typeof isSandbox==='function' && state.company && isSandbox()) return 9; return Math.min(6, stars+1); }   // en carrera el mundo tiene las 7 ligas (las del Sandbox no)
 function starsFor(rep){ let s=0; STAR_THRESHOLDS.forEach((t,i)=>{ if(rep>=t) s=i; }); return s; }
 
 // Hype: días seguidos sin jornada de esa liga -> pérdida diaria
@@ -113,20 +117,20 @@ function genStats(){
 // Freestylers reales de FMS y de Red Bull Batalla (2016-2026). País = región con la que compiten (los de Red Bull EEUU van como EEUU).
 // Los de país 'Sudamérica'/'Centroamérica' compitieron en esas finales regionales sin país confirmado.
 const REAL_PRESET = {
-  "España": [["Laíño", 40, 25], ["Chuty", 95, 94], ["Gazir", 94, 91], ["Arkano", 86, 89], ["Bnet", 91, 93], ["Zasko", 89, 87], ["Skone", 89, 89], ["Mnak", 84, 78], ["Sweet Pain", 88, 84], ["Blon", 82, 89], ["Dani VK", 81, 73], ["Hander", 76, 77], ["Sawi Elekipo", 74, 64], ["Force", 74, 89], ["Le33", 74, 62], ["Alek", 78, 77], ["Mounts", 77, 71], ["Tirpa", 81, 85], ["Michu", 67, 58], ["Fabiuki", 77, 75], ["Bta", 72, 77], ["Jesús LC", 72, 56], ["Kmbra", 77, 79], ["Nez", 75, 55], ["Barón", 73, 73], ["Mr. Ego", 80, 86], ["Invert", 74, 83], ["Khan", 32, 81], ["Sara Socas", 77, 88], ["Navas", 71, 86], ["Mowlihawk", 65, 84], ["Bélico", 75, 74], ["Nocre", 74, 71], ["BTP", 71, 62], ["Errecé", 76, 81], ["Adriana", 51, 53], ["Piromana", 55, 61], ["Segrelles", 78, 76], ["Owen", 68, 51], ["Spolker", 67, 61], ["Argente", 61, 55], ["Davisito", 70, 89], ["Mr Aaron", 67, 65], ["CDFlex", 66, 75], ["Ander2K", 73, 70], ["Sozat", 65, 65], ["Ibán", 74, 71], ["Zyko GDH", 68, 51], ["Piezas", 79, 86], ["Lgido", 76, 71], ["Dr. Filtros", 74, 72], ["Azeta", 50, 35], ["NQP", 78, 76], ["Babi", 77, 78], ["Mike Shinobi", 70, 77], ["MC Men", 78, 83], ["Peret", 66, 65], ["Soen", 70, 72], ["Krisan", 74, 78], ["Nacho SRK", 75, 79], ["Botta", 72, 77], ["Nacho Argentino", 71, 61], ["Ortega", 64, 60], ["Arcoiris", 58, 65], ["Kavron", 75, 67], ["Akar", 66, 61], ["Ortiz", 50, 35], ["Titus", 73, 75], ["Kensuke", 67, 77], ["Niki DMT", 69, 71], ["Kinkiwinky", 60, 62], ["Rubenico", 70, 70], ["Swit Eme", 76, 83], ["Driu", 42, 66], ["Walls", 84, 89], ["Pyro", 65, 62], ["NachoLCM", 60, 50], ["Triple R", 67, 73], ["Estrimo", 31, 66], ["Godlemon", 45, 35], ["Jaloner", 96, 88], ["Jorge Mauro", 62, 59], ["Bohemia", 64, 67], ["Santi", 74, 76], ["Rayban", 77, 81], ["Tanquecrack", 57, 71], ["NG", 62, 76], ["Perry", 61, 51], ["Kusho", 66, 58], ["Conde", 46, 46], ["Tyler", 56, 55], ["Compare Flow", 76, 84], ["Viti", 73, 72], ["El Jincho", 76, 91], ["Calles", 71, 71], ["Yak Lamelo", 70, 67], ["Hastro", 67, 64], ["Ruvix", 66, 65], ["Sugha", 67, 67], ["Was", 72, 67], ["ATR", 47, 32], ["Lmakina", 45, 70], ["Track Charles", 55, 67], ["Klenchos", 69, 74], ["Isma72", 74, 73], ["Carballeda", 72, 70], ["Ibai", 30, 96], ["Paco CBA", 76, 70], ["Emege", 68, 65], ["Pitu Dood", 73, 74], ["Luisaker", 63, 74], ["Jado PVG", 66, 68], ["Zatu", 56, 62], ["Noult", 59, 71], ["Champi", 64, 72], ["Guanyar", 45, 90], ["Layto", 73, 71]],
-  "Argentina": [["Kevin Mil Problemas", 73, 75], ["Stuart", 88, 86], ["Larrix", 89, 84], ["Mecha", 91, 87], ["Wos", 89, 97], ["Papo", 88, 95], ["Dtoke", 82, 91], ["Dani Ribba", 78, 84], ["Kodigo", 85, 86], ["Trueno", 87, 99], ["Klan", 83, 81], ["G Sony", 80, 81], ["Replik", 84, 87], ["Jesse Pungaz", 75, 71], ["Nacho", 76, 75], ["Naista", 72, 78], ["Zaina", 75, 83], ["MP", 81, 79], ["Tata", 74, 81], ["Katra", 72, 62], ["Wolf", 72, 58], ["Mito", 70, 62], ["Dybbuk", 75, 71], ["DAC", 62, 56], ["Jaff", 67, 56], ["CTZ", 77, 78], ["MKS", 77, 82], ["Cacha", 77, 88], ["Sub", 77, 83], ["Nasir Catriel", 62, 55], ["Barto", 66, 61], ["Exe", 80, 77], ["HDR", 73, 80], ["Sophia", 71, 74], ["Abel", 79, 82], ["Cobe CLK", 63, 65], ["1Tobi", 72, 74], ["Dyse", 82, 76], ["GW", 65, 62], ["Ritter", 70, 71], ["Franchute", 77, 78], ["Rife", 77, 78], ["TiagoPZK", 83, 91], ["Lit Killah", 83, 95], ["Duki", 80, 99], ["Roma", 70, 77], ["Dozer", 71, 76], ["G5", 71, 67], ["Brasita", 60, 55], ["Parker", 70, 72], ["Alkoy", 75, 75], ["Snake", 68, 71], ["Acru", 92, 88], ["Frescolate", 76, 82], ["Dam", 79, 81], ["Paulo Londra", 72, 92], ["Ysy A", 87, 89], ["Issy", 78, 76], ["Auge", 76, 74], ["One Night", 73, 72], ["Khateon", 73, 71], ["Zent", 72, 67], ["La Prima", 74, 73], ["Ecko", 78, 77], ["Frijo", 75, 83], ["La Joaqui", 76, 86], ["Yun", 80, 81], ["Prome", 70, 73], ["Holanda", 67, 62], ["KNT", 62, 64], ["Piscu", 66, 69], ["Giro", 75, 86], ["Lucho SSJ", 74, 78], ["Underdann", 76, 77], ["Beelze", 73, 73], ["Afrito", 72, 71], ["Santiki", 76, 74], ["Javiuknow", 59, 50], ["Esteban La Fiebre", 73, 69], ["Uber Rastafari", 68, 83], ["Tego", 78, 72], ["Ramiro a la cabra", 71, 69], ["Shinovi Sambrailo", 70, 68], ["Nacco", 67, 70], ["Lautaro Romario", 72, 73], ["OHM", 63, 60], ["Thom", 68, 61], ["Eros", 66, 60], ["Sergio", 77, 78], ["Nahu Nauseas", 48, 73], ["Musher", 68, 80], ["C Humilde", 67, 65], ["Enma", 67, 63], ["Seniora no sabe que vine", 59, 53], ["Luis Farias", 65, 67], ["Alejo Santino", 66, 65], ["Intermitente 46", 75, 67]],
-  "México": [["Maquiavélico", 73, 77], ["Mutante", 66, 71], ["Soni Montiel", 75, 71], ["Aczino", 95, 98], ["Jony Beltrán", 89, 91], ["Azuky", 86, 94], ["Rapder", 84, 83], ["Lobo Estepario", 85, 82], ["Yoiker", 76, 74], ["RC", 83, 82], ["Dante", 72, 64], ["Skiper", 86, 80], ["Ari Carrillo", 71, 60], ["Zticma", 75, 77], ["Dominic", 72, 68], ["Garza", 71, 72], ["Jack Andrenalina", 72, 82], ["Nota Roja", 70, 48], ["Soto", 60, 48], ["Xavlac", 65, 48], ["Damián", 69, 46], ["Lobo López", 68, 87], ["Xhavez", 71, 72], ["Fat Tony", 66, 65], ["Potencia", 73, 70], ["DangerAK", 21, 68], ["Saturno", 64, 56], ["Dalia", 72, 78], ["Sandra", 64, 71], ["Hadrian", 74, 81], ["Vens", 64, 59], ["B One", 72, 62], ["Gino", 67, 65], ["Tess La", 47, 81], ["Garces", 72, 71], ["Eric El Niño", 72, 77], ["Foker", 70, 69], ["Drixer", 75, 74], ["Sangre Azul", 63, 64], ["Valex", 61, 69], ["Gonzo", 75, 77], ["Omana", 75, 72], ["Locura", 70, 78], ["Dani Flow", 70, 86], ["Terry", 73, 59]],
-  "Chile": [["El Menor", 94, 92], ["Teorema", 91, 93], ["Acertijo", 84, 80], ["Nitro", 87, 87], ["Kaiser", 84, 89], ["Tom Crowley", 79, 76], ["Stigma", 77, 81], ["Ricto", 88, 84], ["Joqerr", 76, 74], ["Drose", 83, 86], ["Pepe Grillo", 74, 76], ["Jokker", 74, 62], ["Metalingüística", 83, 85], ["Racso", 73, 58], ["Esezeta", 72, 78], ["Rodamiento", 78, 76], ["Anubis", 79, 72], ["Basek", 72, 66], ["Satim", 61, 65], ["Blade", 71, 65], ["99", 70, 64], ["Bigtamina", 72, 67], ["Adesong", 78, 64], ["Elemece", 70, 64], ["Eskai", 60, 54], ["ChysteMC", 80, 84], ["BTI", 62, 69], ["Destello", 70, 67], ["Fusok", 72, 66], ["Scub", 70, 72], ["Drefquila", 74, 81], ["Mcmadetuhermana", 77, 79], ["JNO", 73, 74], ["Animus", 68, 67], ["Plets", 74, 75], ["Bellota", 68, 71], ["KMC", 64, 70], ["Nobody", 76, 68], ["Zample", 68, 65], ["Berrun", 68, 63], ["Barto​", 72, 74], ["Jeff Turner", 60, 70], ["Cristofebril", 70, 75], ["Nazion", 72, 68], ["Nait", 68, 67], ["Clap Psycho", 70, 73], ["Elemental", 57, 76], ["Mzeta", 60, 59], ["Panchok", 68, 69]],
+  "España": [["Jamal", 67, 66], ["Laíño", 40, 25], ["Chuty", 95, 94], ["Gazir", 94, 91], ["Arkano", 86, 89], ["Bnet", 91, 93], ["Zasko", 89, 87], ["Skone", 89, 89], ["Mnak", 84, 78], ["Sweet Pain", 88, 84], ["Blon", 86, 89], ["Dani VK", 81, 73], ["Hander", 76, 77], ["Sawi Elekipo", 74, 64], ["Force", 74, 89], ["Le33", 74, 62], ["Alek", 78, 77], ["Mounts", 77, 71], ["Tirpa", 81, 85], ["Michu", 67, 58], ["Fabiuki", 77, 75], ["Bta", 72, 77], ["Jesús LC", 72, 56], ["Kmbra", 77, 79], ["Nez", 80, 55], ["Barón", 73, 73], ["Mr. Ego", 80, 86], ["Invert", 74, 83], ["Khan", 32, 81], ["Sara Socas", 77, 88], ["Navas", 76, 86], ["Mowlihawk", 65, 84], ["Bélico", 75, 74], ["Nocre", 74, 71], ["BTP", 71, 62], ["Errecé", 76, 81], ["Adriana", 51, 53], ["Piromana", 55, 61], ["Segrelles", 78, 76], ["Owen", 68, 51], ["Spolker", 67, 61], ["Argente", 61, 55], ["Davisito", 70, 89], ["Mr Aaron", 67, 65], ["El Demonio En Bici", 66, 75], ["Ander2K", 73, 70], ["Sozat", 65, 65], ["Ibán", 74, 71], ["Zyko GDH", 68, 51], ["Piezas", 79, 86], ["Lgido", 76, 71], ["Dr. Filtros", 74, 72], ["Azeta", 50, 35], ["NQP", 78, 76], ["Babi", 77, 78], ["Mike Shinobi", 70, 77], ["MC Men", 78, 83], ["Peret", 66, 65], ["Soen", 70, 72], ["Krisan", 74, 78], ["Nacho SRK", 75, 79], ["Botta", 72, 77], ["Nacho Argentino", 71, 61], ["Ortega", 64, 60], ["Arcoiris", 58, 65], ["Kavron", 75, 67], ["Akar", 66, 61], ["Ortiz", 50, 35], ["Titus", 73, 75], ["Kensuke", 67, 77], ["Niki DMT", 69, 71], ["Kinkiwinky", 60, 62], ["Rubenico", 70, 70], ["Swit Eme", 76, 83], ["Driu", 42, 66], ["Walls", 84, 89], ["Pyro", 65, 62], ["NachoLCM", 60, 50], ["Triple R", 67, 73], ["Estrimo", 31, 66], ["Godlemon", 45, 35], ["Jaloner", 90, 88], ["Jorge Mauro", 62, 59], ["Bohemia", 64, 67], ["Santi", 74, 76], ["Rayban", 77, 81], ["Tanquecrack", 57, 71], ["NG", 62, 76], ["Perry", 61, 51], ["Kusho", 66, 58], ["Conde", 46, 46], ["Tyler", 56, 55], ["Compare Flow", 76, 84], ["Viti", 73, 72], ["El Jincho", 76, 91], ["Calles", 71, 71], ["Yak Lamelo", 70, 67], ["Hastro", 67, 64], ["Ruvix", 66, 65], ["Sugha", 67, 67], ["Was", 72, 67], ["ATR", 47, 32], ["Lmakina", 45, 70], ["Track Charles", 55, 67], ["Klenchos", 69, 74], ["Isma72", 74, 73], ["Carballeda", 72, 70], ["Ibai", 30, 96], ["Paco CBA", 76, 70], ["Emege", 68, 65], ["Pitu Dood", 73, 74], ["Luisaker", 63, 74], ["Jado PVG", 66, 68], ["Zatu", 56, 62], ["Noult", 59, 71], ["Champi", 64, 72], ["Guanyar", 45, 90], ["Layto", 73, 71]],
+  "Argentina": [["Saith", 70, 67], ["Vid", 67, 62], ["Pelin", 67, 63], ["Mono Strong", 69, 70], ["Exe DK", 67, 62], ["Saga", 64, 74], ["Piba Cósmica", 62, 61], ["SHECKA", 61, 71], ["Staner", 63, 73], ["MIDEL", 70, 73], ["Rusty", 72, 69], ["Bette La Magia", 68, 53], ["Lanel", 67, 53], ["TOSK", 69, 60], ["L. EFRUM", 73, 57], ["Beto Blues", 71, 57], ["Tanger", 70, 50], ["Kevin Mil Problemas", 73, 75], ["Stuart", 88, 86], ["Larrix", 89, 84], ["Mecha", 91, 87], ["Wos", 89, 97], ["Papo", 88, 95], ["Dtoke", 82, 91], ["Dani Ribba", 78, 84], ["Kodigo", 85, 86], ["Trueno", 87, 99], ["Klan", 83, 81], ["G Sony", 80, 81], ["Replik", 84, 87], ["Jesse Pungaz", 75, 71], ["Nacho", 76, 75], ["Naista", 72, 78], ["Zaina", 75, 83], ["MP", 81, 79], ["Tata", 74, 81], ["Katra", 72, 62], ["Wolf", 72, 58], ["Mito", 70, 62], ["Dybbuk", 75, 71], ["DAC", 62, 56], ["Jaff", 67, 56], ["CTZ", 77, 78], ["MKS", 77, 82], ["Cacha", 77, 88], ["Sub", 77, 83], ["Nasir Catriel", 62, 55], ["Barto", 66, 61], ["Exe", 80, 77], ["HDR", 73, 80], ["Sophia", 71, 74], ["Abel", 79, 82], ["Cobe CLK", 63, 65], ["1Tobi", 72, 74], ["Dyse", 82, 76], ["GW", 65, 62], ["Ritter", 70, 71], ["Franchute", 77, 78], ["Rife", 77, 78], ["TiagoPZK", 83, 91], ["Lit Killah", 83, 95], ["Duki", 80, 99], ["Roma", 70, 77], ["Dozer", 71, 76], ["G5", 71, 67], ["Brasita", 60, 55], ["Parker", 70, 72], ["Alkoy", 75, 75], ["Snake", 68, 71], ["Acru", 92, 88], ["Frescolate", 76, 82], ["Dam", 79, 81], ["Paulo Londra", 72, 92], ["Ysy A", 87, 89], ["Issy", 78, 76], ["Auge", 76, 74], ["One Night", 73, 72], ["Khateon", 73, 71], ["Zent", 72, 67], ["La Prima", 74, 73], ["Ecko", 78, 77], ["Frijo", 75, 83], ["La Joaqui", 76, 86], ["Yun", 80, 81], ["Prome", 70, 73], ["Holanda", 67, 62], ["KNT", 62, 64], ["Piscu", 66, 69], ["Giro", 75, 86], ["Lucho SSJ", 74, 78], ["Underdann", 76, 77], ["Beelze", 73, 73], ["Afrito", 72, 71], ["Santiki", 76, 74], ["Javiuknow", 59, 50], ["Esteban La Fiebre", 73, 69], ["Uber Rastafari", 68, 83], ["Tego", 78, 72], ["Ramiro a la cabra", 71, 69], ["Shinovi Sambrailo", 70, 68], ["Nacco", 67, 70], ["Lautaro Romario", 72, 73], ["OHM", 63, 60], ["Thom", 68, 61], ["Eros", 66, 60], ["Sergio", 77, 78], ["Nahu Nauseas", 48, 73], ["Musher", 68, 80], ["C Humilde", 67, 65], ["Enma", 67, 63], ["Seniora no sabe que vine", 59, 53], ["Luis Farias", 65, 67], ["Alejo Santino", 66, 65], ["Intermitente 46", 75, 67]],
+  "México": [["Teniente Dan", 67, 66], ["Artil", 70, 69], ["Maquiavélico", 73, 77], ["Mutante", 66, 71], ["Soni Montiel", 75, 71], ["Aczino", 95, 98], ["Jony Beltrán", 89, 91], ["Azuky", 86, 94], ["Rapder", 84, 83], ["Lobo Estepario", 85, 82], ["Yoiker", 76, 74], ["RC", 83, 82], ["Dante", 72, 64], ["Skiper", 86, 80], ["Ari Carrillo", 71, 60], ["Zticma", 75, 77], ["Dominic", 72, 68], ["Garza", 71, 72], ["Jack Andrenalina", 72, 82], ["Nota Roja", 70, 48], ["Soto", 60, 48], ["Xavlac", 65, 48], ["Damián", 69, 46], ["Lobo López", 68, 87], ["Xhavez", 71, 72], ["Fat Tony", 66, 65], ["Potencia", 73, 70], ["DangerAK", 21, 68], ["Saturno", 64, 56], ["Dalia", 72, 78], ["Sandra", 64, 71], ["Hadrian", 74, 81], ["Vens", 64, 59], ["B One", 72, 62], ["Gino", 67, 65], ["Tess La", 47, 81], ["Garces", 72, 71], ["Eric El Niño", 72, 77], ["Foker", 70, 69], ["Drixer", 75, 74], ["Sangre Azul", 63, 64], ["Valex", 61, 69], ["Gonzo", 75, 77], ["Omana", 75, 72], ["Locura", 70, 78], ["Dani Flow", 70, 86], ["Terry", 73, 59]],
+  "Chile": [["Nasho", 68, 71], ["Erreka", 68, 63], ["El Menor", 94, 92], ["Teorema", 91, 93], ["Acertijo", 84, 80], ["Nitro", 87, 87], ["Kaiser", 84, 89], ["Tom Crowley", 79, 76], ["Stigma", 77, 81], ["Ricto", 88, 84], ["Joqerr", 76, 74], ["Drose", 83, 86], ["Pepe Grillo", 74, 76], ["Jokker", 74, 62], ["Metalingüística", 83, 85], ["Racso", 73, 58], ["Esezeta", 72, 78], ["Rodamiento", 78, 76], ["Anubis", 79, 72], ["Basek", 72, 66], ["Satim", 61, 65], ["Blade", 71, 65], ["99", 70, 64], ["Bigtamina", 72, 67], ["Adesong", 78, 64], ["Elemece", 70, 64], ["Eskai", 60, 54], ["ChysteMC", 80, 84], ["BTI", 62, 69], ["Destello", 70, 67], ["Fusok", 72, 66], ["Scub", 70, 72], ["Drefquila", 74, 81], ["Mcmadetuhermana", 77, 79], ["JNO", 73, 74], ["Animus", 68, 67], ["Plets", 74, 75], ["Bellota", 68, 71], ["KMC", 64, 70], ["Nobody", 76, 68], ["Zample", 68, 65], ["Berrun", 68, 63], ["Barto​", 72, 74], ["Jeff Turner", 60, 70], ["Cristofebril", 70, 75], ["Nazion", 72, 68], ["Nait", 68, 67], ["Clap Psycho", 70, 73], ["Elemental", 57, 76], ["Mzeta", 60, 59], ["Panchok", 68, 69]],
   "Perú": [["Caquinha", 72, 72], ["Blaxo", 73, 70], ["Señor G", 71, 62], ["Vokbulario", 56, 55], ["Klibre", 67, 68], ["JC Snake", 64, 64], ["Jaze", 93, 94], ["Jota", 86, 84], ["Stick", 84, 74], ["KG", 84, 85], ["Nekroos", 88, 87], ["Litzen", 76, 74], ["Skill", 87, 82], ["Choque", 76, 80], ["Strike", 75, 73], ["Jair Wong", 71, 74], ["Vijay Kesh", 85, 89], ["Diego MC", 74, 60], ["Kian", 79, 79], ["Ramset", 72, 56], ["Ghost", 72, 56], ["Xplain", 79, 76], ["Almendrades", 78, 79], ["Piero Pistas", 70, 54], ["Katacrist", 70, 48], ["Xilo", 68, 44], ["Scope", 68, 44], ["Maricielo", 67, 44], ["Letras Tarapoto", 67, 42], ["Blaxi Mental", 67, 42], ["Sumeria", 67, 83], ["Scraps", 74, 62], ["Venti", 67, 62], ["Dexuz", 72, 76], ["Danu", 72, 70], ["Icon", 62, 66], ["Necia", 76, 71], ["Gasper", 70, 72], ["Papicha", 72, 67], ["MSL", 61, 55], ["Fox", 67, 61], ["Cafú", 56, 55], ["NoFace", 56, 71], ["Gino​", 68, 70], ["Clayphonebeat", 60, 65], ["Sol", 63, 60], ["Lemafais", 68, 70], ["Mordekai", 73, 76]],
-  "Colombia": [["Valles-T", 88, 89], ["Marithea", 89, 88], ["Lokillo", 85, 93], ["Filósofo", 81, 74], ["J1", 76, 60], ["Coloso", 75, 62], ["Puppy", 81, 71], ["RBN", 74, 60], ["Airon", 76, 77], ["Carpediem", 86, 82], ["Elevn", 74, 56], ["Fat N", 82, 84], ["Ken Zingle", 72, 58], ["Token", 72, 54], ["Axl Evans", 68, 44], ["Coffy", 68, 44], ["Urko", 73, 78], ["Visionario", 76, 74], ["Pandora", 67, 72], ["Lil White", 67, 65], ["Dima", 67, 65], ["Nico B", 75, 56], ["Flama", 68, 65], ["Gafas", 67, 51], ["Andy Ink", 61, 48], ["Tormenta", 59, 51], ["JM Serna", 70, 73], ["Ñko", 73, 72]],
-  "Venezuela": [["Kore", 68, 65], ["Chang", 86, 83], ["Letra", 82, 80], ["Black Code", 83, 78], ["Lit Ignis", 69, 46], ["Lancer Lirical", 79, 76], ["MCKlopedia", 80, 86], ["Gavyria", 64, 75], ["Oner", 70, 66], ["Akapellah", 83, 87], ["AdonysX", 79, 62], ["Freites", 77, 58], ["White Caracas", 75, 56], ["Bobby", 68, 44], ["Imigrante", 68, 44], ["Lou T", 68, 44], ["Cristonita", 52, 53]],
+  "Colombia": [["Horus", 74, 70], ["Villardy", 78, 71], ["Clezart", 68, 61], ["Django", 73, 68], ["Valles-T", 88, 89], ["Marithea", 89, 88], ["Lokillo", 85, 93], ["Filósofo", 81, 74], ["J1", 76, 60], ["Coloso", 75, 62], ["Puppy", 81, 71], ["RBN", 74, 60], ["Airon", 76, 77], ["Carpediem", 86, 82], ["Elevn", 74, 56], ["Fat N", 82, 84], ["Ken Zingle", 72, 58], ["Token", 72, 54], ["Axl Evans", 68, 44], ["Coffy", 68, 44], ["Urko", 73, 78], ["Visionario", 76, 74], ["Pandora", 67, 72], ["Lil White", 67, 65], ["Dima", 67, 65], ["Nico B", 75, 56], ["Flama", 68, 65], ["Gafas", 67, 51], ["Andy Ink", 61, 48], ["Tormenta", 59, 51], ["JM Serna", 70, 73], ["Ñko", 73, 72]],
+  "Venezuela": [["Kechu", 71, 68], ["Kore", 68, 65], ["Chang", 86, 83], ["Letra", 82, 80], ["Black Code", 83, 78], ["Lit Ignis", 69, 46], ["Lancer Lirical", 79, 76], ["MCKlopedia", 80, 86], ["Gavyria", 64, 75], ["Oner", 70, 66], ["Akapellah", 83, 87], ["AdonysX", 79, 62], ["Freites", 77, 58], ["White Caracas", 75, 56], ["Bobby", 68, 44], ["Imigrante", 68, 44], ["Lou T", 68, 44], ["Cristonita", 52, 53]],
   "Ecuador": [["Mac Tempo", 80, 66], ["Abel EC", 76, 56], ["Alfredozki", 75, 56], ["Switch", 74, 58], ["Melo", 72, 50], ["Eppico", 71, 48], ["Big Mind", 69, 44], ["Punch", 69, 44], ["Andy Novem", 68, 42], ["Adulterio", 68, 42], ["Amir", 67, 42], ["Acxel Rapster", 66, 40], ["Santo Skill", 66, 40], ["Track Garden", 30, 20], ["Minotauro", 60, 53], ["Nost", 60, 57]],
-  "Uruguay": [["Spektro", 79, 71], ["Wordplay", 72, 50], ["Naicen", 69, 44], ["Alexunder", 68, 42], ["SOK", 67, 42], ["Vostok", 67, 42], ["Punisher", 67, 40], ["Rasta", 72, 69], ["Ualde", 66, 41], ["SFJ", 66, 43], ["Varela", 66, 45], ["Hammer", 74, 71], ["Morfeo", 66, 41], ["Cronin", 66, 40], ["Harry", 61, 51]],
+  "Uruguay": [["Franco", 66, 62], ["Spektro", 79, 71], ["Wordplay", 72, 50], ["Naicen", 69, 44], ["Alexunder", 68, 42], ["SOK", 67, 42], ["Vostok", 67, 42], ["Punisher", 67, 40], ["Rasta", 72, 69], ["Ualde", 66, 41], ["SFJ", 66, 43], ["Varela", 66, 45], ["Hammer", 74, 71], ["Morfeo", 66, 41], ["Cronin", 66, 40], ["Harry", 61, 51]],
   "Paraguay": [["Drazer", 72, 50], ["Mister H", 68, 44]],
-  "Bolivia": [["Minos", 72, 50], ["Armamente", 66, 64]],
-  "República Dominicana": [["Éxodo Lirical", 78, 76], ["KDT", 70, 48], ["Shield Master", 69, 46]],
+  "Bolivia": [["CrisPa", 67, 61], ["Minos", 72, 50], ["Armamente", 66, 64]],
+  "República Dominicana": [["Numenosis", 74, 65], ["Éxodo Lirical", 78, 76], ["KDT", 70, 48], ["Shield Master", 69, 46]],
   "Costa Rica": [["SNK", 74, 70], ["RVS", 69, 46], ["P8", 68, 44], ["Blackhawk", 68, 44], ["Eros EQ", 67, 67], ["Kenyari", 67, 42], ["Cehzar", 67, 42], ["Bana", 68, 44], ["Nicosan", 68, 44]],
-  "Guatemala": [["Ritmodelia", 74, 76], ["Ghetto", 78, 83]],
+  "Guatemala": [["Tesla", 68, 60], ["Ritmodelia", 74, 76], ["Ghetto", 78, 83]],
   "Panamá": [["Aldahir", 71, 65], ["UFO", 70, 48], ["Índico", 69, 66], ["Bway Woody", 67, 42], ["Zoom", 64, 60], ["Gabriel", 61, 58]],
   "El Salvador": [["Zaki", 72, 56], ["Zeu", 68, 44], ["Reos", 68, 44], ["Verso One", 68, 44], ["Jafet", 68, 44], ["Odil", 67, 42]],
   "Nicaragua": [["Pseudocódigo", 68, 44], ["Blaze", 67, 42]],
@@ -158,7 +162,7 @@ const STYLES = {
   'Poético':    {v:0.6, m:{}, spike:true,                             txt:'Constante, pero de vez en cuando se sale en una ronda.'},
 };
 const STYLE_NAMES = Object.keys(STYLES);
-const STYLE_PRESET = {"Chuty": "Ingenio", "Gazir": "Ingenio", "Arkano": "Punchline", "Bnet": "Métrico", "Zasko": "Métrico", "Skone": "Showman", "Mnak": "Punchline", "Sweet Pain": "Poético", "Blon": "Ingenio", "Dani VK": "Ingenio", "Hander": "Punchline", "Sawi Elekipo": "Punchline", "Force": "Punchline", "Le33": "Flow", "Alek": "Coherencia", "Mounts": "Ingenio", "Tirpa": "Poético", "Michu": "Flow", "Fabiuki": "Métrico", "Bta": "Punchline", "Jesús LC": "Punchline", "Kmbra": "Poético", "Nez": "Ingenio", "Barón": "Métrico", "Mr. Ego": "Showman", "Invert": "Showman", "Khan": "Flow", "Sara Socas": "Flow", "Navas": "Disonante", "Mowlihawk": "Showman", "Bélico": "Poético", "Nocre": "Punchline", "BTP": "Punchline", "Errecé": "Flow", "Adriana": "Punchline", "Piromana": "Poético", "Segrelles": "Métrico", "Owen": "Punchline", "Spolker": "Métrico", "Argente": "Showman", "Davisito": "Punchline", "Mr Aaron": "Métrico", "CDFlex": "Showman", "Ander2K": "Métrico", "Sozat": "Flow", "Ibán": "Métrico", "Zyko GDH": "Punchline", "Piezas": "Flow", "Lgido": "Punchline", "Dr. Filtros": "Disonante", "Pirry": "Flow", "Azeta": "Coherencia", "NQP": "Métrico", "Babi": "Showman", "Mike Shinobi": "Flow", "MC Men": "Showman", "Peret": "Punchline", "Soen": "Punchline", "Krisan": "Punchline", "Nacho SRK": "Métrico", "Botta": "Showman", "Nacho Argentino": "Métrico", "Ortega": "Disonante", "Arcoiris": "Disonante", "Kavron": "Punchline", "Akar": "Flow", "Ortiz": "Coherencia", "Titus": "Showman", "Kensuke": "Showman", "Niki DMT": "Punchline", "Kinkiwinky": "Disonante", "Rubenico": "Métrico", "Swit Eme": "Poético", "Driu": "Disonante", "Walls": "Ingenio", "Pyro": "Teatral", "NachoLCM": "Punchline", "Triple R": "Métrico", "Estrimo": "Punchline", "Godlemon": "Métrico", "Jaloner": "Métrico", "Jorge Mauro": "Punchline", "Bohemia": "Punchline", "Santi": "Ingenio", "Rayban": "Showman", "Tanquecrack": "Showman", "NG": "Coherencia", "Stuart": "Poético", "Larrix": "Teatral", "Mecha": "Punchline", "Wos": "Flow", "Papo": "Métrico", "Dtoke": "Showman", "Dani Ribba": "Flow", "Kodigo": "Flow", "Trueno": "Flow", "Klan": "Punchline", "G Sony": "Flow", "Replik": "Poético", "Jesse Pungaz": "Flow", "Nacho": "Punchline", "Naista": "Punchline", "Zaina": "Ingenio", "MP": "Flow", "Tata": "Teatral", "Katra": "Punchline", "Wolf": "Ingenio", "Mito": "Coherencia", "Dybbuk": "Showman", "DAC": "Ingenio", "Jaff": "Teatral", "CTZ": "Poético", "MKS": "Punchline", "Cacha": "Showman", "Sub": "Punchline", "Nasir Catriel": "Punchline", "Barto": "Punchline", "Exe": "Ingenio", "HDR": "Showman", "Sophia": "Poético", "Abel": "Métrico", "Cobe CLK": "Showman", "1Tobi": "Flow", "Dyse": "Coherencia", "GW": "Punchline", "Ritter": "Métrico", "Franchute": "Showman", "Rife": "Poético", "TiagoPZK": "Flow", "Lit Killah": "Métrico", "Duki": "Flow", "Roma": "Punchline", "Dozer": "Punchline", "G5": "Flow", "Brasita": "Punchline", "Parker": "Punchline", "Alkoy": "Flow", "Snake": "Flow", "Acru": "Métrico", "Frescolate": "Punchline", "Dam": "Métrico", "Aczino": "Punchline", "Jony Beltrán": "Showman", "Azuky": "Punchline", "Rapder": "Punchline", "Lobo Estepario": "Punchline", "Yoiker": "Punchline", "RC": "Flow", "Dante": "Punchline", "Skiper": "Ingenio", "Ari Carrillo": "Punchline", "Zticma": "Showman", "Dominic": "Punchline", "Garza": "Showman", "Jack Andrenalina": "Showman", "Nota Roja": "Teatral", "Soto": "Punchline", "Xavlac": "Punchline", "Damián": "Punchline", "Lobo López": "Showman", "Xhavez": "Flow", "Fat Tony": "Punchline", "Potencia": "Ingenio", "DangerAK": "Punchline", "Saturno": "Ingenio", "Dalia": "Showman", "Sandra": "Punchline", "Hadrian": "Ingenio", "Vens": "Showman", "El Menor": "Métrico", "Teorema": "Métrico", "Acertijo": "Ingenio", "Nitro": "Punchline", "Kaiser": "Showman", "Tom Crowley": "Punchline", "Stigma": "Flow", "Ricto": "Métrico", "Joqerr": "Coherencia", "Drose": "Métrico", "Pepe Grillo": "Ingenio", "Jokker": "Punchline", "Metalingüística": "Métrico", "Racso": "Punchline", "Esezeta": "Poético", "Rodamiento": "Ingenio", "Anubis": "Métrico", "Basek": "Punchline", "Satim": "Showman", "Blade": "Punchline", "99": "Flow", "Bigtamina": "Métrico", "Adesong": "Métrico", "Elemece": "Ingenio", "Eskai": "Punchline", "ChysteMC": "Métrico", "BTI": "Punchline", "Destello": "Métrico", "Fusok": "Showman", "Scub": "Métrico", "Jaze": "Flow", "Jota": "Flow", "Stick": "Punchline", "KG": "Flow", "Nekroos": "Punchline", "Litzen": "Punchline", "Skill": "Poético", "Choque": "Punchline", "Strike": "Ingenio", "Jair Wong": "Showman", "Vijay Kesh": "Teatral", "Diego MC": "Punchline", "Kian": "Métrico", "Ramset": "Punchline", "Ghost": "Punchline", "Xplain": "Métrico", "Almendrades": "Ingenio", "Piero Pistas": "Punchline", "Katacrist": "Punchline", "Xilo": "Punchline", "Scope": "Punchline", "Maricielo": "Punchline", "Letras Tarapoto": "Punchline", "Blaxi Mental": "Punchline", "Sumeria": "Showman", "Scraps": "Punchline", "Venti": "Ingenio", "Dexuz": "Ingenio", "Danu": "Punchline", "Icon": "Punchline", "Necia": "Ingenio", "Gasper": "Punchline", "Papicha": "Ingenio", "MSL": "Ingenio", "Valles-T": "Punchline", "Marithea": "Ingenio", "Lokillo": "Showman", "Filósofo": "Poético", "J1": "Punchline", "Coloso": "Ingenio", "Puppy": "Ingenio", "RBN": "Punchline", "Airon": "Punchline", "Carpediem": "Métrico", "Elevn": "Punchline", "Fat N": "Showman", "Ken Zingle": "Punchline", "Token": "Punchline", "Axl Evans": "Punchline", "Coffy": "Ingenio", "Urko": "Showman", "Visionario": "Flow", "Pandora": "Ingenio", "Lil White": "Métrico", "Dima": "Métrico", "Kore": "Ingenio", "Nico B": "Punchline", "Flama": "Ingenio", "Gafas": "Ingenio", "Andy Ink": "Punchline", "Tormenta": "Coherencia", "JM Serna": "Ingenio", "Chang": "Ingenio", "Letra": "Coherencia", "Black Code": "Ingenio", "Lit Ignis": "Punchline", "Lancer Lirical": "Flow", "MCKlopedia": "Flow", "Gavyria": "Punchline", "Oner": "Punchline", "Akapellah": "Flow", "AdonysX": "Punchline", "Freites": "Punchline", "White Caracas": "Punchline", "Bobby": "Punchline", "Imigrante": "Punchline", "Lou T": "Punchline", "Mac Tempo": "Punchline", "Abel EC": "Ingenio", "Alfredozki": "Punchline", "Switch": "Ingenio", "Melo": "Punchline", "Eppico": "Punchline", "Big Mind": "Punchline", "Punch": "Punchline", "Andy Novem": "Punchline", "Adulterio": "Punchline", "Amir": "Punchline", "Acxel Rapster": "Punchline", "Santo Skill": "Punchline", "Spektro": "Ingenio", "Wordplay": "Punchline", "Naicen": "Punchline", "Alexunder": "Punchline", "SOK": "Punchline", "Vostok": "Punchline", "Punisher": "Punchline", "Rasta": "Poético", "Ualde": "Punchline", "SFJ": "Punchline", "Varela": "Punchline", "Hammer": "Ingenio", "Morfeo": "Punchline", "Cronin": "Punchline", "Drazer": "Punchline", "Mister H": "Punchline", "Minos": "Punchline", "Éxodo Lirical": "Showman", "KDT": "Punchline", "Shield Master": "Punchline", "SNK": "Ingenio", "RVS": "Punchline", "P8": "Punchline", "Blackhawk": "Punchline", "Eros EQ": "Ingenio", "Kenyari": "Punchline", "Cehzar": "Punchline", "Bana": "Punchline", "Nicosan": "Punchline", "Ritmodelia": "Ingenio", "Aldahir": "Ingenio", "UFO": "Punchline", "Índico": "Ingenio", "Bway Woody": "Punchline", "Zaki": "Ingenio", "Zeu": "Punchline", "Reos": "Punchline", "Verso One": "Ingenio", "Jafet": "Punchline", "Odil": "Punchline", "Pseudocódigo": "Punchline", "Blaze": "Punchline", "Terrorista": "Punchline", "Androide": "Punchline", "Yartzi": "Ingenio", "Outlaw": "Punchline", "Knnon": "Punchline", "Reverse": "Flow", "Perry": "Ingenio", "Kusho": "Poético", "Conde": "Teatral", "JC Snake": "Ingenio", "Tyler": "Punchline", "Vokbulario": "Coherencia", "Cafú": "Punchline", "Compare Flow": "Métrico", "Paulo Londra": "Flow", "B One": "Punchline", "Drefquila": "Punchline", "Mcmadetuhermana": "Showman", "JNO": "Showman", "Animus": "Métrico", "Plets": "Poético", "Bellota": "Punchline", "KMC": "Punchline", "Fox": "Punchline", "Gino": "Punchline", "Tess La": "Showman", "Garces": "Punchline", "Viti": "Métrico", "Laíño": "Punchline", "Caquinha": "Showman", "Blaxo": "Poético", "Señor G": "Coherencia", "Maquiavélico": "Punchline", "Mutante": "Flow", "Soni Montiel": "Punchline", "Klibre": "Punchline", "El Jincho": "Flow", "Ghetto": "Flow", "Ysy A": "Flow", "Issy": "Métrico", "Auge": "Métrico", "One Night": "Punchline", "Khateon": "Punchline", "Zent": "Punchline", "La Prima": "Poético", "Ecko": "Métrico", "Frijo": "Punchline", "La Joaqui": "Punchline", "Yun": "Ingenio", "Calles": "Punchline", "Yak Lamelo": "Showman", "Hastro": "Punchline", "Ruvix": "Punchline", "Sugha": "Flow", "Was": "Disonante", "Prome": "Showman", "Holanda": "Poético", "KNT": "Ingenio", "Piscu": "Métrico", "Giro": "Ingenio", "Lucho SSJ": "Flow", "Underdann": "Punchline", "Beelze": "Showman", "Afrito": "Coherencia", "Eric El Niño": "Coherencia", "Foker": "Coherencia", "Drixer": "Ingenio", "Sangre Azul": "Punchline", "Valex": "Showman", "Gonzo": "Coherencia", "ATR": "Disonante", "Santiki": "Métrico", "NoFace": "Flow", "Javiuknow": "Métrico", "Lmakina": "Punchline", "Ñko": "Ingenio", "Kevin Mil Problemas": "Disonante", "Track Charles": "Disonante", "Klenchos": "Disonante", "Isma72": "Disonante", "Carballeda": "Coherencia", "Ibai": "Showman", "Paco CBA": "Coherencia", "Emege": "Métrico", "Pitu Dood": "Poético", "Luisaker": "Métrico", "Jado PVG": "Punchline", "Zatu": "Punchline", "Noult": "Showman", "Champi": "Ingenio", "Guanyar": "Showman", "Esteban La Fiebre": "Disonante", "Uber Rastafari": "Showman", "Tego": "Poético", "Ramiro a la cabra": "Poético", "Shinovi Sambrailo": "Métrico", "Nacco": "Disonante", "Lautaro Romario": "Showman", "OHM": "Punchline", "Thom": "Punchline", "Eros": "Showman", "Sergio": "Poético", "Nahu Nauseas": "Disonante", "Musher": "Showman", "C Humilde": "Disonante", "Enma": "Métrico", "Seniora no sabe que vine": "Showman", "Luis Farias": "Disonante", "Alejo Santino": "Punchline", "Intermitente 46": "Ingenio", "Layto": "Ingenio", "Omana": "Métrico", "Locura": "Disonante", "Dani Flow": "Showman", "Terry": "Métrico", "Nobody": "Poético", "Zample": "Flow", "Berrun": "Métrico", "Barto​": "Showman", "Jeff Turner": "Showman", "Cristofebril": "Showman", "Nazion": "Punchline", "Nait": "Poético", "Clap Psycho": "Métrico", "Elemental": "Punchline", "Mzeta": "Punchline", "Panchok": "Métrico", "Gino​": "Showman", "Clayphonebeat": "Punchline", "Sol": "Coherencia", "Lemafais": "Punchline", "Mordekai": "Flow", "Track Garden": "Disonante", "Minotauro": "Ingenio", "Cristonita": "Punchline", "Zoom": "Showman", "Gabriel": "Punchline", "Nost": "Punchline", "Harry": "Coherencia", "Armamente": "Ingenio"};   // bloc de notas de la base de datos
+const STYLE_PRESET = {"Horus": "Métrico", "Saith": "Ingenio", "Kechu": "Métrico", "Erreka": "Punchline", "Clezart": "Ingenio", "Numenosis": "Punchline", "CrisPa": "Ingenio", "Nasho": "Punchline", "Tesla": "Punchline", "Villardy": "Coherencia", "Artil": "Punchline", "Jamal": "Punchline", "Django": "Métrico", "Teniente Dan": "Showman", "Tanger": "Punchline", "Beto Blues": "Poético", "L. EFRUM": "Ingenio", "TOSK": "Flow", "Lanel": "Métrico", "Bette La Magia": "Ingenio", "Rusty": "Punchline", "MIDEL": "Flow", "Franco": "Flow", "Staner": "Flow", "SHECKA": "Flow", "Piba Cósmica": "Poético", "Saga": "Punchline", "Exe DK": "Punchline", "Mono Strong": "Flow", "Pelin": "Teatral", "Vid": "Punchline", "Chuty": "Ingenio", "Gazir": "Ingenio", "Arkano": "Punchline", "Bnet": "Métrico", "Zasko": "Métrico", "Skone": "Showman", "Mnak": "Punchline", "Sweet Pain": "Poético", "Blon": "Ingenio", "Dani VK": "Ingenio", "Hander": "Punchline", "Sawi Elekipo": "Punchline", "Force": "Punchline", "Le33": "Flow", "Alek": "Coherencia", "Mounts": "Ingenio", "Tirpa": "Poético", "Michu": "Flow", "Fabiuki": "Métrico", "Bta": "Punchline", "Jesús LC": "Punchline", "Kmbra": "Poético", "Nez": "Ingenio", "Barón": "Métrico", "Mr. Ego": "Showman", "Invert": "Showman", "Khan": "Flow", "Sara Socas": "Flow", "Navas": "Disonante", "Mowlihawk": "Showman", "Bélico": "Poético", "Nocre": "Punchline", "BTP": "Punchline", "Errecé": "Flow", "Adriana": "Punchline", "Piromana": "Poético", "Segrelles": "Métrico", "Owen": "Punchline", "Spolker": "Métrico", "Argente": "Showman", "Davisito": "Punchline", "Mr Aaron": "Métrico", "El Demonio En Bici": "Showman", "Ander2K": "Métrico", "Sozat": "Flow", "Ibán": "Métrico", "Zyko GDH": "Punchline", "Piezas": "Flow", "Lgido": "Punchline", "Dr. Filtros": "Disonante", "Pirry": "Flow", "Azeta": "Coherencia", "NQP": "Métrico", "Babi": "Showman", "Mike Shinobi": "Flow", "MC Men": "Showman", "Peret": "Punchline", "Soen": "Punchline", "Krisan": "Punchline", "Nacho SRK": "Métrico", "Botta": "Showman", "Nacho Argentino": "Métrico", "Ortega": "Disonante", "Arcoiris": "Disonante", "Kavron": "Punchline", "Akar": "Flow", "Ortiz": "Coherencia", "Titus": "Showman", "Kensuke": "Showman", "Niki DMT": "Punchline", "Kinkiwinky": "Disonante", "Rubenico": "Métrico", "Swit Eme": "Poético", "Driu": "Disonante", "Walls": "Ingenio", "Pyro": "Teatral", "NachoLCM": "Punchline", "Triple R": "Métrico", "Estrimo": "Punchline", "Godlemon": "Métrico", "Jaloner": "Métrico", "Jorge Mauro": "Punchline", "Bohemia": "Punchline", "Santi": "Ingenio", "Rayban": "Showman", "Tanquecrack": "Showman", "NG": "Coherencia", "Stuart": "Poético", "Larrix": "Teatral", "Mecha": "Punchline", "Wos": "Flow", "Papo": "Métrico", "Dtoke": "Showman", "Dani Ribba": "Flow", "Kodigo": "Flow", "Trueno": "Flow", "Klan": "Punchline", "G Sony": "Flow", "Replik": "Poético", "Jesse Pungaz": "Flow", "Nacho": "Punchline", "Naista": "Punchline", "Zaina": "Ingenio", "MP": "Flow", "Tata": "Teatral", "Katra": "Punchline", "Wolf": "Ingenio", "Mito": "Coherencia", "Dybbuk": "Showman", "DAC": "Ingenio", "Jaff": "Teatral", "CTZ": "Poético", "MKS": "Punchline", "Cacha": "Showman", "Sub": "Punchline", "Nasir Catriel": "Punchline", "Barto": "Punchline", "Exe": "Ingenio", "HDR": "Showman", "Sophia": "Poético", "Abel": "Métrico", "Cobe CLK": "Showman", "1Tobi": "Flow", "Dyse": "Coherencia", "GW": "Punchline", "Ritter": "Métrico", "Franchute": "Showman", "Rife": "Poético", "TiagoPZK": "Flow", "Lit Killah": "Métrico", "Duki": "Flow", "Roma": "Punchline", "Dozer": "Punchline", "G5": "Flow", "Brasita": "Punchline", "Parker": "Punchline", "Alkoy": "Flow", "Snake": "Flow", "Acru": "Métrico", "Frescolate": "Punchline", "Dam": "Métrico", "Aczino": "Punchline", "Jony Beltrán": "Showman", "Azuky": "Punchline", "Rapder": "Punchline", "Lobo Estepario": "Punchline", "Yoiker": "Punchline", "RC": "Flow", "Dante": "Punchline", "Skiper": "Ingenio", "Ari Carrillo": "Punchline", "Zticma": "Showman", "Dominic": "Punchline", "Garza": "Showman", "Jack Andrenalina": "Showman", "Nota Roja": "Teatral", "Soto": "Punchline", "Xavlac": "Punchline", "Damián": "Flow", "Lobo López": "Showman", "Xhavez": "Flow", "Fat Tony": "Punchline", "Potencia": "Ingenio", "DangerAK": "Punchline", "Saturno": "Ingenio", "Dalia": "Showman", "Sandra": "Punchline", "Hadrian": "Ingenio", "Vens": "Showman", "El Menor": "Métrico", "Teorema": "Poético", "Acertijo": "Ingenio", "Nitro": "Punchline", "Kaiser": "Showman", "Tom Crowley": "Punchline", "Stigma": "Flow", "Ricto": "Métrico", "Joqerr": "Coherencia", "Drose": "Métrico", "Pepe Grillo": "Ingenio", "Jokker": "Punchline", "Metalingüística": "Métrico", "Racso": "Punchline", "Esezeta": "Poético", "Rodamiento": "Ingenio", "Anubis": "Métrico", "Basek": "Punchline", "Satim": "Showman", "Blade": "Punchline", "99": "Flow", "Bigtamina": "Métrico", "Adesong": "Métrico", "Elemece": "Ingenio", "Eskai": "Punchline", "ChysteMC": "Métrico", "BTI": "Punchline", "Destello": "Métrico", "Fusok": "Showman", "Scub": "Métrico", "Jaze": "Flow", "Jota": "Flow", "Stick": "Punchline", "KG": "Flow", "Nekroos": "Punchline", "Litzen": "Punchline", "Skill": "Poético", "Choque": "Punchline", "Strike": "Ingenio", "Jair Wong": "Showman", "Vijay Kesh": "Teatral", "Diego MC": "Punchline", "Kian": "Métrico", "Ramset": "Punchline", "Ghost": "Punchline", "Xplain": "Métrico", "Almendrades": "Ingenio", "Piero Pistas": "Punchline", "Katacrist": "Punchline", "Xilo": "Punchline", "Scope": "Punchline", "Maricielo": "Punchline", "Letras Tarapoto": "Punchline", "Blaxi Mental": "Punchline", "Sumeria": "Showman", "Scraps": "Punchline", "Venti": "Ingenio", "Dexuz": "Ingenio", "Danu": "Punchline", "Icon": "Punchline", "Necia": "Ingenio", "Gasper": "Punchline", "Papicha": "Ingenio", "MSL": "Ingenio", "Valles-T": "Punchline", "Marithea": "Ingenio", "Lokillo": "Showman", "Filósofo": "Poético", "J1": "Punchline", "Coloso": "Ingenio", "Puppy": "Ingenio", "RBN": "Punchline", "Airon": "Punchline", "Carpediem": "Métrico", "Elevn": "Punchline", "Fat N": "Showman", "Ken Zingle": "Punchline", "Token": "Punchline", "Axl Evans": "Punchline", "Coffy": "Ingenio", "Urko": "Showman", "Visionario": "Flow", "Pandora": "Ingenio", "Lil White": "Métrico", "Dima": "Métrico", "Kore": "Ingenio", "Nico B": "Punchline", "Flama": "Ingenio", "Gafas": "Ingenio", "Andy Ink": "Punchline", "Tormenta": "Coherencia", "JM Serna": "Ingenio", "Chang": "Ingenio", "Letra": "Coherencia", "Black Code": "Ingenio", "Lit Ignis": "Punchline", "Lancer Lirical": "Flow", "MCKlopedia": "Flow", "Gavyria": "Punchline", "Oner": "Punchline", "Akapellah": "Flow", "AdonysX": "Punchline", "Freites": "Punchline", "White Caracas": "Punchline", "Bobby": "Punchline", "Imigrante": "Punchline", "Lou T": "Punchline", "Mac Tempo": "Punchline", "Abel EC": "Ingenio", "Alfredozki": "Punchline", "Switch": "Ingenio", "Melo": "Punchline", "Eppico": "Punchline", "Big Mind": "Punchline", "Punch": "Punchline", "Andy Novem": "Punchline", "Adulterio": "Punchline", "Amir": "Punchline", "Acxel Rapster": "Punchline", "Santo Skill": "Punchline", "Spektro": "Ingenio", "Wordplay": "Punchline", "Naicen": "Punchline", "Alexunder": "Punchline", "SOK": "Punchline", "Vostok": "Punchline", "Punisher": "Punchline", "Rasta": "Poético", "Ualde": "Punchline", "SFJ": "Punchline", "Varela": "Punchline", "Hammer": "Ingenio", "Morfeo": "Punchline", "Cronin": "Punchline", "Drazer": "Punchline", "Mister H": "Punchline", "Minos": "Punchline", "Éxodo Lirical": "Showman", "KDT": "Punchline", "Shield Master": "Punchline", "SNK": "Ingenio", "RVS": "Punchline", "P8": "Punchline", "Blackhawk": "Punchline", "Eros EQ": "Ingenio", "Kenyari": "Punchline", "Cehzar": "Punchline", "Bana": "Punchline", "Nicosan": "Punchline", "Ritmodelia": "Ingenio", "Aldahir": "Ingenio", "UFO": "Punchline", "Índico": "Ingenio", "Bway Woody": "Punchline", "Zaki": "Ingenio", "Zeu": "Punchline", "Reos": "Punchline", "Verso One": "Ingenio", "Jafet": "Punchline", "Odil": "Punchline", "Pseudocódigo": "Punchline", "Blaze": "Punchline", "Terrorista": "Punchline", "Androide": "Punchline", "Yartzi": "Ingenio", "Outlaw": "Punchline", "Knnon": "Punchline", "Reverse": "Flow", "Perry": "Ingenio", "Kusho": "Poético", "Conde": "Teatral", "JC Snake": "Ingenio", "Tyler": "Punchline", "Vokbulario": "Coherencia", "Cafú": "Punchline", "Compare Flow": "Métrico", "Paulo Londra": "Flow", "B One": "Punchline", "Drefquila": "Punchline", "Mcmadetuhermana": "Showman", "JNO": "Showman", "Animus": "Métrico", "Plets": "Poético", "Bellota": "Punchline", "KMC": "Punchline", "Fox": "Punchline", "Gino": "Punchline", "Tess La": "Showman", "Garces": "Punchline", "Viti": "Métrico", "Laíño": "Punchline", "Caquinha": "Showman", "Blaxo": "Poético", "Señor G": "Coherencia", "Maquiavélico": "Punchline", "Mutante": "Flow", "Soni Montiel": "Punchline", "Klibre": "Punchline", "El Jincho": "Flow", "Ghetto": "Flow", "Ysy A": "Flow", "Issy": "Métrico", "Auge": "Métrico", "One Night": "Punchline", "Khateon": "Punchline", "Zent": "Punchline", "La Prima": "Poético", "Ecko": "Métrico", "Frijo": "Punchline", "La Joaqui": "Punchline", "Yun": "Ingenio", "Calles": "Punchline", "Yak Lamelo": "Showman", "Hastro": "Punchline", "Ruvix": "Punchline", "Sugha": "Flow", "Was": "Disonante", "Prome": "Showman", "Holanda": "Poético", "KNT": "Ingenio", "Piscu": "Métrico", "Giro": "Ingenio", "Lucho SSJ": "Flow", "Underdann": "Punchline", "Beelze": "Showman", "Afrito": "Coherencia", "Eric El Niño": "Coherencia", "Foker": "Coherencia", "Drixer": "Ingenio", "Sangre Azul": "Punchline", "Valex": "Showman", "Gonzo": "Coherencia", "ATR": "Disonante", "Santiki": "Métrico", "NoFace": "Flow", "Javiuknow": "Métrico", "Lmakina": "Punchline", "Ñko": "Ingenio", "Kevin Mil Problemas": "Disonante", "Track Charles": "Disonante", "Klenchos": "Disonante", "Isma72": "Disonante", "Carballeda": "Coherencia", "Ibai": "Showman", "Paco CBA": "Coherencia", "Emege": "Métrico", "Pitu Dood": "Poético", "Luisaker": "Métrico", "Jado PVG": "Punchline", "Zatu": "Punchline", "Noult": "Showman", "Champi": "Ingenio", "Guanyar": "Showman", "Esteban La Fiebre": "Disonante", "Uber Rastafari": "Showman", "Tego": "Poético", "Ramiro a la cabra": "Poético", "Shinovi Sambrailo": "Métrico", "Nacco": "Disonante", "Lautaro Romario": "Showman", "OHM": "Punchline", "Thom": "Punchline", "Eros": "Showman", "Sergio": "Poético", "Nahu Nauseas": "Disonante", "Musher": "Showman", "C Humilde": "Disonante", "Enma": "Métrico", "Seniora no sabe que vine": "Showman", "Luis Farias": "Disonante", "Alejo Santino": "Punchline", "Intermitente 46": "Ingenio", "Layto": "Ingenio", "Omana": "Métrico", "Locura": "Disonante", "Dani Flow": "Showman", "Terry": "Métrico", "Nobody": "Poético", "Zample": "Flow", "Berrun": "Métrico", "Barto​": "Showman", "Jeff Turner": "Showman", "Cristofebril": "Showman", "Nazion": "Punchline", "Nait": "Poético", "Clap Psycho": "Métrico", "Elemental": "Punchline", "Mzeta": "Punchline", "Panchok": "Métrico", "Gino​": "Showman", "Clayphonebeat": "Punchline", "Sol": "Coherencia", "Lemafais": "Punchline", "Mordekai": "Flow", "Track Garden": "Disonante", "Minotauro": "Ingenio", "Cristonita": "Punchline", "Zoom": "Showman", "Gabriel": "Punchline", "Nost": "Punchline", "Harry": "Coherencia", "Armamente": "Ingenio"};   // bloc de notas de la base de datos
 function defaultStyle(name){ if(STYLE_PRESET[name]) return STYLE_PRESET[name]; let h=0; for(const ch of name) h=(h*31+ch.charCodeAt(0))>>>0; return STYLE_NAMES[h%STYLE_NAMES.length]; }
 function styleOf(f){ return (f && STYLES[f.style]) ? f.style : (f ? defaultStyle(f.name) : 'Showman'); }
 
@@ -494,7 +498,7 @@ function nuevoNovato(country, year){
 function generarNovatos(s, retirados){
   const n=clamp(retirados.length, NOVATO_MIN, NOVATO_MAX);
   const paises=shuffle(retirados.map(id=>(fby(id)||{}).country).filter(Boolean)).slice(0, n);
-  if(paises.length<n){ const bolsa=[]; const liga=new Set(LEAGUES.flatMap(l=>l.countries||[])); activos().forEach(f=>{ if(liga.has(f.country)) bolsa.push(f.country); });
+  if(paises.length<n){ const bolsa=[]; const liga=new Set(LEAGUES.filter(l=>!l.sbx).flatMap(l=>l.countries||[])); activos().forEach(f=>{ if(liga.has(f.country)) bolsa.push(f.country); });
     while(paises.length<n && bolsa.length) paises.push(bolsa[Math.floor(Math.random()*bolsa.length)]); }
   const out=[]; paises.forEach(c=>{ const f=nuevoNovato(c, s.year); state.freestylers.push(f); out.push(f.id); });
   return out;
@@ -505,13 +509,15 @@ const FOREIGN_MULT = 1.25; // un extranjero cuesta un 25% más por viajes
 // país "de liga": casi siempre su nacionalidad. Pirry es cubano pero compite como español (en el resto de ligas, Caribe incluido, cobra viajes)
 const HOME_FIX={'Pirry':'España', 'Kevin Mil Problemas':'España'};
 function fHome(f){ return (f && HOME_FIX[f.name]) || (f && f.country); }
-function isForeign(f, key){ if(isWS(key)) return false; const d=ldef(key); return !!(d && d.countries && !d.countries.includes(fHome(f))); }
+function isForeign(f, key){ if(isWS(key)) return false; const d=ldef(key); return !!(d && d.countries && !d.countries.includes(fHome(f)) && !(d.noTravel||[]).includes(fHome(f))); }   // isForeign = cobra viaje
 const STAR_SALARY = 0.15;  // cada estrella de la empresa: los freestylers piden un 15% más
 function contractCost(f, key){ if(isWS(key)) return Math.round(contractCostBase(f,key)*0.5/100)*100; return contractCostBase(f,key); }
 function contractCostBase(f, key){ const st=(state.company&&state.company.stars)||0; const nk=(typeof fxVal==='function') ? 1-fxVal(key,'salary') : 1; const base=salaryOf(f)*(1+STAR_SALARY*st)*(isForeign(f,key)?FOREIGN_MULT:1); const capped = Math.min(SALARY_CAP, base); const dj=(isForeign(f,key) && typeof djVal==='function') ? 1-djVal(key,'fcost') : 1; return Math.round(capped*nk*dj/100)*100; }
 const SALARY_CAP = 70000;   // nadie cobra más de 70K de sueldo (Walls incluido)
-const UQ_SAL = {'Ibai':3, 'Guanyar':2, 'Walls':1.6, 'Wos':1.15, 'Trueno':1.15, 'Duki':1.15, 'TiagoPZK':1.15, 'Jaloner':1.15, 'Lit Killah':1.15};
+const UQ_SAL = {'Guanyar':2, 'Walls':1.6, 'Wos':1.15, 'Trueno':1.15, 'Duki':1.15, 'TiagoPZK':1.15, 'Jaloner':1.15, 'Lit Killah':1.15};
+var SAL_FIXED={'Ibai':50000};   // sueldo fijo de inicio (luego sube con las estrellas, como todos)
 function salaryOf(f){
+  if(SAL_FIXED[f.name]) return Math.round(Math.min(SALARY_CAP, SAL_FIXED[f.name]*(f.salUp||1))/100)*100;
   const v = 0.6*f.nivel + 0.4*f.fama;
   const raw = (600 + Math.pow(Math.max(0,(v-35))/60, 2.3)*32000) * (f.legend ? LEGEND_MULT : 1) * 0.9 * (UQ_SAL[f.name]||1) * (f.salUp||1);   // salUp: +5% por cada temporada en el top 10 de visitas
   return Math.round(Math.min(SALARY_CAP, raw)/100)*100;
@@ -522,7 +528,7 @@ function salaryOf(f){
 ========================================================================= */
 const STORAGE_KEY = 'fms_ceo_v1';                 // partida de CEO
 const CARRERA_KEY = 'fms_ceo_carrera_v1';         // partida del modo carrera, aparte: las dos conviven en el mismo navegador
-const DBV_ACTUAL = 18;                             // versión interna del guardado (company.dbv): las migraciones de syncRealPool llegan hasta aquí
+const DBV_ACTUAL = 22;                             // versión interna del guardado (company.dbv): las migraciones de syncRealPool llegan hasta aquí
 function storageKey(modo){ return (modo || (state.company && state.company.modo)) === 'carrera' ? CARRERA_KEY : slotKey(state.ui.slot||1); }   // el CEO guarda en su ranura (STORAGE_KEY es la clave antigua, que migrateSlots pasa a la ranura 1)
 let state = { company:null, freestylers:[], seasons:[], logos:{}, _counter:1, view:{name:'dashboard', params:{}}, ui:{} };
 let _skipScrollRestore = false;
@@ -586,9 +592,10 @@ function slotKey(n){ return 'fms_ceo_slot_'+n; }
 function slotMetaKey(n){ return 'fms_ceo_slotmeta_'+n; }
 function saveStr(d){ return JSON.stringify(d, (k,v)=> (k==='img' && typeof v==='string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v); }   // las fotos de los tuits se recuperan al pintar
 function metaOf(d){ const ss=d.seasons||[]; const last=ss[ss.length-1]||{};
-  return {inf:!!(d.company&&(d.company.infinite||d.company.sbxWon)), mode:(d.company&&d.company.mode)||'empresario', name:(d.company&&d.company.name)||'FMS', stars:(d.company&&d.company.stars)||0, money:(d.company&&d.company.money)||0, year:last.year||null, seasons:ss.length, phase:last.phase||'pre', lost:!!(d.company&&d.company.lost), t:Date.now()}; }
-function slotMeta(n){ try{ const m=localStorage.getItem(slotMetaKey(n)); if(m) return JSON.parse(m);
-    const d=readSlot(n); if(!d||!d.company) return null; const mm=metaOf(d); mm.t=null; return mm; }catch(e){ return null; } }
+  return {inf:sbxEarned(d), mode:(d.company&&d.company.mode)||'empresario', name:(d.company&&d.company.name)||'FMS', stars:(d.company&&d.company.stars)||0, money:(d.company&&d.company.money)||0, year:last.year||null, seasons:ss.length, phase:last.phase||'pre', lost:!!(d.company&&d.company.lost), t:Date.now()}; }
+function slotMeta(n){ try{ const m=localStorage.getItem(slotMetaKey(n)); if(m) return JSON.parse(m); }catch(e){}
+  try{ const d=readSlot(n); if(!d||!d.company) return null; const mm=metaOf(d); mm.t=null; return mm; }
+  catch(e){ try{ if(localStorage.getItem(slotKey(n))!=null) return {broken:true, inf:false, mode:'empresario', name:'Partida (no se puede leer)', stars:0, money:0, year:null, seasons:0, phase:'pre', lost:false, t:null}; }catch(e2){} return null; } }
 // GUARDADO por trozos: las temporadas antiguas (ya cerradas) se guardan una sola vez y comprimidas (LZ, ~10 veces menos);
 // en el guardado principal solo van la empresa, los freestylers y las 2 últimas temporadas. Así guardar es rápido y caben cientos de temporadas.
 const LZ_TAG='LZ1:';
@@ -599,8 +606,10 @@ const _chunks={};   // slot -> Map(índice de temporada -> objeto ya guardado)
 function chunkMap(n){ return _chunks[n]||(_chunks[n]=new Map()); }
 function chunkSucio(s){ Object.values(_chunks).forEach(m=>m.forEach((v,i)=>{ if(v===s) m.delete(i); })); }   // la temporada cambió en el sitio (aligerada): su trozo se vuelve a escribir
 function readSlot(n, track){ const raw=localStorage.getItem(slotKey(n)); if(!raw) return null; const d=JSON.parse(unpackSave(raw));
-  if(d && d.v===2){ const olds=[]; for(let i=0;i<(d.nOld||0);i++){ const c=localStorage.getItem(chunkKey(n,i)); if(c==null) throw new Error('falta la temporada '+i); olds.push(JSON.parse(unpackSave(c))); }
-    d.seasons=olds.concat(d.seasons||[]); if(track){ const m=chunkMap(n); m.clear(); olds.forEach((o,i)=>m.set(i,d.seasons[i])); } delete d.v; delete d.nOld; }
+  if(d && d.v===2){ const olds=[]; let lost=0; for(let i=0;i<(d.nOld||0);i++){ const c=localStorage.getItem(chunkKey(n,i)); let o=null;
+      try{ if(c!=null) o=JSON.parse(unpackSave(c)); }catch(e){ o=null; }
+      if(o && o.year!=null) olds.push(o); else { lost++; console.warn('temporada antigua '+i+' perdida en el slot '+n); if(track) state.ui.lostOld=(state.ui.lostOld||0)+1; } }
+    d.seasons=olds.concat(d.seasons||[]); if(track){ const m=chunkMap(n); m.clear(); if(!lost) olds.forEach((o,i)=>m.set(i,d.seasons[i])); } delete d.v; delete d.nOld; }   // si se perdió alguna temporada, se reescriben todas en orden
   return d; }
 function writeSlot(n, d){
   const ss=d.seasons||[]; const cut=Math.max(0, ss.length-2); const m=chunkMap(n);
@@ -616,11 +625,14 @@ function migrateSlots(){   // la partida de versiones antiguas pasa al slot 1
     if(localStorage.getItem(slotKey(1))) localStorage.removeItem(STORAGE_KEY);
   }catch(e){} }
 const SBX_KEY='fms_ceo_sandbox_ok';
+// ¿esta partida ya se ha ganado el Sandbox? (una temporada empezada con 5 estrellas y terminada, en Empresario o Pandemia)
+function sbxEarned(d){ const c=d&&d.company; if(!c || c.mode==='sandbox') return false; if(c.infinite||c.sbxWon) return true; const ss=d.seasons||[];
+  return ss.some(x=> x && x.phase==='done' && (x.starsStart||0)>=5); }
 function unlockSandbox(){ try{ localStorage.setItem(SBX_KEY,'1'); }catch(e){} }
 function sandboxUnlocked(){   // el Sandbox se gana llegando al modo infinito en una partida Empresario o Pandemia
   try{ if(localStorage.getItem(SBX_KEY)==='1') return true;
     for(const n of SLOTS){ const m=slotMeta(n); if(!m || m.mode==='sandbox') continue; let inf=m.inf;
-      if(inf==null){ const d=readSlot(n); inf=!!(d&&d.company&&(d.company.infinite||d.company.sbxWon)); }
+      if(!inf){ const d=readSlot(n); inf=sbxEarned(d); }
       if(inf){ unlockSandbox(); return true; } } }catch(e){}
   return false; }
 // guardado automático: se agrupan los cambios y se escribe como mucho cada 1,5 s (y siempre al cerrar o salir de la app)
@@ -633,7 +645,7 @@ function saveNow(){
   if(modoCarrera()){ saveCarrera(); return; }   // la carrera no usa ranuras ni desbloquea el Sandbox
   try{
     if(!state.ui.slot) state.ui.slot=1;
-    if(state.company && (state.company.infinite||state.company.sbxWon) && state.company.mode!=='sandbox') unlockSandbox();
+    if(sbxEarned(state)) unlockSandbox();
     const dump = {company:state.company, freestylers:state.freestylers, seasons:state.seasons, _counter:state._counter};
     writeSlot(state.ui.slot, dump);
     state.ui.saveFailed=false; state.ui.lastSave=Date.now();
@@ -663,10 +675,11 @@ function load(n){   // n: ranura de CEO (1-3; sin n, la actual o la 1) o 'carrer
   flushSave(); clearUiDrafts();
   try{
     let d=null;
-    if(n==='carrera'){ const raw=localStorage.getItem(CARRERA_KEY); if(!raw) return false; d=JSON.parse(unpackSave(raw)); }
-    else { if(n==='ceo') n=null; n=n||state.ui.slot||1; d=readSlot(n, true); }
+    if(n==='carrera'){ try{ const raw=localStorage.getItem(CARRERA_KEY); if(!raw) return false; d=JSON.parse(unpackSave(raw)); }catch(e){ console.error(e); return false; } }
+    else { if(n==='ceo') n=null; n=n||state.ui.slot||1; try{ d=readSlot(n, true); }catch(e){ console.error(e); return false; } }
     if(!d || !d.company) return false;
     state.company=d.company; state.freestylers=d.freestylers||[]; state.seasons=d.seasons||[]; state._counter=d._counter||1; state.ui.slot = n==='carrera' ? null : n;
+    try{   // actualizaciones de partidas antiguas: si alguna falla, la partida se carga igual
     if(!state.company.tutLU && (state.seasons.length>1 || state.seasons.some(x=>Object.values(x.leagues||{}).some(L=>L.competitors&&L.competitors.length)))) state.company.tutLU=true;
     state.seasons.forEach((s,i)=>{ const last=i===state.seasons.length-1;
       if(last && s.phase==='pre' && (!s.rb || !s.rb.drawn)) rbGenerateSchedule(s, state.seasons.slice(0,i));
@@ -676,10 +689,13 @@ function load(n){   // n: ranura de CEO (1-3; sin n, la actual o la 1) o 'carrer
     syncRealPool(); mergeCustoms();
     { const ls=state.seasons[state.seasons.length-1]; if(ls){ Object.values(ls.leagues||{}).forEach(L=>{ if(L.jurado) L.jurado=L.jurado.filter(n=>jdBy(n)); }); if(ls.intl && ls.intl.jurado) ls.intl.jurado=ls.intl.jurado.filter(n=>jdBy(n)); } }   // jurados creados que ya se borraron
     state.seasons.forEach(fmtRepair);
+    try{ pandClean(state.seasons[state.seasons.length-1]); }catch(e){ console.error(e); }
     { const ls=state.seasons[state.seasons.length-1]; if(ls) rbSanitize(ls); if(ls && ls.phase==='live' && !ls.under2){ try{ under2Generate(ls, ls.day+1); }catch(e){ console.error(e); } } }
+    }catch(e){ console.error(e); }
     setTimeout(()=>{ try{ offerOfficialMerge(); }catch(e){ console.error(e); } }, 400);
+    if(state.ui.lostOld){ const k=state.ui.lostOld; state.ui.lostOld=0; setTimeout(()=>toast(`No se pudieron recuperar ${k} temporada(s) antiguas del historial; la partida sigue intacta.`), 600); }
     return true;
-  }catch(e){ return false; }
+  }catch(e){ console.error(e); if(!state.company || !state.seasons.length){ state.company=null; state.seasons=[]; state.freestylers=[]; } return !!state.company; }
 }
 
 function newLeagueSeason(key, prev){
@@ -703,7 +719,7 @@ function newSeason(prev){
   const season = {
     number: prev? prev.number+1 : 1, year, phase:'pre', day:0, format: prev && (prev.format==='long' || (prev.format==='ws' && (state.company.stars||0)>=4 && !isPandemic()) || (prev.format==='f11' && (state.company.stars||0)>=2 && !isPandemic())) ? prev.format : 'short',
     activeKeys: keys, leagues,
-    intlEnabled: !!(prev && prev.intlEnabled && keys.filter(k=>!isWS(k)).length>=4),
+    intlEnabled: !!(prev && prev.intlEnabled && keys.filter(k=>!isWS(k)).length>=4 && keys.filter(k=>!isWS(k)).length<=8),
     intl:{date:null, sede:null, played:false, bracket:null, qualifiers:[], champion:null, runnerUp:null, third:null, fourth:null},
     defendingChampion: prev ? (prev.intl.champion || prev.defendingChampion || null) : null,
     log:[], fin:{salaries:0, income:0, production:0},
@@ -846,9 +862,13 @@ function calClick(day){
 /* =========================================================================
    PRETEMPORADA
 ========================================================================= */
-function toggleLeague(key){
+// en Pandemia no se viaja: ni FMS Caribe, ni Internacional, ni World Series
+function pandHidden(key){ return isPandemic() && (key==='fms_caribe' || isWS(key) || key===INTL.key); }
+function pandClean(s){ if(!s || s.phase!=='pre' || !isPandemic()) return; s.activeKeys.filter(k=>pandHidden(k)).forEach(k=>toggleLeague(k, true)); if(s.intlEnabled){ s.intlEnabled=false; if(s.intl) s.intl.date=null; } }
+function toggleLeague(key, quiet){
   const s=cur(); if(s.phase!=='pre') return;
   const i=s.activeKeys.indexOf(key);
+  if(i<0 && pandHidden(key)){ toast('En el modo Pandemia no se puede viajar: esta competición no está disponible.'); return; }
   if(i>=0){
     const L=s.leagues[key];
     if(L && L.competitors.length){ L.competitors.forEach(id=>{ state.company.money += L.contracts[id]||0; s.fin.salaries -= L.contracts[id]||0; }); }
@@ -861,12 +881,15 @@ function toggleLeague(key){
     if(isWS(key)){ const c=spState(); if(c.wsPool.length<3) sponsorOffers(state.company.stars||5, 4-c.wsPool.length, false, true); }
     s.activeKeys.push(key); s.activeKeys.sort((a,b)=> (isWS(a)?99:LEAGUES.findIndex(l=>l.key===a))-(isWS(b)?99:LEAGUES.findIndex(l=>l.key===b)));
     ensureLeague(s,key); preselectRoster(s,key);
+    if(natKeys(s).length>8 && s.intlEnabled){ s.intlEnabled=false; s.intl.date=null; toast('Con 9 ligas no hay Internacional (funciona de 4 a 8 ligas).'); }
   }
-  render();
+  if(!quiet) render();
 }
 function toggleIntl(){
   const s=cur(); if(s.phase!=='pre') return;
+  if(isPandemic() && !s.intlEnabled){ toast('En el modo Pandemia no hay Internacional: no se puede viajar.'); return; }
   if(natKeys(s).length<4){ toast('El Internacional se desbloquea con 4 ligas activas.'); return; }
+  if(natKeys(s).length>8 && !s.intlEnabled){ toast('El Internacional funciona con 4 a 8 ligas activas.'); return; }
   s.intlEnabled=!s.intlEnabled; if(!s.intlEnabled) s.intl.date=null; render();
 }
 function signedLeagueOf(s, id){ return natKeys(s).find(k=> s.leagues[k] && s.leagues[k].competitors.includes(id)) || null; }
@@ -926,11 +949,15 @@ function releaseAll(key){
 }
 function preseasonIssues(s){
   const issues=[];
+  try{ poRepairAuto(s); }catch(e){ console.error(e); }
   if(!natKeys(s).length) issues.push('Activa al menos una liga.');
   s.activeKeys.forEach(k=>{
     const L=s.leagues[k]; const d=ldef(k);
     if(L.competitors.length<lgSize(k,s)) issues.push(`${d.name}: faltan ${lgSize(k,s)-L.competitors.length} fichajes.`);
     else if(L.competitors.length>lgSize(k,s)) issues.push(`${d.name}: sobran ${L.competitors.length-lgSize(k,s)} fichajes (este formato es de ${lgSize(k,s)}).`);
+    poList(L).filter(P=>P.b && !P.done).forEach(P=>{ const f=fby(P.b); if(!f) return;
+      if(foreignLocked() && isForeignTo(k,f)) issues.push(`${d.name}: ${f.name} no puede jugar el Vida o muerte (${isPandemic()?'en Pandemia no se puede fichar fuera del país':'los extranjeros se desbloquean con la primera estrella'}).`);
+      if(isJudgeId(s,P.b) || isSpeakerId(s,P.b)) issues.push(`${d.name}: ${f.name} está en el staff (jurado o host) y no puede jugar el Vida o muerte.`); });
     if(L.dates.length<nJ(k)) issues.push(`${d.name}: faltan ${nJ(k)-L.dates.length} fechas en el calendario.`);
     if(!spkList(L).length) issues.push(`${d.name}: falta elegir el host (speaker).`);
     if(!modoCarrera()){   // en carrera no hay DJ ni jurado contratados
@@ -988,7 +1015,8 @@ function computeStandings(L){
     const fa=fby(a.id)||{}, fb=fby(b.id)||{}; if((fb.nivel||0)!==(fa.nivel||0)) return (fb.nivel||0)-(fa.nivel||0);
     return String(fa.name||a.id).localeCompare(String(fb.name||b.id),'es') || String(a.id).localeCompare(String(b.id)); });
 }
-function intlSlotsPerLeague(n){ return n===4?4:(n===5?3:(n===6?2:0)); }
+function intlSlotsPerLeague(n){ return n===4?4:(n===5?3:(n>=6 && n<=8 ? 2 : 0)); }   // 7 y 8 ligas: solo en Sandbox
+function intlHasChampSlot(n){ return n===6 || n===7; }
 
 /* =========================================================================
    ENFRENTAMIENTOS: comprobar que una elección manual deja un calendario válido
@@ -1212,6 +1240,28 @@ function runLeagueJornada(s, L, d){
 }
 
 /* --- clasificación al Internacional (mismo sistema que el gestor original) --- */
+// votación de terceros (FMS Internacional con 7 ligas): votas, pero como en la Red Bull Internacional decide la fama
+function intlVoteCands(s){ const keys=natKeys(s); if(keys.length!==7 || !keys.every(k=>s.leagues[k].finished)) return null;
+  const st=k=>s.leagues[k].finalStandings; const D=s.defendingChampion && fby(s.defendingChampion) ? s.defendingChampion : null; let ex=null, extra=null;
+  if(D){ keys.forEach(k=>{ const i=st(k).indexOf(D); if(i>=0 && i<=2 && ex==null){ ex=k; } }); }
+  const top2=keys.flatMap(k=>[st(k)[0],st(k)[1]]); const need = D ? 1 : 2;
+  return {ids:keys.filter(k=>k!==ex).map(k=>st(k)[2]).filter(id=>id && id!==D && !top2.includes(id)), need}; }
+function intlVoteResolve(s, cands, need){ const I=s.intl; if(I.ivote && I.ivote.ids && I.ivote.ids.length) return I.ivote.ids.slice(0,need);
+  const chosen=shuffle(cands.slice()).sort((a,b)=>fby(b).fama-fby(a).fama).slice(0,need); I.ivote={ids:chosen, cands:cands.slice(), user:(state.ui.iVotes||[]).slice()}; return chosen; }
+function intlNeedsVote(s){ return !!(s.intlEnabled && !s.intl.played && !(s.intl.ivote && s.intl.ivote.ids) && intlVoteCands(s)); }
+function showIntlVote(){ const s=cur(); const c=intlVoteCands(s); if(!c || !intlNeedsVote(s)) return; const v=state.ui.iVotes||(state.ui.iVotes=[]);
+  const from=id=>{ const k=natKeys(s).find(k=>s.leagues[k].finalStandings[2]===id); return k?ldef(k).short:''; };
+  openModal(`<h3>Votación · ${INTL.name}</h3>
+    <p class="step-note" style="margin-bottom:12px;">Los terceros de cada liga. ${c.need===1?'Uno irá':'Dos irán'} al Internacional${s.defendingChampion?'':' (no hay campeón vigente, así que son dos plazas)'}. Tus votos cuentan, pero la fama de cada uno pesa más.</p>
+    <div class="vote-grid">${c.ids.map(id=>{ const f=fby(id); const on=v.includes(id);
+      return `<button class="vote-card ${on?'on':''}" onclick="toggleIntlVote('${id}')" aria-pressed="${on}"><div class="vote-photo" style="${avatarDivStyle(f)}">${avatarContent(f)}</div>
+        <div class="vote-name">${nameH(f)}</div><div class="vote-country">${esc(f.country)} · 3º ${from(id)}</div>${on?'<span class="vote-check">✓</span>':''}</button>`; }).join('')}</div>
+    <div class="modal-actions"><span class="step-note" style="margin-right:auto">Votos <b>${v.length}</b>/${c.need}</span>
+      <button class="btn primary" ${v.length===c.need?'':'disabled'} onclick="confirmIntlVote()">Enviar votos</button></div>`, 'vote', true); }
+function toggleIntlVote(id){ const s=cur(); const c=intlVoteCands(s); if(!c) return; const v=state.ui.iVotes||(state.ui.iVotes=[]); const i=v.indexOf(id);
+  if(i>=0) v.splice(i,1); else if(v.length<c.need) v.push(id); else { toast(`Ya tienes ${c.need} voto${c.need>1?'s':''}. Quita uno para cambiarlo.`); return; } showIntlVote(); }
+function confirmIntlVote(){ const s=cur(); const c=intlVoteCands(s); if(!c) return; const ids=intlVoteResolve(s, c.ids, c.need); state.ui.iVotes=[];
+  closeModal(); toast(`Al Internacional por votación: ${ids.map(fname).join(' y ')}.`); addLog(s, s.day, `🗳️ Votación del ${INTL.name}: ${ids.map(fname).join(' y ')} van como terceros.`, 'gold'); render(); }
 function bestOf(ids, s){
   // desempate para comodines: puntos en su liga, luego nivel
   const pts={};
@@ -1227,6 +1277,15 @@ function intlQualifiers(s){
     const wc=bestOf(keys.map(k=>st(k)[3]), s)[0]; out.push(wc);
     return {ids:out, note:`Top 3 de cada liga + comodín: ${fname(wc)} (mejor cuarto).`, wildcards:[wc]};
   }
+  if(n===8){ const out=[]; keys.forEach(k=>{ out.push(st(k)[0], st(k)[1]); }); return {ids:out.filter(Boolean), note:'Top 2 de cada liga.'}; }
+  if(n===7){ const D=s.defendingChampion && fby(s.defendingChampion) ? s.defendingChampion : null; const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
+    let dKey=null, dPos=null; if(D) keys.forEach(k=>{ const i=st(k).indexOf(D); if(i>=0 && dKey==null){ dKey=k; dPos=i; } });
+    let extra=null, exclude=null, note='';
+    if(D && dKey!=null && dPos<=1){ extra=st(dKey)[2]; exclude=dKey; note=`El campeón vigente ya entró por su liga; ${fname(extra)} (3º de ${ldef(dKey).short}) ocupa su cupo.`; }
+    else if(D){ extra=D; if(dKey!=null && dPos===2) exclude=dKey; note=`Cupo de campeón vigente: ${fname(D)}.`; }
+    const need=16-top2.length-(extra?1:0); const V=intlVoteResolve(s, keys.filter(k=>k!==exclude).map(k=>st(k)[2]).filter(id=>id && id!==extra && !top2.includes(id)), need);
+    const out=[...top2]; if(extra) out.push(extra); out.push(...V);
+    return {ids:out, note:`Top 2 de cada liga.${note?' '+note:''} Por votación: ${V.map(fname).join(', ')}.`, wildcards:V}; }
   // 6 ligas: top 2 (12) + cupo de campeón + 3 comodines entre terceros
   const D=fbyActivo(s.defendingChampion) ? s.defendingChampion : null;   // un campeón vigente retirado no se clasifica
   const top2=[]; keys.forEach(k=>{ top2.push(st(k)[0], st(k)[1]); });
@@ -1295,7 +1354,7 @@ function simulateDay(auto, soloFid){ econMode();
   const ver=c=>!auto && (!soloFid || c);              // presentación: ¿se pausa para enseñarla?
   if(!s.uqInit){ s.uqInit=true; uqSeasonStart(s); }
   // eventos únicos pendientes
-  const uq=(s.uq||[]).find(x=>!x.done && x.day<=d);
+  const uq=(s.uq||[]).find(x=>!x.done && x.day<=d && x.type==='snub') || (s.uq||[]).find(x=>!x.done && x.day<=d);   // los enfados, siempre primero
   if(uq){ if(!uq.applied){ uq.applied=true; uqApply(s, uq); } if(sola) uqAuto(s, uq); else if(!uq.done || uq.show) return {pause:'uq', uq}; }
   for(const k of s.activeKeys){ const L=s.leagues[k]; if(L && L.pendingRep && L.pendingRep.length){ if(sola) uqAutoReplace(s,k); else return {pause:'replace', key:k}; } }
   const st=(s.streams||[]).find(x=>!x.done && x.day===d);
@@ -1312,6 +1371,7 @@ function simulateDay(auto, soloFid){ econMode();
   if(!carr && s.intlEnabled && s.intl.date!=null && !s.intl.played && !s.intl.jdDone && (d>=s.intl.date-15 || natKeys(s).every(k=>s.leagues[k].finished))){   // jurado de la Internacional (en carrera no hay)
     if(auto || intlJdCands(s).length<=5) intlJdAuto(s); else return {pause:'ijud'}; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && !(s.intl.lu && s.intl.lu.shown) && natKeys(s).every(k=>s.leagues[k].finished)){
+    if(intlNeedsVote(s)){ if(auto){ const c=intlVoteCands(s); intlVoteResolve(s, c.ids, c.need); } else return {pause:'ivote'}; }   // 7 ligas: votación de terceros antes del line up
     if(!s.intl.lu) luGenerate(s, INTL.key);
     if(ver((s.intl.lu.order||[]).includes(soloFid))) return {pause:'lineup', key:INTL.key}; s.intl.lu.shown=true; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && s.intl.lu && s.intl.lu.shown && !s.intl.spkDone && natKeys(s).every(k=>s.leagues[k].finished)){
@@ -1393,6 +1453,7 @@ function advance(mode){
       if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day);
       render(); openLineup(ev.key); return;
     }
+    if(ev && ev.pause==='ivote'){ render(); state.ui.iVotes=[]; setTimeout(showIntlVote,30); return; }
     if(ev && (ev.pause==='ispk' || ev.pause==='ijud')){ render(); state.ui.ispk=[]; state.ui.idj=null; state.ui.ijd=[]; try{ showIntlStaff(); }catch(e){ console.error(e); intlJdAuto(s); intlSpkAuto(s); toast('Staff del Internacional elegido automáticamente.'); render(); } return; }
     if(ev && ev.pause==='replace'){ render(); showReplace(ev.key); return; }
     if(ev && ev.pause==='exhib'){
@@ -1410,7 +1471,7 @@ function advance(mode){
     if(ev && ev.pause==='fu'){ if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day); render(); openRBShow('fu_'+ev.key); return; }
     if(ev && ev.pause==='under'){
       if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day);
-      render(); if(ev.key===MFU.key) openMFU(ev.day); else openRBShow(ev.key); return;
+      render(); if(ev.key===MFU.key) openMFU(ev.day); else if(ev.key==='u_royal') openRoyal(ev.day); else openRBShow(ev.key); return;
     }
     if(ev && ev.pause==='rb'){
       if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day);
@@ -1453,6 +1514,7 @@ function endSeason(s){
     else if(net < -PAND_BIGLOSS*spent){ state.company.stars=Math.max(0, before-1); starWhy='bigloss'; }
     else { state.company.stars=before; starWhy = net<-PAND_TOL*spent ? 'loss' : 'hype'; } }
   if(state.company.mode==='sandbox') state.company.stars=5;
+  if(state.company.mode!=='sandbox' && (s.starsStart!=null ? s.starsStart : before)>=5){ s.sbxJust=!sandboxUnlocked(); unlockSandbox(); }   // temporada de 5 estrellas completada: el Sandbox se desbloquea ya, sin esperar a pasar de temporada
   if(state.company.stars>before){ const offers=sponsorOffers(state.company.stars, 3+state.company.stars); s.newSponsorOffers=offers.length; }
   // evolución de freestylers: progresión por atributo según experiencia, potencial y actividad
   const signed=new Set(s.activeKeys.flatMap(k=>s.leagues[k].competitors));
@@ -1518,17 +1580,17 @@ function nextSeason(){
   const prev=cur(); if(prev.phase!=='done') return; if(state.company.lost){ showBankrupt(); return; }
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>(L.rounds||[]).flat().forEach(m=>{ if(m.d){ battlePTB(m); delete m.d.s; } })); });
   state.seasons.slice(0,-1).forEach(o=>{ Object.values(o.leagues||{}).forEach(L=>{ if(L.lu) delete L.lu.tweets; delete L.pv; if(L.champTw) delete L.champTw.tweets; }); if(o.intl && o.intl.lu) delete o.intl.lu.tweets; delete o.twUsados; delete o.twTextos; });   // los tuits de temporadas pasadas no se guardan
-  state.seasons.push(newSeason(prev)); state.ui.calMonth=null;
+  state.seasons.push(newSeason(prev)); state.ui.calMonth=null; try{ pandClean(cur()); }catch(e){ console.error(e); }
   aligerarAntiguas();   // las temporadas con más de LIGERA_TRAS años se quedan en versión ligera
   aligerarLocales();    // y en todas las cerradas, los cuadros de los torneos locales que no jugó el jugador se quedan en campeón y finalista
   asegurarOfertas(cur());   // modo carrera: ofertas de liga del año nuevo
   { const ns=cur(); ns.activeKeys.forEach(k=>preselectRoster(ns,k)); natKeys(ns).forEach(k=>ascSetup(ns,k)); if(ns.activeKeys.includes(WS.key)){ const c=spState(); if(c.wsPool.length<3) sponsorOffers(state.company.stars||5, 3-c.wsPool.length, false, true); } }
   Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB_|exQ_|draft_|wsd_|venJ_)/.test(x)).forEach(x=>delete state.ui[x]);
   { const c=state.company; if(!c.tut) c.tut={};
-    if(prev.starsStart>=5 && !c.sbxWon && c.mode!=='sandbox'){ c.sbxWon=true; c.tut.inf=true; state.ui.sbxNew=!sandboxUnlocked(); unlockSandbox(); state.ui.pendingTut='sbx'; }
+    if(((prev.starsStart!=null?prev.starsStart:0)>=5 || prev.sbxJust!=null) && !c.sbxWon && c.mode!=='sandbox'){ c.sbxWon=true; c.tut.inf=true; state.ui.sbxNew=!!prev.sbxJust || !sandboxUnlocked(); unlockSandbox(); state.ui.pendingTut='sbx'; }
     else if(false){ c.infinite=true; c.tut.inf=true; state.ui.pendingTut='inf'; if(c.mode!=='sandbox'){ state.ui.sbxNew=!sandboxUnlocked(); unlockSandbox(); } }
     else if(c.stars>=1 && !c.tut.s2){ c.tut.s2=true; state.ui.pendingTut='s2'; }
-    else if(c.stars>=3 && !c.tut.intl){ c.tut.intl=true; state.ui.pendingTut='intl'; } }
+    else if(c.stars>=3 && !c.tut.intl && !isPandemic()){ c.tut.intl=true; state.ui.pendingTut='intl'; } }
   if(state.seasons.length===2){ const c=spState(); if(c.sponsorPool.length<3) sponsorOffers(state.company.stars||0, 3-c.sponsorPool.length); }
   closeModal(); goto(modoCarrera() ? 'carrera' : 'dashboard');
   if(state.ui.pendingTut){ const t=state.ui.pendingTut; state.ui.pendingTut=null; setTimeout(()=>showTutorial(t), 120); }
@@ -1744,7 +1806,7 @@ function renderTopbar(){
   const s=cur();
   const tabs=[modoCarrera() ? ['carrera','Mi carrera'] : ['dashboard','Inicio'],['calendar','Calendario'],['leagues','Ligas']];
   if(s.intlEnabled || s.intl.played) tabs.push(['intl','Internacional']);
-  tabs.push(['redbull','Red Bull'],['freestylers','Freestylers'],['palmares','Palmarés'],['mvps','MVPs'],['history','Historial']);
+  tabs.push(['redbull','Red Bull'],['freestylers','Freestylers'],['palmares','Palmarés'],['mvps','Records'],['history','Historial']);
   const dateTxt = s.phase==='pre' ? `Pretemporada ${s.year}` : (s.phase==='done' ? `Temporada ${s.year} cerrada` : fmtDay(s.year,s.day)+' '+s.year);
   tb.innerHTML=`<div class="topbar">
     <div class="brand">${gameMark()}<div class="name">FMS <span>CEO</span></div></div>
@@ -2553,10 +2615,10 @@ function renderPreseason(s){
     <div class="step ${leaguesOk?'ok':''}">
       <div class="step-head"><div class="step-num">1</div><h3>Ligas activas</h3><span class="counter"><span class="n">${natKeys(s).length}</span>/${limit}</span></div>
       <div class="league-toggle-grid">
-        ${LEAGUES.map(l=>{ const on=s.activeKeys.includes(l.key); const locked=!on && natKeys(s).length>=limit;
+        ${LEAGUES.filter(l=>!pandHidden(l.key) && (!l.sbx || isSandbox())).map(l=>{ const on=s.activeKeys.includes(l.key); const locked=!on && natKeys(s).length>=limit;
           return `<button class="ltoggle ${on?'on':''} ${locked?'locked':''}" onclick="toggleLeague('${l.key}')" aria-pressed="${on}">${leagueDot(l.key)}<span>${l.name}<small>${on?'Activa':(locked?`Necesitas más estrellas`:'Inactiva')}</small></span></button>`; }).join('')}
-        <button class="ltoggle ${s.intlEnabled?'on':''} ${natKeys(s).length<4?'locked':''}" onclick="toggleIntl()" aria-pressed="${s.intlEnabled}">${leagueDot(INTL.key)}<span>${INTL.name}<small>${natKeys(s).length<4?'Requiere 4 ligas':(s.intlEnabled?'Activo · 16 plazas':'Inactivo')}</small></span></button>
-        <button class="ltoggle ${s.activeKeys.includes(WS.key)?'on':''} ${(state.company.stars||0)<5?'locked':''}" onclick="toggleLeague('${WS.key}')" aria-pressed="${s.activeKeys.includes(WS.key)}">${leagueDot(WS.key)}<span>${WS.name}<small>${(state.company.stars||0)<5?'Requiere 5 estrellas':(s.activeKeys.includes(WS.key)?'Activa · no ocupa cupo':'Inactiva · no ocupa cupo')}</small></span></button>
+        ${isPandemic()?'':`<button class="ltoggle ${s.intlEnabled?'on':''} ${natKeys(s).length<4||natKeys(s).length>8?'locked':''}" onclick="toggleIntl()" aria-pressed="${s.intlEnabled}">${leagueDot(INTL.key)}<span>${INTL.name}<small>${natKeys(s).length<4?'Requiere 4 ligas':(s.intlEnabled?'Activo · 16 plazas':'Inactivo')}</small></span></button>
+        <button class="ltoggle ${s.activeKeys.includes(WS.key)?'on':''} ${(state.company.stars||0)<5?'locked':''}" onclick="toggleLeague('${WS.key}')" aria-pressed="${s.activeKeys.includes(WS.key)}">${leagueDot(WS.key)}<span>${WS.name}<small>${(state.company.stars||0)<5?'Requiere 5 estrellas':(s.activeKeys.includes(WS.key)?'Activa · no ocupa cupo':'Inactiva · no ocupa cupo')}</small></span></button>`}
       </div>
       ${s.intlEnabled? sedePicker() : ''}
     </div>
@@ -2824,7 +2886,7 @@ function renderLeague(key){
   h+=`<div class="section-title"><h2>Clasificación</h2>${q?`<span class="tag">Top ${q} al Internacional</span>`:''}</div>
   <div style="overflow-x:auto;"><table class="standings"><thead><tr><th>#</th><th>Freestyler</th><th class="num">PJ</th><th class="num">V</th><th class="num">VR</th><th class="num">DR</th><th class="num">D</th><th class="num">PTB</th><th class="num">PTS</th></tr></thead><tbody>
   ${st.map((r,i)=>{ const rel=!isWS(key) && i>=st.length-2; const isQ=i<q; const pot=!isWS(key) && ascOf(s).vom && (i===st.length-3 || (st.length>=12 && i===st.length-4));
-    return `<tr class="${isQ?'q':''} ${rel?'rel':''} ${pot?'pot':''}"><td class="pos">${i+1}</td><td><span style="display:inline-flex;align-items:center;gap:8px;cursor:pointer" onclick="showFreestyler('${r.id}')">${miniAvatar(r.id,24)} ${fnameH(r.id)}</span>${isQ?'<span class="qbadge">INTL</span>':''}${(()=>{ const n=L.rounds.flat().filter(m=>m.postponed&&!m.result&&(m.a===r.id||m.b===r.id)).length; return n?`<span class="tag-mini pend">⏳ ${n} batalla${n>1?'s':''} pendiente${n>1?'s':''}</span>`:''; })()}${rel&&L.played?'<span class="tag-mini" style="background:#2a2a2e;color:var(--gray)">Descenso</span>':''}${pot&&L.played?'<span class="tag-mini po-tag">⚔️ Play Off</span>':''}</td>
+    return `<tr class="${isQ?'q':''} ${rel?'rel':''} ${pot?'pot':''}"><td class="pos">${i+1}</td><td><span style="display:inline-flex;align-items:center;gap:8px;cursor:pointer" onclick="showFreestyler('${r.id}')">${miniAvatar(r.id,24)} ${fnameH(r.id)}</span>${isQ?'<span class="qbadge">INTL</span>':''}${(s.intlEnabled && !isWS(key) && intlHasChampSlot(n) && s.defendingChampion===r.id)?'<span class="tag-mini clas-intl">Clas. FMS Inter</span>':''}${(()=>{ const n=L.rounds.flat().filter(m=>m.postponed&&!m.result&&(m.a===r.id||m.b===r.id)).length; return n?`<span class="tag-mini pend">⏳ ${n} batalla${n>1?'s':''} pendiente${n>1?'s':''}</span>`:''; })()}${rel&&L.played?'<span class="tag-mini" style="background:#2a2a2e;color:var(--gray)">Descenso</span>':''}${pot&&L.played?'<span class="tag-mini po-tag">⚔️ Play Off</span>':''}</td>
     <td class="num">${r.pj}</td><td class="num">${r.v}</td><td class="num">${r.vr}</td><td class="num">${r.dr}</td><td class="num">${r.d}</td><td class="num ptb">${fpt(r.ptb)}</td><td class="pts num">${r.pts}</td></tr>`; }).join('')}
   </tbody></table></div>
   <p class="step-note" style="margin-top:-14px; margin-bottom:10px;">Victoria 3 · Victoria en réplica 2 · Derrota en réplica 1 · Derrota 0 · Empate a puntos: enfrentamiento directo (si empatan dos y ya se han enfrentado) y si no, PTB${isWSF(key)?' · Contra un extraplayer se puntúa igual (en réplica, 2 o 1)':''}</p>`;
@@ -2885,7 +2947,7 @@ function renderSigning(s,key){
       const od=other? ldef(other):null;
       return `<div class="pick-item ${checked?'checked':''} ${other||cant||isJd||ban?'disabled':''} ${isJd?'judge':''} ${blocked?'relegated':''}" onclick="toggleSign('${key}','${f.id}')">
         <span class="mini-avatar" style="width:32px;height:32px;font-size:15px;${avatarDivStyle(f)}">${avatarContent(f)}</span>
-        <div style="min-width:0;"><div class="pname">${nameH(f)}</div>${isJd?`<span class="tag-mini jd-tag">⚖️ Jurado · ${esc(ldef(judgeKeyOf(s,f.name)).short)}</span>`:styleTag(f)}${rbIntChampId()===f.id?'<span class="tag-mini dem rbc">🏆 Campeón RB Internacional</span>':''}${f.demand&&f.demand.year===s.year?(f.demand.good?'<span class="tag-mini dem good">🔥 Pedido por la comunidad</span>':'<span class="tag-mini dem bad">👎 No lo quieren</span>'):(commDislike(f)?'<span class="tag-mini dem bad">👎 No lo quieren</span>':'')}<div class="pcountry">${esc(f.country)}${fx?' <span class="tag-mini foreign" title="Extranjero: +'+Math.round((FOREIGN_MULT-1)*100)+'% por viajes">✈ viajes</span>':''}</div>
+        <div style="min-width:0;"><div class="pname">${nameH(f)}</div>${isJd?`<span class="tag-mini jd-tag">⚖️ Jurado · ${esc(ldef(judgeKeyOf(s,f.name)).short)}</span>`:styleTag(f)}${rbIntChampId()===f.id?'<span class="tag-mini dem rbc">🏆 Campeón RB Internacional</span>':''}${f.demand&&f.demand.year===s.year?(f.demand.good?'<span class="tag-mini dem good">🔥 Pedido por la comunidad</span>':'<span class="tag-mini dem bad">👎 No lo quieren</span>'):(commDislike(f)?`<span class="tag-mini dem bad">👎 No lo quieren en ${esc(ldef(commDislike(f)[0]).name)}</span>`:'')}<div class="pcountry">${esc(f.country)}${fx?' <span class="tag-mini foreign" title="Extranjero: +'+Math.round((FOREIGN_MULT-1)*100)+'% por viajes">✈ viajes</span>':''}</div>
         ${od?`<span class="league-badge-tag" style="background:${od.badge};color:${od.fg}">${od.short}</span>`:''}${blocked?`<div class="relegated-tag">Descendió · vuelve en ${s.year+1}</div>`:''}${vback?`<div class="relegated-tag verse">🎧 Descendió · vuelve con Dj Verse${checked?'':` (+${Math.round(20*djVal(key,'verse'))} hype, +${Math.round(6*djVal(key,'verse'))} fama)`}</div>`:''}</div>
         <div class="pick-stats">Nivel <b>${f.nivel}</b><br>Fama <b>${f.fama}</b><br>Hype <b>${f.hype!=null?Math.round(f.hype):'—'}</b><br>${ban?'<span class="tag-mini angry">😠 Enfadado</span>':`<span class="sal">${moneyK(sal)}</span>`}</div>
       </div>`; }).join('') || '<div class="step-note">Nadie coincide con la búsqueda.</div>'}</div>
@@ -3172,7 +3234,7 @@ function devConfirmReset(){
 const AUTO_FECHA_PASO = 24;   // una jornada cada ~24 días (GAP_OK es 21); la J1 va justo después de los días reservados (LU_RESERVED)
 function autoPretemporada(s){
   if(s.phase!=='pre') return [];
-  LEAGUES.forEach(L=>{ if(!s.activeKeys.includes(L.key)){ s.activeKeys.push(L.key); ensureLeague(s, L.key); } });
+  LEAGUES.filter(L=>!L.sbx).forEach(L=>{ if(!s.activeKeys.includes(L.key)){ s.activeKeys.push(L.key); ensureLeague(s, L.key); } });   // las ligas del Sandbox (Venezuela, Uruguay) no entran
   s.activeKeys.sort((a,b)=> (isWS(a)?99:LEAGUES.findIndex(l=>l.key===a))-(isWS(b)?99:LEAGUES.findIndex(l=>l.key===b)));
   s.intlEnabled = natKeys(s).length>=4;
   // host: del país de la liga si lo hay, si no cualquiera libre; sin coste
@@ -3344,7 +3406,7 @@ const OFERTA_APUESTA = 14;          // puesto 11-14: «apuesta de la liga», ofr
 const OFERTA_APUESTA_PROB = 0.5;
 function jugadores(){ return activos().filter(f=>f.jugador); }
 function planDe(f){ if(!f.plan) f.plan={}; const p=f.plan; if(!Array.isArray(p.inscrito)) p.inscrito=[]; if(!Array.isArray(p.ofertas)) p.ofertas=[]; if(p.entreno===undefined) p.entreno=null; if(p.liga===undefined) p.liga=null; return p; }
-function ligasDelPais(f){ return LEAGUES.filter(L=>L.countries.includes(f.country)).map(L=>L.key); }   // solo las ligas de su país ofrecen
+function ligasDelPais(f){ return LEAGUES.filter(L=>!L.sbx && L.countries.includes(f.country)).map(L=>L.key); }   // solo las ligas de su país ofrecen
 // Puesto del jugador entre los activos del país de la liga ordenados por nivel (el mismo orden que usa autoFicharLigas); 0 si no es del país.
 // Los empates de nivel se deciden por fama y después por el nivel con décimas: con el orden de creación, el jugador de la carrera, que se crea el último, perdía todos.
 function nivelExacto(f){ return ATTR_KEYS.reduce((a,k)=>a+attrOf(f,k),0)/ATTR_KEYS.length; }
@@ -3619,6 +3681,19 @@ function syncRealPool(){
   if(state.company && (state.company.dbv||0)<18){   // (creador v12) Kevin Mil Problemas es argentino (compite como español, como Pirry)
     state.freestylers.forEach(f=>{ if(!f.custom && f.name==='Kevin Mil Problemas') f.country='Argentina'; });
     state.company.dbv=18; }
+  if(state.company && (state.company.dbv||0)<19){   // (creador v13) CDFlex pasa a llamarse El Demonio En Bici
+    state.freestylers.forEach(f=>{ if(!f.custom && f.name==='CDFlex') f.name='El Demonio En Bici'; });
+    state.company.dbv=19; }
+  if(state.company && (state.company.dbv||0)<20){   // (creador v14) Teorema pasa a ser Poético
+    state.freestylers.forEach(f=>{ if(!f.custom && f.name==='Teorema') f.style='Poético'; });
+    state.company.dbv=20; }
+  if(state.company && (state.company.dbv||0)<21){   // (creador v15) Damián pasa a ser Flow
+    state.freestylers.forEach(f=>{ if(!f.custom && f.name==='Damián') f.style='Flow'; });
+    state.company.dbv=21; }
+  if(state.company && (state.company.dbv||0)<22){   // (creador v16) ajustes de nivel
+    const lv={'Nez':80,'Blon':86,'Navas':76,'Jaloner':90}; state.freestylers.forEach(f=>{ if(!f.custom && lv[f.name]!=null) setNivel(f, lv[f.name]); });
+    state.company.dbv=22; }
+  if(state.company && state.company.modo!=='carrera' && sbxEarned(state)) unlockSandbox();   // partidas que ya terminaron una temporada de 5 estrellas (una carrera no cuenta)
   if(state.company && state.company.modo!=='carrera' && state.company.mode!=='sandbox' && state.company.infinite){   // Empresario y Pandemia ya no tienen modo infinito: queda el Sandbox desbloqueado (la carrera sigue en infinito)
     unlockSandbox(); state.company.infinite=false; state.company.sbxWon=true; if(state.company.tut) state.company.tut.inf=true; }
   const s=cur(); const ref=new Set();
@@ -3710,7 +3785,7 @@ function rbDraw(s){
   // EEUU y Centroamérica comparten cantera: un mismo freestyler puede ir a una u otra, nunca a las dos
   const shared=['rb_usa','rb_cen'];
   // los uruguayos van a la Sudamérica y, si sobran, también pueden ir a la Centroamérica (nunca a EEUU)
-  const elig=(def,f)=> (fHome(f)==='Uruguay' && def.key==='rb_cen') ? true : shared.includes(def.key) ? (fHome(f)!=='Uruguay' && shared.some(k=>rbdef(k).countries.includes(fHome(f)))) : def.countries.includes(fHome(f));
+  const elig=(def,f)=> shared.includes(def.key) ? (fHome(f)!=='Uruguay' && shared.some(k=>rbdef(k).countries.includes(fHome(f)))) : def.countries.includes(fHome(f));
   // primero los podios de todas las nacionales
   const seedsBy={};
   RB_NATS.forEach(def=>{ const sd=prevPodium(def.key).filter(id=>id && fbyActivo(id) && !used.has(id) && elig(def,fby(id))); sd.forEach(id=>used.add(id)); seedsBy[def.key]=sd; });
@@ -3750,7 +3825,7 @@ function rbDraw(s){
   });
   sh.forEach(def=>{ const ev=rbEvent(s,def.key); ev.seeds=seedsBy[def.key]; ev.participants=[...ev.seeds, ...fijosNat[def.key]]; });
   // Centroamérica: primero los uruguayos que no han entrado en la Sudamérica (con su % de participación)
-  { const ev=rbEvent(s,'rb_cen'); if(ev){ activos().filter(f=>fHome(f)==='Uruguay' && !used.has(f.id)).sort((a,b)=>quality(b)-quality(a)).forEach(f=>{ if(ev.participants.length<16 && Math.random()<RB_PARTICIPATION){ ev.participants.push(f.id); used.add(f.id); } }); } }
+  // los uruguayos ya solo compiten en la Red Bull Sudamérica
   let guard=0;
   while(sh.some(def=>rbEvent(s,def.key).participants.length<16) && guard++<400){
     let progress=false;
@@ -3778,7 +3853,6 @@ function rbDraw(s){
 // candado: nadie puede estar en dos clasificatorias Red Bull de la misma temporada (ni repetido en una).
 // Se revisa al sortear, antes de jugar cada torneo y al cargar partida; si hay un repetido se cambia por un libre apto.
 function rbEligTop(def,f){ const h=fHome(f); if(def.key===RB_PLZ.key) return f.fama<=83;
-  if(h==='Uruguay' && def.key==='rb_cen') return true;
   if(def.key==='rb_usa'||def.key==='rb_cen') return h!=='Uruguay' && ['rb_usa','rb_cen'].some(k=>rbdef(k).countries.includes(h));
   return def.countries.includes(h); }
 function rbSanitize(s){
@@ -3894,7 +3968,7 @@ function runRBInter(s, d){
   const I=s.rb.inter;
   if(!I.voted) rbResolveVote(s, []);
   const r=runKnockout(I.order||koSpread(I.qualifiers), sedeBonus(I.sede), 2.2*0.4, pickJudges(null)); { const fin=r.bracket.rounds[r.bracket.rounds.length-1][0]; fin.views=Math.round(fin.views*1.15); }
-  Object.assign(I, r, {played:true}); ascAwardRB(s, I.qualifiers, r.bracket, 2, I); uqViral(s, r.bracket, 'rb', d); uqLocalismo(s, I.qualifiers, I.sede, 'rb', d, r.champion);
+  Object.assign(I, r, {played:true}); ascAwardRB(s, I.qualifiers, r.bracket, 1.5, I); uqViral(s, r.bracket, 'rb', d); uqLocalismo(s, I.qualifiers, I.sede, 'rb', d, r.champion);
   premioTorneo(s, 'rbint', r.champion, r.runnerUp, RB_INT.name);
   addFama(r.champion, FAMA_RB_INT[0]); addFama(r.runnerUp, FAMA_RB_INT[1]); addFama(r.third, FAMA_RB_INT[2]);
   const hn=finalHype(r.champion, r.runnerUp, true);
@@ -4301,7 +4375,7 @@ function simulateFMSBattle(m, lvB, judges, opts){
   }
   // réplica si la diferencia de un juez es de 1,5 o menos (corto) o de 5 o menos (largo); a partir de 2 / 5,5 es victoria directa
   const RT = fmt==='long' ? 5 : 1.5;
-  let v=''; for(let j=0;j<5;j++) v+= tA[j]-tB[j]>RT?'A':(tB[j]-tA[j]>RT?'B':'R');
+  let v=''; for(let j=0;j<5;j++) v+= (JD[j] && JD[j].uff) ? 'R' : (tA[j]-tB[j]>RT?'A':(tB[j]-tA[j]>RT?'B':'R'));
   const nA=[...v].filter(x=>x==='A').length, nB=[...v].filter(x=>x==='B').length, nR=[...v].filter(x=>x==='R').length;
   let aWins, h=null, tiebreak=false;
   if(nA<3 && nB<3){   // sin 3 votos para nadie → réplica (p. ej. 2-2-1 o 2 votos + 2 réplicas + 1)
@@ -4531,7 +4605,7 @@ function fmFace(id, cls){ const f=fby(id); return `<span class="fm-face ${cls||'
 async function fmRun(tok){
   const {L, round, ord}=fmData(); const k=fmK;
   // Vida o muerte: en el cartel no se desvela quién lo ha ganado (sale como "Ganador del Vida o muerte")
-  const poW={}; if(SHOW.j===0 && !SHOW.replay) poList(L).forEach(P=>{ if(P.done && P.winner && P.winner===P.b) poW[P.b]=P; });
+  const poW={}; if(SHOW.j===0 && !SHOW.replay) poList(L).forEach(P=>{ if(P.done && P.winner && !P.refused && !P.walkover) poW[P.winner]=P; });   // gane quien gane, su otra batalla sale como "Ganador del V/M" (si no, se adivina)
   const cSide=(m,id,r)=> (!m.po && poW[id]) ? (r ? `<span class="fm-cn r">Ganador del V/M</span><span class="fm-face" style="display:inline-flex;align-items:center;justify-content:center;font-weight:900;background:#2a2a33">?</span>` : `<span class="fm-face" style="display:inline-flex;align-items:center;justify-content:center;font-weight:900;background:#2a2a33">?</span><span class="fm-cn">Ganador del V/M</span>`)
     : (r ? `<span class="fm-cn r">${fnameH(id)}</span>${fmFace(id)}` : `${fmFace(id)}<span class="fm-cn">${fnameH(id)}</span>`);
   // 1. intro
@@ -4753,10 +4827,13 @@ function spState(){ const c=state.company; if(!c.sponsors) c.sponsors={}; if(!c.
     c.sponsorPool=c.sponsorPool.filter(ok); Object.keys(c.sponsors).forEach(k=>{ c.sponsors[k]=c.sponsors[k].map(x=>ok(x)?x:null); });
     if(lost) sponsorOffers(c.stars||1, lost, true); c.spReal=true; }
   if(!c.spStart){ c.spStart=true; const any=c.sponsorPool.length || Object.values(c.sponsors).flat().some(Boolean); if(!any) sponsorOffers(c.stars||0, 3, true); }
+  if(!c.rqOffered && (c.stars||0)>=1){ c.rqOffered=true; const has=c.sponsorPool.some(x=>x.name==='RQ') || Object.values(c.sponsors).flat().some(x=>x&&x.name==='RQ');
+    if(!has){ const b=SPONSOR_BRANDS.find(x=>x[0]==='RQ'); const st=c.stars||1; c.sponsorPool.push({id:uid('sp'), name:b[0], cat:b[1], bg:b[2], fg:b[3], amount:Math.round((1000+Math.random()*1800)*(1+0.35*st)*(c.mode==='pandemia'?PAND_SPON:1)*empK()/100)*100, stars:st}); c.newOffers=(c.newOffers||0)+1; } }
   return c; }
 function sponsorOffers(stars, n, raw, ws){
   const c=raw? state.company : spState(); const used=ws ? new Set([...(c.wsPool||[]).map(x=>x.name), ...((c.sponsors||{})[WS.key]||[]).map(x=>x&&x.name)]) : new Set([...c.sponsorPool.map(x=>x.name), ...Object.values(c.sponsors).flat().map(x=>x&&x.name)]);
-  const free=shuffle(SPONSOR_BRANDS.filter(b=>!used.has(b[0]) && !(b[0]==='Playz' && (ws || (stars<1 && state.company.mode!=='pandemia'))) && !(b[0]==='RQ' && stars<1)));
+  const pandNo=b=>state.company.mode==='pandemia' && ['ticket','weekday'].includes((SPONSOR_FX[b[0]]||{}).fx);
+  const free=shuffle(SPONSOR_BRANDS.filter(b=>!used.has(b[0]) && !pandNo(b) && !(b[0]==='Playz' && (ws || (stars<1 && state.company.mode!=='pandemia'))) && !(b[0]==='RQ' && stars<1)));
   const out=[];
   for(let i=0;i<n && i<free.length;i++){
     const [name,cat,bg,fg]=free[i];
@@ -4810,10 +4887,15 @@ function assignSponsor(key, i, id){ if(cur().phase!=='pre'){ toast('Los patrocin
   if(spLocked(leagueSponsors(key)[i])){ toast('Ese patrocinador tiene contrato hasta la próxima temporada.'); return; }
   const c=spState(); const slots=leagueSponsors(key); const k=spPool(key).findIndex(x=>x.id===id); if(k<0) return;
   const clash=sponsorClash(key, i, spPool(key)[k]); if(clash){ toast(`${spPool(key)[k].name} no es compatible con ${clash.name}: tienen exclusividad.`); return; }
+  const sv0=fxVal(key,'salary');
   const x=spPool(key).splice(k,1)[0]; if(slots[i]) spPool(key).push(slots[i]); x.lockSeason=cur().number; slots[i]=x; c.newOffers=0;
+  spRepriceSalary(key, sv0);
   closeModal(); toast(`${x.name} patrocina ${ldef(key).name}: +${money(x.amount)} por jornada. Contrato cerrado hasta ${cur().year+1}.`); render();
 }
-function removeSponsor(key, i){ const c=spState(); const slots=leagueSponsors(key); if(spLocked(slots[i])){ toast('Ese patrocinador tiene contrato hasta la próxima temporada.'); return; } if(slots[i]){ spPool(key).push(slots[i]); slots[i]=null; } closeModal(); render(); }
+function removeSponsor(key, i){ const c=spState(); const slots=leagueSponsors(key); if(spLocked(slots[i])){ toast('Ese patrocinador tiene contrato hasta la próxima temporada.'); return; } const sv0=fxVal(key,'salary'); if(slots[i]){ spPool(key).push(slots[i]); slots[i]=null; } spRepriceSalary(key, sv0); closeModal(); render(); }
+function spRepriceSalary(key, sv0){ const s=cur(); const L=s && s.leagues[key]; if(!L || s.phase!=='pre') return; const sv1=fxVal(key,'salary'); if(Math.abs(sv1-sv0)<1e-9) return;
+  const r=(1-sv1)/(1-sv0); let d=0; Object.keys(L.contracts||{}).forEach(id=>{ const o=L.contracts[id]||0; const n=Math.round(o*r/100)*100; d+=o-n; L.contracts[id]=n; });
+  state.company.money+=d; s.fin.salaries-=d; if(d) toast(d>0 ? `Fichajes de ${ldef(key).name} más baratos: recuperas ${money(d)}.` : `Sin el descuento en fichajes, ${ldef(key).name} cuesta ${money(-d)} más.`); }
 
 /* =========================================================================
    STREAMERS: Force y Rodrigo Quesada opinan de tu jornada al día siguiente
@@ -4824,7 +4906,7 @@ const STREAMERS = {
 };
 STREAMERS.gavyria={name:'Gavyria', pGood:0.6, photo:null}; STREAMERS.yagami={name:'Yagami', pGood:0.5, photo:null};
 function streamerPhoto(S){ return S.photo || (typeof FACES!=='undefined' && FACES[S.name]) || null; }
-if(typeof EXTRA_IMG!=='undefined'){ LOGOS[WS.key]=EXTRA_IMG.ws; STREAMERS.yagami.photo=EXTRA_IMG.yagami; }
+if(typeof EXTRA_IMG!=='undefined'){ LOGOS[WS.key]=EXTRA_IMG.ws; if(EXTRA_IMG.fms_venezuela) LOGOS.fms_venezuela=EXTRA_IMG.fms_venezuela; if(EXTRA_IMG.fms_uruguay) LOGOS.fms_uruguay=EXTRA_IMG.fms_uruguay; STREAMERS.yagami.photo=EXTRA_IMG.yagami; }
 const STREAM_CHANCE = 1;   // siempre habla alguien; solo cambia quién
 
 
@@ -4837,6 +4919,8 @@ const UNDER_DEFS = [
   {key:'u_bdm',   name:'BDM Internacional', short:'BDM', countries:null,          famaMax:83, perCountry:true, color:'#B03A2E'},
   {key:'u_chess', name:'Chess Battle',      short:'CHS', countries:['México'],    famaMax:85, exc:['Rapder'], color:'#16A085'},
   {key:'u_dem',   name:'DEM Battles',       short:'DEM', countries:['Chile'],     famaMax:85, color:'#7D3C98'},
+  {key:'u_royal', name:'Royal League', short:'RL', countries:['España'], famaMax:99, color:'#D4A017', royal:true},   // liga de 10 en un fin de semana de noviembre; solo se ve la clasificación
+  {key:'u_dem_ar', name:'DEM Argentina',    short:'DEM', countries:['Argentina'], famaMax:83, color:'#5DADEC', excOnly:['Klan','CTZ','Dyse','G5','Issy','HDR'], rare:['Acru','MP']},   // sus propias excepciones de fama
 ];
 const MFU = {key:'u_mfu', name:'Monster Fu', short:'MFU', color:'#6AB04C'};
 // Circuito local por país (fase torneos, solo en modo carrera): 3 o 4 torneos al año por país de liga, de 8 o 16, fama máxima LOCAL_FAMA_MAX y premio pequeño.
@@ -4871,7 +4955,7 @@ const LOCAL_DEFS = [
 LOCAL_DEFS.forEach(d=>{ d.famaMax=LOCAL_FAMA_MAX; });
 function esLocal(key){ return /^u_l_/.test(key||''); }
 
-const MFU_ES=['Zasko','Sweet Pain','Arkano','Davisito','Sara Socas','Navas','Mr. Ego','Tirpa','Compare Flow','Swit Eme','Kmbra','Khan','Alek','Krisan','Nacho SRK','Mike Shinobi','NQP','Segrelles','Kevin Mil Problemas','Fabiuki','NG','Bélico','CDFlex','Klenchos','Luisaker','Isma72','Dr. Filtros','Triple R','Ortega','Ibán','Viti','Niki DMT','Tanquecrack','Kavron','Bohemia','Arcoiris','Sozat','Le33','BTP','Akar','Argente','Kusho','Ortiz'];
+const MFU_ES=['Zasko','Sweet Pain','Arkano','Davisito','Sara Socas','Navas','Mr. Ego','Tirpa','Compare Flow','Swit Eme','Kmbra','Khan','Alek','Krisan','Nacho SRK','Mike Shinobi','NQP','Segrelles','Kevin Mil Problemas','Fabiuki','NG','Bélico','El Demonio En Bici','Klenchos','Luisaker','Isma72','Dr. Filtros','Triple R','Ortega','Ibán','Viti','Niki DMT','Tanquecrack','Kavron','Bohemia','Arcoiris','Sozat','Le33','BTP','Akar','Argente','Kusho','Ortiz'];
 const MFU_INT=['Teorema','Ricto','Bigtamina','Anubis','Scub','Replik','Klan','Lit Killah','Acru','Abel','Kodigo','MP','CTZ','Issy','Sophia','KG','Skill','Necia','Rasta'];
 const UNDER_EXC = ['Teorema','El Menor','Acru','Dyse','Alek','Segrelles','Dalia','Mr. Ego','Kodigo','HDR','Abel','Mecha','Naista','MP','Stick','Replik','NQP','Fat N','Dani VK','Tirpa','Anubis','Bélico','Jesse Pungaz','Exe','Sophia','Kmbra','Nez','Rodamiento','Joqerr','Fabiuki','CTZ','Tata','Fat Tony','Potencia'];
 const UNDER_RARE = ['El Menor','Acru'];
@@ -4928,8 +5012,11 @@ function underGenerate(s, from){
   const pickDay=m=>{ const days=[]; for(let d=Math.max(from,0); d<diy; d++){ if(monthOf(y,d)===m && isWeekday(y,d) && !busy.has(d) && !busy.has(d-1) && !busy.has(d+1)) days.push(d); } if(!days.length) return null; const d=days[Math.floor(Math.random()*days.length)]; busy.add(d); return d; };
   const months=shuffle([...Array(11).keys()].map(x=>x+1)).filter(m=>monthOf(y,Math.max(from,0))<=m);
   const ev=[]; let mi=0;
-  UNDER_DEFS.filter(d=>d.key!=='u_bdm').forEach(def=>{ while(mi<months.length){   // la BDM Internacional se pone a final de temporada (under2Generate)
+  UNDER_DEFS.filter(d=>d.key!=='u_bdm' && !d.royal).forEach(def=>{ while(mi<months.length){   // la BDM Internacional se pone a final de temporada (under2Generate)
    const d=pickDay(months[mi++]); if(d!=null){ ev.push({key:def.key, day:d, played:false}); break; } } });
+  // Royal League: un viernes, sábado o domingo de noviembre
+  if(monthOf(y,Math.max(from,0))<=10){ const days=[]; for(let d=Math.max(from,0); d<diy; d++){ if(monthOf(y,d)!==10) continue; const w=dayToDate(y,d).getUTCDay(); if((w===5||w===6||w===0) && !busy.has(d)) days.push(d); }
+    if(days.length){ const d=days[Math.floor(Math.random()*days.length)]; busy.add(d); ev.push({key:'u_royal', day:d, played:false}); } }
   const mm=shuffle([...Array(12).keys()].filter(m=>monthOf(y,Math.max(from,0))<=m)); let n=0;
   for(const m of mm){ if(n>=3) break; const d=pickDay(m); if(d!=null){ ev.push({key:MFU.key, day:d, played:false, n:++n}); } }
   if(modoCarrera()){ const meses=[...Array(12).keys()].filter(m=>monthOf(y,Math.max(from,0))<=m);   // circuito local: solo en carrera (pickDay ya marca el día como ocupado)
@@ -4940,6 +5027,7 @@ function underByDay(s){ const m={}; (s.under||[]).forEach(e=>m[e.day]=e); return
 function underEligible(f, def){
   if(def.local) return f.fama<=def.famaMax && !signedLeagueOf(cur(), f.id);
   if(isTeamRQ(f.id)) return true;   // Team RQ: compiten en las under aunque se pasen de fama
+  if(def.excOnly){ if((def.rare||[]).includes(f.name)) return Math.random()<0.1; if(def.excOnly.includes(f.name)) return true; return f.fama<=def.famaMax; }
   if(UNDER_EXC.includes(f.name) || (def.exc && def.exc.includes(f.name))){ return UNDER_RARE.includes(f.name) ? Math.random()<0.1 : true; }
   return f.fama<=def.famaMax;
 }
@@ -4947,6 +5035,7 @@ function underPick(list, n){ const sorted=list.slice().sort((a,b)=>quality(b)-qu
   while(out.length<n && pool.length){ const i=Math.min(pool.length-1, Math.floor(Math.pow(Math.random(),1.6)*pool.length)); out.push(pool.splice(i,1)[0].id); } return out; }
 function runUnder(s, ev, d){
   const def=udef(ev.key);
+  if(def.royal) return runRoyal(s, ev, d);
   if(ev.key===MFU.key){
     const pool=activos().filter(f=>!f.jugador && fsFlag(f,'mfu')); const es=pool.filter(f=>fHome(f)==='España'), intl=pool.filter(f=>fHome(f)!=='España');   // al azar entre los marcados como Monster (los jugadores entran por inscripción)
     const fijos=inscritosEn(s, MFU.key).filter((f,i)=>1+(i%3)===ev.n).map(f=>f.id);   // cada jugador inscrito juega una de las 3 fechas
@@ -4980,7 +5069,8 @@ function torneosDelJugador(s, f){
   const extra=d=>{ if(!d.local && d.key!==MFU.key){ /* Under: el jugador se apunta sin tope de fama */ } else if(f.fama>d.famaMax) return {apto:false, motivo:'fama por encima de '+d.famaMax}; if(!conLiga) return {apto:true, motivo:null};
     const ch=chocaConLiga(s, f, d.key); if(ch!=null) return {apto:false, motivo:'choca con tu jornada del '+fmtDay(s.year, ch)};
     const yaExtra=p.inscrito.filter(k=>k!==d.key && (isUnder(k)) && k!==MFU.key).length; if(!p.inscrito.includes(d.key) && yaExtra>=LIGA_TORNEOS_EXTRA) return {apto:false, motivo:'con liga, como mucho '+LIGA_TORNEOS_EXTRA+' torneos más'}; return {apto:true, motivo:null}; };
-  UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key) return; if(!d.perCountry && !(d.countries||[]).includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name, apto:e.apto, motivo:e.motivo}); });
+  UNDER_DEFS.forEach(d=>{ if(d.key===MFU.key || d.royal) return;   // la Royal League es por invitación (ROYAL_POOL): no se inscribe nadie
+    if(!d.perCountry && !(d.countries||[]).includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name, apto:e.apto, motivo:e.motivo}); });
   LOCAL_DEFS.forEach(d=>{ if(!d.countries.includes(f.country)) return; const e=extra(d); out.push({key:d.key, name:d.name+' ('+d.size+')', apto:e.apto, motivo:e.motivo, local:true}); });
   if(f.country==='España') out.push({key:MFU.key, name:MFU.name, apto:!conLiga && f.fama<=MFU_FAMA_MAX, motivo: (conLiga ? 'no compatible con la liga' : null) || (f.fama>MFU_FAMA_MAX ? 'fama por encima de '+MFU_FAMA_MAX : null)});
   const rb=rbNacionalDe(f); if(rb) out.push({key:rb, name:rbdef(rb).name, apto:true, motivo:null});
@@ -5019,10 +5109,33 @@ function openMFU(day){
     <div class="modal-actions"><button class="btn" onclick="kovAll()">Revelar todas</button><button class="btn primary" onclick="closeModal(); render(); carreraTrasShow()">Seguir</button></div>`, true);
   themeEl(document.getElementById('modalRoot'), MFU.key);
 }
+/* ---------- Royal League (España): 10 de una lista fija, todos contra todos; solo se publica la clasificación ---------- */
+var ROYAL_POOL=['Chuty','Skone','Arkano','Blon','Force','Davisito','Zasko','Mr. Ego','Navas','Tirpa','Sweet Pain','Invert','Rayban','Mowlihawk','MC Men','Khan','Errecé','Santi','Kmbra','Sawi Elekipo','El Demonio En Bici','Dani VK','Titus','Mounts','Azeta','Jesús LC'];
+var ROYAL_PTS=[1000,900,800,700,600,500,400,300,200,100];
+function runRoyal(s, ev, d){ const def=udef(ev.key);
+  const pool=ROYAL_POOL.map(n=>activos().find(f=>!f.custom && f.name===n)).filter(f=>f && !isBanned(f));
+  const ids=shuffle(pool).slice(0,10).map(f=>f.id); const T={}; ids.forEach(id=>T[id]={id, pts:0, w:0, l:0});
+  for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){ const m={a:ids[i], b:ids[j], result:null}; simulateBattle(m, null); const w=m.result.winner, lo=w===m.a?m.b:m.a;
+    const tb=!!m.result.tiebreak; T[w].pts+=tb?2:3; T[w].w++; T[lo].pts+=tb?1:0; T[lo].l++; }
+  const isKhan=id=>(fby(id)||{}).name==='Khan';
+  const table=Object.values(T).sort((a,b)=>(isKhan(a.id)-isKhan(b.id)) || b.pts-a.pts || b.w-a.w || quality(fby(b.id))-quality(fby(a.id)));   // Khan siempre último
+  ev.table=table; ev.participants=ids; ev.champion=table[0].id; ev.runnerUp=table[1]&&table[1].id; ev.third=table[2]&&table[2].id; ev.played=true;
+  table.forEach((r,i)=>{ const f=fby(r.id); if(!f) return;
+    if(i<3){ addHype(r.id, 4-i); setNivel(f, Math.min(99,f.nivel+2)); f.fama=Math.min(99,f.fama+2); }
+    else if(i>=table.length-3){ addHype(r.id, -(i-(table.length-4))); setNivel(f, Math.max(1,f.nivel-2)); f.fama=Math.max(1,f.fama-2); } });
+  if(ascOf(s).mode==='rank'){ ASC_GAIN={}; table.forEach((r,i)=>ascAdd(s, r.id, ROYAL_PTS[i]||0)); ev.ascGain=ASC_GAIN; ASC_GAIN=null; }   // los que ya están en una FMS no suman (y esos puntos no son para nadie)
+  underTutQueue(ev.key, [ev.champion]);
+  addLog(s, d, `👑 <b>${fname(ev.champion)}</b> gana la ${def.name} por delante de ${fname(ev.runnerUp)} y ${fname(ev.third)}.`, 'rb'); }
+function royalTableHtml(ev){ const n=ev.table.length;
+  return `<table class="standings royal-tab"><thead><tr><th>#</th><th>Freestyler</th><th class="num">G</th><th class="num">P</th><th class="num">Pts</th><th class="num"></th></tr></thead><tbody>${ev.table.map((r,i)=>{ const top=i<3, bot=i>=n-3;
+    return `<tr class="${top?'q':(bot?'rel':'')}"><td class="pos">${i+1}</td><td><span style="display:inline-flex;align-items:center;gap:8px">${miniAvatar(r.id,24)} ${fnameH(r.id)}</span></td><td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num pts">${r.pts}</td><td class="num"><small class="${top?'pos-v':(bot?'neg-v':'')}">${top?'+2 niv · +2 fama':(bot?'−2 niv · −2 fama':'')}</small></td></tr>`; }).join('')}</tbody></table>`; }
+function openRoyal(day){ const s=cur(); const ev=(s.under||[]).find(e=>e.key==='u_royal' && e.day===day); if(!ev) return;
+  ev.presented=true; advance('day'); if(!ev.played) return; showUnder('u_royal', day); }
 function showUnder(key, day){
   const s=cur(); const ev=(s.under||[]).find(e=>e.key===key && e.day===day); if(!ev) return; const def=udef(key);
   let body='';
   if(!ev.played) body=`<p class="step-note">Se juega el ${fmtDay(s.year,ev.day)}. Es una competición externa: no puedes poner jornadas ese día.</p>`;
+  else if(ev.table) body=`<p class="step-note">Liga de 10, todos contra todos. Solo se publica la clasificación. Los 3 primeros suben (+hype, +2 de nivel y +2 de fama) y los 3 últimos bajan.</p>${royalTableHtml(ev)}`;
   else if(ev.battles) body=`<div class="tb-list">${ev.battles.map((m,i)=>{ const wa=m.result.winner===m.a; return `<div class="tb-row clickable"${battleClick(m,'under:'+key+':'+ev.day,'b',i)}><div class="tb-faces"><span class="tb-face ${wa?'w':''}" style="${avatarDivStyle(fby(m.a))}">${avatarContent(fby(m.a))}</span><span class="tb-face ${wa?'':'w'}" style="${avatarDivStyle(fby(m.b))}">${avatarContent(fby(m.b))}</span></div><div class="tb-info"><div class="tb-names"><span class="${wa?'w':''}">${fnameH(m.a)}</span> <i>vs</i> <span class="${wa?'':'w'}">${fnameH(m.b)}</span></div><div class="tb-meta">gana ${fnameH(m.result.winner)}</div></div><div class="tb-views">${fmtViews(m.views)}<small>visitas</small></div></div>`; }).join('')}</div>`;
   else if(!ev.bracket) body=`<div class="sum-row"><span>🏆 Campeón</span><b>${fnameH(ev.champion)}</b></div><div class="sum-row"><span>Subcampeón</span><span>${fnameH(ev.runnerUp)}</span></div>${ev.third?`<div class="sum-row"><span>3º</span><span>${fnameH(ev.third)}</span></div>`:''}<p class="step-note">Cuadro no guardado: de las temporadas cerradas solo se conserva el podio de los torneos locales que no jugaste.</p>`;
   else { const fin=ev.bracket.rounds[ev.bracket.rounds.length-1][0];
@@ -5257,7 +5370,7 @@ function uqReplace(s, key, oldId, newId, half){
 }
 function uqCandidates(s, key){ const L=s.leagues[key]; const bad=new Set([...(s.refused||[]), ...L.blocked, ...natKeys(s).flatMap(k=>poList(s.leagues[k]).filter(P=>!P.done).map(P=>P.b))]);   // los aspirantes del Vida o muerte no pueden ser sustitutos
   const fl=foreignLocked();   // sin la 1ª estrella (o en Pandemia) tampoco salen extranjeros como sustitutos
-  return activos().filter(f=>(isWS(key) ? !L.competitors.includes(f.id) : !signedLeagueOf(s,f.id)) && !(fl && isForeignTo(key,f)) && !bad.has(f.id) && !isBanned(f) && !isJudgeId(s,f.id) && !isSpeakerId(s,f.id)).sort((a,b)=>b.fama-a.fama); }
+  return activos().filter(f=>(isWS(key) ? !L.competitors.includes(f.id) : !signedLeagueOf(s,f.id)) && !(fl && isForeignTo(key,f)) && !bad.has(f.id) && !isAngry(f) && !isBanned(f) && !isJudgeId(s,f.id) && !isSpeakerId(s,f.id)).sort((a,b)=>b.fama-a.fama); }
 function uqAutoReplace(s, key){ const L=s.leagues[key]; (L.pendingRep||[]).slice().forEach(old=>{ const c=uqCandidates(s,key).filter(f=>f.country===fby(old).country)[0] || uqCandidates(s,key)[0]; if(c) uqReplace(s,key,old,c.id); }); }
 function uqApply(s, ev){
   const L=s.leagues[ev.key];
@@ -5308,8 +5421,9 @@ function uqApply(s, ev){
     const x=cands[0]; ev.rival=x; L.tiago={a:tg, b:x, j:ev.j};
     if(!L.manual && !isWSF(L.key)){ const sol=solveRounds(L.competitors, playedPairsOf(L), [[tg,x]], nJ(L.key)-L.played); if(sol) L.rounds=L.rounds.slice(0,L.played).concat(sol.map(r=>r.map(([a,b])=>({id:uid('m'), a, b, result:null})))); }
     ev.done=true; ev.show=true; addLog(s, ev.day, `💔 Se filtra que TiagoPZK está con la novia de ${fname(x)}. La polémica estalla.`, 'rb'); }
+  else if(ev.type==='snub' && !ev.swap && competesAnywhere(s, ev.fid)){ ev.done=true; ev.show=false; }   // ya está en un line up (p. ej. entró de sustituto): no hay enfado
   else if(ev.type==='snub'){ ev.done=true; ev.show=true; { const f=fby(ev.fid); if(f) f.angry=s.year; }
-    addLog(s, ev.day, `📄 ${fname(ev.fid)} saca un comunicado: quedó ${ev.pos}º en ${ldef(ev.prev).name} y no le has renovado.`, 'bad'); }
+    addLog(s, ev.day, ev.swap ? `📄 ${fname(ev.fid)} saca un comunicado: le has quitado su sitio en ${ldef(ev.key).name} para meter a ${fname(ev.by)}.` : `📄 ${fname(ev.fid)} saca un comunicado: quedó ${ev.pos}º en ${ldef(ev.prev).name} y no le has renovado.`, 'bad'); }
   else if(ev.type==='khan'){ ev.done=true; ev.show=true; addLog(s, ev.day, '📉 Un regreso decepcionante: Khan.', 'bad'); }
   else if(ev.type==='sweet'){ const f=fby(ev.fid); f.hype=Math.round((f.hype||0)*0.9*10)/10; ev.done=true; ev.show=true;
     addLog(s, ev.day, `😡 Los fans de Sweet Pain se enfadan en redes tras su derrota contra ${fname(ev.rival)}.`, 'bad'); }
@@ -5423,9 +5537,9 @@ function uqAfterJornada(s, L, round, d, zk){
   // Navas enseña el culo en mitad de la jornada (5%)
   { const nv=state.freestylers.find(f=>f.name==='Navas'); if(nv && L.competitors.includes(nv.id) && round.some(m=>m && m.result && (m.a===nv.id||m.b===nv.id)) && Math.random()<NAVAS_P)
       uqPush(s, {day:d+1, type:'navas', key:L.key, fid:nv.id}); }
-  // Mr. Ego suelta una burrada en directo: YouTube desmonetiza su batalla (15%; es dinero de la empresa: en carrera no pasa)
+  // Mr. Ego suelta una burrada en directo: YouTube desmonetiza su batalla (15%; siempre si su rival es una mujer; es dinero de la empresa: en carrera no pasa)
   { const R0=L.rounds[L.played]||[]; R0.forEach((m,mi)=>{ if(!m.result || m.postponed || !m.views) return; const eg=[m.a,m.b].map(fby).find(f=>f && f.name==='Mr. Ego');
-      if(eg && !modoCarrera() && Math.random()<0.15) uqPush(s, {day:d+1, type:'ego', key:L.key, j:L.played, mi, fid:eg.id, rival: m.a===eg.id?m.b:m.a}); }); }
+      if(eg && !modoCarrera() && (isWoman(m.a===eg.id?m.b:m.a) || Math.random()<0.15)) uqPush(s, {day:d+1, type:'ego', key:L.key, j:L.played, mi, fid:eg.id, rival: m.a===eg.id?m.b:m.a}); }); }
   // TiagoPZK: una vez por temporada (30%), se filtra que está con la novia de un rival al que aún no se ha enfrentado
   { const tg=state.freestylers.find(f=>f.name==='TiagoPZK'); const next=L.played+2;   // jornada siguiente (1, 2, 3…)
     if(tg && !isWS(L.key) && L.competitors.includes(tg.id)){ if(!s.tiagoRoll) s.tiagoRoll={on:Math.random()<0.30, at:natWSF(L.key)?rint(2,4):rint(3,7)};
@@ -5441,7 +5555,7 @@ function uqAfterJornada(s, L, round, d, zk){
   // enfrentamientos especiales (al día siguiente / a los dos días)
   const nm=id=>(fby(id)||{}).name; const R=L.rounds[L.played];
   const RQ=['Coloso','Alek','Segrelles','Navas','Triple R','Ander2K'], EL=['Dani VK','JM Serna','Dima'];
-  const WOMEN=['NG','Azuky','Marithea','Sara Socas','Pandora','Sumeria','Necia','Bohemia','Piromana','Roma','Sandra','Eskai','Arcoiris','Adriana','Bellota','KMC','La Prima','La Joaqui','Valex','Cristonita'];
+  const WOMEN=['NG','Azuky','Marithea','Sara Socas','Pandora','Sumeria','Necia','Bohemia','Piromana','Roma','Sandra','Eskai','Arcoiris','Adriana','Bellota','KMC','La Prima','La Joaqui','Valex','Cristonita','Staner','Piba Cósmica','Saga'];
   round.forEach(m=>{ if(!m.result) return; const a=nm(m.a), b=nm(m.b); const mi=R.indexOf(m);
     if([a,b].includes('Azuky') && [a,b].includes('Nota Roja') && Math.random()<0.75) uqPush(s, {day:d+2, type:'pairv', sub:'azuky', mult:1.35, key:L.key, j:L.played, mi, fid:m.a});
     if((RQ.includes(a)&&EL.includes(b))||(RQ.includes(b)&&EL.includes(a))) uqPush(s, {day:d+1, type:'pairv', sub:'rq', mult:1.05, key:L.key, j:L.played, mi, fid:m.a});
@@ -5563,6 +5677,9 @@ function showUQ(ev){
     body=`<div class="ex-row" style="justify-content:center; font-size:17px">${miniAvatar(ev.fid,34)} ${fnameH(ev.fid)} <span class="vs">vs</span> ${fnameH(ev.rival)} ${miniAvatar(ev.rival,34)}</div>
       <p>Las redes arden. Todo el mundo quiere ver a TiagoPZK y ${nameH(fby(ev.rival))} cara a cara.</p>
       <p>Haz la batalla entre los dos en la <b>próxima jornada (J${ev.j+1})</b> para aprovechar la polémica: tendrá <b class="pos-v">200 de hype</b> y <b class="pos-v">más de 3M de visitas</b>.</p>`; }
+  else if(ev.type==='snub' && ev.swap){ kick='📄 Comunicado'; title=`${f.name} se queja de que le has quitado su sitio`;
+    body=`<p>"Tenía mi plaza en ${esc(ldef(ev.key).name)} y me la han quitado para meter a ${esc(fname(ev.by))}, que no quería competir fuera. Muy feo."</p>
+      <p class="step-note">Está enfadado contigo: esta temporada no aceptará exhibiciones ni ser extraplayer.</p>`; }
   else if(ev.type==='snub'){ kick='📄 Comunicado'; title=`${f.name} se queja de que no le has renovado`;
     body=`<p>"Hice una gran temporada en ${esc(ldef(ev.prev).name)}: terminé <b>${ev.pos}º</b>. Me gané mi puesto y la empresa ha decidido no renovarme porque no le ha dado la gana."</p>
       <p class="step-note">La comunidad ya está hablando. Seguro que lo comenta cuando se presente el line up. Está enfadado contigo: esta temporada no aceptará exhibiciones ni ser extraplayer.</p>`; }
@@ -5613,6 +5730,31 @@ function uqMiniCal(s, ev, days, sel){
     h+= ok.has(d) ? `<button class="mc ${cls}" onclick="state.ui.uqDay=${d}; showUQ(cur().uq.find(y=>y.id==='${ev.id}'))">${lbl}<b>${n}</b></button>` : `<span class="mc ${cls}">${lbl}<b>${n}</b>${tag?`<i>${tag}</i>`:''}</span>`; }
   return h+'</div></div>';
 }
+/* ---------- el extranjero que no quiere viajar puede entrar en la FMS de su país, sustituyendo a uno de ese line up (que se enfada) ---------- */
+function abHomeKey(s, ev){ const f=fby(ev.fid); if(!f || ev.swapped) return null; const hk=ascLeagueOf(f); if(!hk || hk===ev.key || isWS(hk) || !natKeys(s).includes(hk)) return null;
+  const H=s.leagues[hk]; const sl=signedLeagueOf(s,f.id); if(!H || H.finished || H.played>0 || (sl && sl!==ev.key)) return null; return abSwapOk(s,hk).length ? hk : null; }
+function abSwapOk(s, hk){ const H=s.leagues[hk]; const po=new Set(poList(H).flatMap(P=>[P.a,P.b]).filter(Boolean)); return H.competitors.filter(id=>id!==H.ascUp && !po.has(id)); }
+function abSwapOpen(evId){ const s=cur(); const ev=(s.uq||[]).find(x=>x.id===evId); if(!ev) return; const hk=abHomeKey(s,ev); if(!hk){ showReplace(ev.key); return; }
+  const H=s.leagues[hk]; const f=fby(ev.fid); const ok=new Set(abSwapOk(s,hk)); const sel=state.ui.abSel;
+  const po=new Set(poList(H).map(P=>P.a).filter(Boolean));
+  const card=id=>{ const g=fby(id); const can=ok.has(id); const why=id===H.ascUp?'Ascendido':(po.has(id)?'Vida o muerte':'');
+    return `<button class="ab-card ${sel===id?'sel':''} ${can?'':'off'}" ${can?`onclick="state.ui.abSel='${id}'; abSwapOpen('${evId}')"`:'disabled'}><span class="ab-ph" style="${avatarDivStyle(g)}">${avatarContent(g)}</span><b>${esc(g.name)}</b><small>${why||esc(styleOf(g))}</small></button>`; };
+  openModal(`<h3>Meter a ${nameH(f)} en ${esc(ldef(hk).name)}</h3>
+    <p class="step-note">Elige a quién del line up de ${esc(ldef(hk).name)} sustituye. El que salga se enfadará contigo. No se puede quitar a un ascendido ni a los del Vida o muerte.</p>
+    <div class="ab-wrap"><div class="ab-grid">${H.competitors.map(card).join('')}</div>
+      <div class="ab-in"><small>Entra</small><span class="ab-ph big" style="${avatarDivStyle(f)}">${avatarContent(f)}</span><b>${esc(f.name)}</b><small>${esc(styleOf(f))} · ${moneyK(contractCost(f,hk))}</small>${sel?`<div class="ab-out">Sale <b>${esc(fname(sel))}</b></div>`:''}</div></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal(); showReplace('${ev.key}')">Mejor no</button><button class="btn primary" ${sel&&ok.has(sel)?'':'disabled'} onclick="abSwapDo('${evId}')">Sustituir</button></div>`, 'uqwide');
+}
+function abSwapDo(evId){ const s=cur(); const ev=(s.uq||[]).find(x=>x.id===evId); if(!ev) return; const hk=abHomeKey(s,ev); const out=state.ui.abSel; if(!hk || !out || !abSwapOk(s,hk).includes(out)) return;
+  const H=s.leagues[hk]; const f=fby(ev.fid);
+  const ref=H.contracts[out]||0; state.company.money+=ref; s.fin.salaries-=ref; delete H.contracts[out];   // al que sale se le devuelve el contrato
+  s.refused=(s.refused||[]).filter(x=>x!==f.id);
+  uqReplace(s, hk, out, f.id);
+  ev.swapped=hk; state.ui.abSel=null;
+  uqPush(s, {day:s.day, type:'snub', swap:true, key:hk, prev:hk, fid:out, by:f.id});   // el que sale se enfada
+  addLog(s, s.day, `🔁 ${f.name} no quiere competir fuera: entra en ${ldef(hk).name} en lugar de ${fname(out)}.`, 'gold');
+  closeModal(); toast(`${f.name} entra en ${ldef(hk).name}. ${fname(out)} se ha enfadado.`);
+  const L=s.leagues[ev.key]; if(L && (L.pendingRep||[]).length) showReplace(ev.key); else render(); }
 function uqClose(id){ const s=cur(); const ev=(s.uq||[]).find(x=>x.id===id); if(ev){ ev.show=false; if(ev.type==='refuse') ev.done=true; } closeModal(); document.body.classList.remove('noscroll'); render(); }
 function showReplace(key){
   const s=cur(); const L=s.leagues[key]; const old=(L.pendingRep||[])[0]; if(!old){ render(); return; }
@@ -5633,7 +5775,7 @@ function pickReplace(key, old, id){ const s=cur(); const f=fby(id); const c=cont
 /* ---------- exhibiciones ---------- */
 function exViewMult(m){ return ((fby(m.a).fama<80 || fby(m.b).fama<80) ? 0.5 : 0.7) * 0.75; }   // con el 0,8 de la liga: un 40% menos que antes
 const EXH_UNKNOWN=60, EXH_FAMOUS=80;   // fama por debajo = desconocido · fama desde = con bastante fama
-function exhibCost(f, key){ const y=cur()&&cur().year; const disc=(exOfferActive(f,y) && UQ_REFUSE[f.name]) ? (UQ_REFUSE[f.name].exDisc||0) : 0; return Math.max(100, Math.round(contractCost(f,key)*0.025*(1-disc)*(1-fxVal(key,'exfee'))/100)*100); }
+function exhibCost(f, key){ const y=cur()&&cur().year; const disc=(exOfferActive(f,y) && UQ_REFUSE[f.name]) ? (UQ_REFUSE[f.name].exDisc||0) : 0; return Math.max(100, Math.round(contractCostBase(f,key)/9*(1-disc)*(1-fxVal(key,'exfee'))/100)*100); }   // una exhibición = su salario de temporada completo (con viajes si es extranjero) entre 9
 function exhibBusy(s){ const set=new Set(); s.activeKeys.forEach(k=>{ const L=s.leagues[k]; Object.entries(L.exhib||{}).forEach(([j,x])=>{ if(+j>=L.played){ set.add(x.a); set.add(x.b); } }); }); return set; }
 function isJudgeOf(s, id, key){ const f=fby(id); return !!(f && key && jdList(s,key).some(n=>nrm(n)===nrm(f.name))); }   // es jurado de ESA liga
 function exhibEligible(s, key){ const busy=exhibBusy(s); const own=new Set(key&&s.leagues[key]?s.leagues[key].competitors:[]); const pf=isPandemic() && key; return activos().filter(f=>!own.has(f.id) && !busy.has(f.id) && !(pf && isForeignTo(key,f)) && !(key ? isJudgeOf(s,f.id,key) : isJudgeId(s,f.id)) && !isSpeakerId(s,f.id)); }
@@ -5863,10 +6005,31 @@ function fmContinue(){
   if(!replay && L && L.finished && j===nJ(key)-1) celebrateFMSLeague(key);
 }
 
+/* ---------- 🏆 y 👁️ como imagen en TODO el juego (textos, ventanas, avisos, shows, Twitter…) ---------- */
+var EMO_SWAP_MAP=[[/🏆/u,'emo_trophy','trofeo'],[/👁/u,'emo_eye','visitas'],[/🎤|🎙/u,'emo_mic','micro'],[/⬆/u,'emo_up','arriba'],[/⭐/u,'emo_star','estrella'],[/🔒/u,'emo_lock','candado']];
+var EMO_SWAP_RE=/🏆|👁️|👁|🎤|🎙️|🎙|⬆️|⬆|⭐|🔒/u, EMO_SWAP_RE_G=/🏆|👁️|👁|🎤|🎙️|🎙|⬆️|⬆|⭐|🔒/gu;
+function emoSwapNode(root){ if(!root || typeof EXTRA_IMG==='undefined' || !EXTRA_IMG.emo_trophy) return;
+  const tw=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode:n=>{ if(!EMO_SWAP_RE.test(n.nodeValue)) return NodeFilter.FILTER_REJECT; const p=n.parentNode; if(!p || /^(SCRIPT|STYLE|TEXTAREA|OPTION|SELECT|TITLE)$/.test(p.nodeName)) return NodeFilter.FILTER_REJECT; return NodeFilter.FILTER_ACCEPT; }});
+  const list=[]; while(tw.nextNode()) list.push(tw.currentNode);
+  list.forEach(n=>{ const frag=document.createDocumentFragment(); let last=0; const t=n.nodeValue; t.replace(EMO_SWAP_RE_G,(m,i)=>{ if(i>last) frag.appendChild(document.createTextNode(t.slice(last,i)));
+      const im=document.createElement('img'); im.className='emo'; const E=EMO_SWAP_MAP.find(x=>x[0].test(m))||EMO_SWAP_MAP[0]; if(!EXTRA_IMG[E[1]]){ frag.appendChild(document.createTextNode(m)); last=i+m.length; return m; } im.src=EXTRA_IMG[E[1]]; im.alt=E[2]; frag.appendChild(im); last=i+m.length; return m; });
+    if(last<t.length) frag.appendChild(document.createTextNode(t.slice(last))); n.parentNode.replaceChild(frag, n); }); }
+function initEmoSwap(){ try{ emoSwapNode(document.body); new MutationObserver(recs=>{ recs.forEach(r=>{ if(r.type==='characterData'){ if(EMO_SWAP_RE.test(r.target.nodeValue||'')) emoSwapNode(r.target.parentNode); } else r.addedNodes.forEach(n=>{ if(n.nodeType===3){ if(EMO_SWAP_RE.test(n.nodeValue)) emoSwapNode(n.parentNode); } else if(n.nodeType===1) emoSwapNode(n); }); }); }).observe(document.body,{childList:true, subtree:true, characterData:true}); }catch(e){} }
+/* ---------- bloqueo del scroll del fondo mientras hay una ventana o un show abiertos ---------- */
+var SCRL_ROOTS=['modalRoot','rbShow','calAnim','celeb'];
+function syncScrollLock(){ const on=SCRL_ROOTS.some(id=>{ const e=document.getElementById(id); return !!(e && e.firstElementChild); });
+  const h=document.documentElement; if(h.classList.contains('scrlock')!==on) h.classList.toggle('scrlock', on); }
+function initScrollLock(){ try{ const mo=new MutationObserver(syncScrollLock); mo.observe(document.body,{childList:true});
+    const watch=()=>SCRL_ROOTS.forEach(id=>{ const e=document.getElementById(id); if(e && !e._scrlW){ e._scrlW=true; mo.observe(e,{childList:true}); } });
+    watch(); new MutationObserver(watch).observe(document.body,{childList:true}); }catch(e){} setInterval(syncScrollLock, 500); syncScrollLock(); }
 /* ---------- init ---------- */
 function init(){
   state.ui.devStats=false;
   migrateSlots(); state.ui.slot=null; state.view={name:'dashboard',params:{}};   // siempre empieza en el menú: CEO con sus ranuras o «Modo carrera»
+  initScrollLock(); initEmoSwap();
+  { let buf=''; document.addEventListener('keydown', e=>{ if(state.company) { buf=''; return; } const k=(e.key||'').toLowerCase(); if(k.length!==1) return; buf=(buf+k).slice(-7);
+      if(buf==='sandbox'){ buf=''; if(sandboxUnlocked()){ toast('El modo Sandbox ya estaba desbloqueado.'); return; } unlockSandbox(); toast('🔓 Modo Sandbox desbloqueado.'); render(); } }); }   // truco: escribir "sandbox" en el menú principal
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}   // pide al navegador que no borre el guardado para liberar espacio
   render();
   window.addEventListener('pagehide', ()=>{ if(state.company){ save(); flushSave(); } });
 }
@@ -6104,7 +6267,7 @@ var TWITTEROS = [
   {"handle": "larriva_j", "name": "JLarriva", "country": "Ecuador", "verified": false, "img": "tw_larriva_j", "fav": ["Gazir", "Tom Crowley", "Blon"], "hate": ["Navas", "Rapder", "Rodamiento"]},
   {"handle": "Marc254222", "name": "Marc", "country": "España", "verified": false, "img": "tw_marc254222", "fav": ["Chuty", "Bnet", "Acru"], "hate": ["Sara Socas", "Nocre", "El Menor"]},
   {"handle": "Bautistamenaje", "name": "Bautitamenaje", "country": "Argentina", "verified": false, "img": "tw_bautistamenaje", "fav": ["Bnet", "Stuart", "El Menor"], "hate": ["Navas", "Drose", "HDR"]},
-  {"handle": "edersanv", "name": "edersan", "country": null, "verified": false, "img": "tw_edersanv", "fav": ["Abel", "Ibán", "Fabiuki"], "hate": ["Azuky", "CDFlex", "Rapder"]},
+  {"handle": "edersanv", "name": "edersan", "country": null, "verified": false, "img": "tw_edersanv", "fav": ["Abel", "Ibán", "Fabiuki"], "hate": ["Azuky", "El Demonio En Bici", "Rapder"]},
   {"handle": "ElMaxTO", "name": "TheMaxTO", "country": "México", "verified": false, "img": "tw_elmaxto", "fav": ["Aczino", "Jaze", "Teorema"], "hate": ["Navas", "Rapder", "Black Code"]},
   {"handle": "3l_F3NIXx", "name": "Diego_Mtz", "country": "México", "verified": false, "img": "tw_3l_f3nixx", "fav": ["Stuart", "Sweet Pain", "Teorema"], "hate": ["Rapder", "Dybbuk", "Replik"]},
   {"handle": "Carlito52323616", "name": "Carlos :)", "country": "México", "verified": false, "img": "tw_carlito52323616", "fav": ["Gazir", "Aczino", "Chuty"], "hate": ["Replik", "Navas", "Jony Beltrán"]},
@@ -6131,7 +6294,7 @@ var TWITTEROS = [
   {"handle": "MGJVYB", "name": "ex manu baby", "country": "España", "verified": false, "img": "tw_mgjvyb", "fav": ["Jaze", "Acru", "Sweet Pain"], "hate": ["Vijay Kesh", "Blon", "Dybbuk"]},
   {"handle": "jxandi_vz", "name": "Jxandi", "country": "Venezuela", "verified": false, "img": "tw_jxandi_vz", "fav": ["Papo", "Chang", "Fabiuki"], "hate": ["Navas", "Dybbuk", "Hander"]},
   {"handle": "6ancap6Lib", "name": "FanDelFree 🇲🇽", "country": "México", "verified": false, "img": "tw_6ancap6lib", "fav": ["Abel", "Zasko"], "hate": ["Cacha", "Rapder", "Valles-T"]},
-  {"handle": "gutifiosoo", "name": "Gutifioso", "country": "España", "verified": false, "img": "tw_gutifiosoo", "fav": ["Teorema", "Bnet", "Sweet Pain"], "hate": ["Navas", "CDFlex", "Drose"]},
+  {"handle": "gutifiosoo", "name": "Gutifioso", "country": "España", "verified": false, "img": "tw_gutifiosoo", "fav": ["Teorema", "Bnet", "Sweet Pain"], "hate": ["Navas", "El Demonio En Bici", "Drose"]},
   {"handle": "Sarto0d", "name": "Sarto.0", "country": "Argentina", "verified": false, "img": "tw_sarto0d", "fav": ["Mecha", "Dyse", "El Menor"], "hate": ["Azuky", "Dalia", "Chang"]},
   {"handle": "TukiSaint", "name": "TUKI", "country": "Argentina", "verified": false, "img": "tw_tukisaint", "fav": ["Abel", "Mecha", "1Tobi"], "hate": ["Filósofo", "KG", "Aczino"]},
   {"handle": "Marco_Ramirez7", "name": "Marco R. Martinez", "country": "Honduras", "verified": false, "img": "tw_marco_ramirez7", "fav": ["Chuty", "Jaze", "Aczino"], "hate": ["Abel", "Nocre", "Dani VK"]},
@@ -6511,6 +6674,7 @@ var TW_OFFICIAL={
 var TW_NEWS = [
   {handle:'McNoticiasFree', name:'McNoticias', country:null, verified:false, img:'tw_mcn', special:'mcn'},
   {handle:'InfoFreestyle2', name:'Info Freestyle', country:null, verified:true, img:'tw_info', special:'info'},
+  {handle:'PunchlineMedia_', name:'Punchline Media', country:null, verified:false, img:'tw_pm', special:'pm'},   // solo line ups y cruces (no saca tuit de campeón)
 ];
 var RQ_TRUE=['Navas','Alek','Segrelles','Ander2K','Fabiuki','Ortega','Coloso','Triple R'];   // los RQ de verdad
 var RQ_CREW=[...RQ_TRUE,'Chuty','Mr. Ego','Arkano','Bnet','MP','HDR','Mowlihawk','Teorema','Zasko'];   // a todos estos los apoya
@@ -6537,6 +6701,11 @@ function emoHtml(html){
       return im ? `<img class="emo" src="${im}" alt="${iso}">` : `<span class="emo-code">${iso}</span>`; })
     .replace(/🆚/gu, ()=> EXTRA_IMG.emo_vs ? `<img class="emo" src="${EXTRA_IMG.emo_vs}" alt="vs">` : 'vs')
     .replace(/🏆/gu, ()=> EXTRA_IMG.emo_trophy ? `<img class="emo" src="${EXTRA_IMG.emo_trophy}" alt="trofeo">` : '🏆')
+    .replace(/🎤|🎙️|🎙/gu, ()=> EXTRA_IMG.emo_mic ? `<img class="emo" src="${EXTRA_IMG.emo_mic}" alt="micro">` : '🎤')
+    .replace(/⬆️|⬆/gu, ()=> EXTRA_IMG.emo_up ? `<img class="emo" src="${EXTRA_IMG.emo_up}" alt="arriba">` : '⬆️')
+    .replace(/⭐/gu, ()=> EXTRA_IMG.emo_star ? `<img class="emo" src="${EXTRA_IMG.emo_star}" alt="estrella">` : '⭐')
+    .replace(/🔒/gu, ()=> EXTRA_IMG.emo_lock ? `<img class="emo" src="${EXTRA_IMG.emo_lock}" alt="candado">` : '🔒')
+    .replace(/👁️|👁/gu, ()=> EXTRA_IMG.emo_eye ? `<img class="emo" src="${EXTRA_IMG.emo_eye}" alt="visitas">` : '👁️')
     .replace(/🔥/gu, ()=> EXTRA_IMG.emo_fire ? `<img class="emo" src="${EXTRA_IMG.emo_fire}" alt="fuego">` : '🔥')
     .replace(/❤️|❤/gu, ()=> EXTRA_IMG.emo_heart ? `<img class="emo" src="${EXTRA_IMG.emo_heart}" alt="corazón">` : '❤️');
 }
@@ -6666,12 +6835,19 @@ function luGenerate(s, k){
   if(isI){ const cnt={}; jdList(s,INTL.key).forEach(n=>{ const j=jdBy(n); if(j){ const c=jdCountry(j); cnt[c]=(cnt[c]||0)+1; } });
     Object.entries(cnt).filter(([c,n])=>n>2).forEach(([c,n])=>{ const pool=accs.filter(a=>!used.has(a.handle) && a.country && a.country!==c); shuffle(pool).slice(0,rint(2,3)).forEach(a=>{ used.add(a.handle); add(a, fill(pick(TW_JD.intl[twDia(a.country)==='es'?'es':'la']),{k:n, c}), -2, END); }); }); }
   // no renovados: el competidor se queja al final del line up, sus fans protestan y sus haters lo celebran
-  if(!isI) (s.uq||[]).filter(x=>x.type==='snub' && x.key===k && fby(x.fid)).forEach(x=>{ const f=fby(x.fid); const o={n:f.name, pos:x.pos, prev:ldef(x.prev).name, liga};
+  if(!isI) (s.uq||[]).filter(x=>x.type==='snub' && !x.swap && x.key===k && fby(x.fid) && !competesAnywhere(s,x.fid)).forEach(x=>{ const f=fby(x.fid); const o={n:f.name, pos:x.pos, prev:ldef(x.prev).name, liga};
     const Tq=(set,c)=>{ const d=twDia(c); return pk(TW_SNUB[set][d]||TW_SNUB[set].neu); };
     add(asComp(x.fid), fill(Tq('comp',f.country),o), -1, END, {fid:x.fid});
     const isF=a=>(a.fav||[]).some(n=>nrm(n)===nrm(f.name)), isH=a=>(a.hate||[]).some(n=>nrm(n)===nrm(f.name));
     accs.filter(a=>isF(a) && !used.has(a.handle)).slice(0,3).forEach(a=>{ used.add(a.handle); add(a, fill(Tq('fan',a.country),o), -1, END); });
     accs.filter(a=>isH(a) && !used.has(a.handle)).slice(0,2).forEach(a=>{ used.add(a.handle); add(a, fill(Tq('hater',a.country),o), 1, END); }); });
+  // le quitaste el sitio para meter al que no quería viajar: comunicado, sus fans se quejan y a quien no le gustaba (y le gusta el nuevo) le parece bien
+  if(!isI) (s.uq||[]).filter(x=>x.type==='snub' && x.swap && x.key===k && fby(x.fid)).forEach(x=>{ const f=fby(x.fid); const o={n:f.name, y:fname(x.by), liga, emp:(state.company&&state.company.name)||'La empresa'};
+    const d=twDia(f.country); add(asComp(x.fid), fill(pk(TW_SWAP.comp[d]||TW_SWAP.comp.neu),o), -1, END-0.5, {fid:x.fid});
+    const T=(a,cat)=>{ const dd=twDia(a.country); return pk(TW_SWAP[cat][dd]||TW_SWAP[cat][dd==='es'?'es':'la']||TW_SWAP[cat].la); };
+    const isF=(a,n)=>(a.fav||[]).some(z=>nrm(z)===nrm(n)), isH=(a,n)=>(a.hate||[]).some(z=>nrm(z)===nrm(n));
+    accs.filter(a=>isF(a,f.name) && !used.has(a.handle)).slice(0,3).forEach(a=>{ used.add(a.handle); add(a, fill(T(a,'fan'),o), -1, END); });
+    accs.filter(a=>isH(a,f.name) && isF(a,o.y) && !used.has(a.handle)).slice(0,2).forEach(a=>{ used.add(a.handle); add(a, fill(T(a,'good'),o), 1, END); }); });
   // traspasos del año pasado: alegría si sigue el que la rompió, quejas si repite el que fracasó
   if(!isI && !isWS(k)){ ids.forEach(id=>{ const f=fby(id); const t=f && f.trf && f.trf[k]; if(!t || !t.res || t.y!==s.year-1) return;
       const o={n:f.name, liga}; const T=(a,cat)=>pk(TW_TRF[twDia(a.country)==='es'?'es':'la'][cat]);
@@ -6688,11 +6864,12 @@ function luGenerate(s, k){
       accs.filter(a=>isF(a) && !used.has(a.handle)).slice(0,4).forEach(a=>{ used.add(a.handle); add(a, fill(T(a, x.kind==='rb'?'rbFan':'ligaFan'),o), -2, END); });
       for(let q=0;q<rint(2,3);q++){ const a=free(); add(a, fill(T(a, x.kind==='rb'?'rb':'liga'),o), -1, END); } }); }
   // 5) cuenta de noticias con el cartel completo (McNoticias o Info Freestyle, nunca las dos)
-  { const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; const lf=leagueFlag(k); const dname=liga.toUpperCase();
+  { const nw=TW_NEWS[rint(0,2)]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; const lf=leagueFlag(k); const dname=liga.toUpperCase();
     const local=id=> !isI && !isWS(k) && ldef(k).countries.includes(fHome(fby(id)));
     const tag=nrm(liga.replace(/^FMS\s*/i,'')).replace(/[^a-z0-9]/g,'');
     let text;
-    if(nw.special==='mcn') text=`🚨 ${dname} ${s.year} ${lf} 🚨\n\n${shuffle(ids).map(id=>`${flagOf(fby(id).country)} ${fname(id).toUpperCase()}`).join('\n')}\n\n#fms${tag}${isI?'':' #fmsinternacional'}`;
+    if(nw.special==='pm') text=`¡Line-Up de la edición de ${s.year} de ${liga}! ${lf}\n\n${shuffle(ids).map(id=>`▶️ ${fname(id)}${local(id)?'':' '+flagOf(fby(id).country)}`).join('\n')}\n\n¿Quién será el campeón? 🏆`;
+    else if(nw.special==='mcn') text=`🚨 ${dname} ${s.year} ${lf} 🚨\n\n${shuffle(ids).map(id=>`${flagOf(fby(id).country)} ${fname(id).toUpperCase()}`).join('\n')}\n\n#fms${tag}${isI?'':' #fmsinternacional'}`;
     else { const T2=x=>x.charAt(0).toUpperCase()+x.slice(1); text=`¡Temporada ${s.year} - ${liga} ${lf}!\n\n${shuffle(ids).map(id=>`- ${nrm(fname(id)).toUpperCase()}${local(id)?'':' '+flagOf(fby(id).country)}`).join('\n')}\n\n#FMS${T2(tag)} ${lf}`; }
     add(acc, text, 0, END+1, {news:true}); }
   // Vida o muerte: el puesto del play off sale como "?" y la gente opina
@@ -6836,7 +7013,7 @@ function spkList(L){ if(!L) return []; if(!L.speakers){ L.speakers = L.speaker ?
 function spkSlots(key){ return isWS(key) ? 2 : ((state.company && state.company.stars>=3) ? 2 : 1); }
 function speakerKeyOf(s, name, onlyNat){ const n=nrm(name||''); return s.activeKeys.find(k=>(!onlyNat || !isWS(k)) && s.leagues[k] && spkList(s.leagues[k]).some(x=>nrm(x)===n)) || null; }
 function isSpeakerId(s, id){ const f=fby(id); return !!(f && SPEAKERS.some(sp=>sp.fs && nrm(sp.name)===nrm(f.name) && speakerKeyOf(s, sp.name))); }
-function competesAnywhere(s, id){ return s.activeKeys.some(k=>s.leagues[k] && s.leagues[k].competitors.includes(id)); }
+function competesAnywhere(s, id){ return s.activeKeys.some(k=>s.leagues[k] && (s.leagues[k].competitors.includes(id) || poList(s.leagues[k]).some(P=>P.b===id && !P.done))); }   // los aspirantes del Vida o muerte también compiten
 function spkRecontract(s, key){ const L=s.leagues[key];
   L.competitors.forEach(id=>{ const n=contractCost(fby(id),key), o=L.contracts[id]||0; if(n!==o){ state.company.money-=(n-o); s.fin.salaries+=(n-o); L.contracts[id]=n; } }); }
 function spkRefundAll(s, L){ spkList(L).forEach(n=>{ const c=(L.spkCosts||{})[n]||0; state.company.money+=c; s.fin.salaries-=c; }); L.speakers=[]; L.spkCosts={}; }
@@ -7013,6 +7190,12 @@ var JURADO_REAL=[
   {name:'Klibre', cost:700, likes:['Punchline','Ingenio']},
   {name:'Ginola', country:'Perú', cost:800, likes:['Ingenio','Flow']},
   {name:'Quezada', country:'México', cost:1000, likes:['Ingenio','Showman']},
+  {name:'Blazzt', country:'Chile', cost:800, likes:['Flow','Métrico']},
+  {name:'Dozer', cost:2000, likes:['Flow','Coherencia'], uff:true, txt:'0.7 uff'},
+  {name:'Pepe Grillo', cost:1000, likes:['Ingenio','Métrico']},
+  {name:'Sebas Arias', country:'Colombia', cost:900, likes:['Punchline','Flow']},
+  {name:'Hellmunth', country:'Colombia', cost:1000, likes:['Ingenio','Teatral']},
+  {name:'Elevn', cost:1000, likes:['Punchline','Teatral']},
 ];
 var JD_QUESADA_NO=['Piezas','Tess La'];
 function jdBy(n){ return JURADO_REAL.find(x=>x.name===n); }
@@ -7205,7 +7388,7 @@ function intlSpkAuto(s){ s.intl.speakers=intlSpkCands(s).sort((a,b)=>spkBy(b).co
 /* =========================================================================
    ENFRENTAMIENTOS OFICIALES: el día después del límite de cruces, X reacciona
 ========================================================================= */
-var PV_ADJ={fms_espana:'liga española',fms_argentina:'liga argentina',fms_mexico:'liga mexicana',fms_chile:'liga chilena',fms_peru:'liga peruana',fms_colombia:'liga colombiana',fms_caribe:'liga del Caribe'};
+var PV_ADJ={fms_venezuela:'liga venezolana',fms_uruguay:'liga uruguaya',fms_espana:'liga española',fms_argentina:'liga argentina',fms_mexico:'liga mexicana',fms_chile:'liga chilena',fms_peru:'liga peruana',fms_colombia:'liga colombiana',fms_caribe:'liga del Caribe'};
 var TWP_BASE={
   both:['{a} vs {b}. Esta jornada la veo dos veces 🔥','{a} contra {b}: batallón asegurado','No me importa quién gane: {a} vs {b} es puro arte','Dos de mis favoritos frente a frente. {a} vs {b}, qué maravilla','{a} vs {b} es la batalla que llevaba tiempo esperando','Si {a} y {b} están inspirados, esto va a ser historia','Gane quien gane, con {a} vs {b} ganamos todos','Me pido primera fila para el {a} vs {b}'],
   hateBoth:['{a} vs {b}… esa batalla me la salto','Ni {a} ni {b}. Ese cruce no lo veo','{a} contra {b}: momento perfecto para ir por algo de comer','Con {a} vs {b} paso, la verdad','{a} vs {b} no me dice nada, siguiente','De toda la jornada, {a} vs {b} es la que menos me apetece'],
@@ -7544,10 +7727,12 @@ function pvGenerate(s, k, j){
   // uno o dos competidores calientan su batalla (nunca entre rivales con mala sangre; Navas va por su cuenta)
   shuffle(items.filter(it=>!it.ex && !it.po && !isVm(it) && !isRival(it.a,it.b) && !(nv && (it.a===nv.id || it.b===nv.id)))).slice(0,rint(1,2)).forEach(it=>{ const me=Math.random()<0.5?it.a:it.b, other=me===it.a?it.b:it.a; const f=fby(me);
     add({handle:twHandle(f.name), name:f.name, country:f.country, verified:true, img:photoOf(f)}, fill(Math.random()<0.6 ? twCompone(s,'comp',twDia(f.country)) : pk(TWP_COMP[twDia(f.country)]||TWP_COMP.neu),{a:fname(me), b:fname(other), h:twHandle(fname(other))}), 0, items.findIndex(x=>x===it)); });
-  // resumen oficial: Info Freestyle o McNoticias (50/50)
+  // resumen oficial: Info Freestyle, McNoticias o Punchline Media (1/3 cada uno)
   { const jn=j+1, last=jn===nJ(k), lf=leagueFlag(k); const nat=id=> !isWS(k) && lc.includes(fby(id).country); const order=items.filter(x=>!x.ex).concat(items.filter(x=>x.ex));
-    const nw=TW_NEWS[Math.random()<0.5?0:1]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; let text;
-    if(nw.special==='info'){ const adj=isWS(k)?'FMS World Series':(PV_ADJ[k]||liga);
+    const nw=TW_NEWS[rint(0,2)]; const acc={...nw, img:EXTRA_IMG[nw.img]||null}; let text;
+    if(nw.special==='pm'){ const nm=(id,vm)=>vm?'Ganador del Vida o muerte':fname(id)+(nat(id)?'':' '+flagOf(fby(id).country));
+      text=`¡Batallas confirmadas ${liga} - Jornada ${jn}! ${lf}🎤🔥\n\n${order.map(x=>`- ${nm(x.a,x.vmA)} 🆚 ${nm(x.b,x.vmB)}${x.po?' (Vida o muerte)':(x.ex?' (Exhibición)':(x.ep?' (Extraplayer)':''))}`).join('\n')}\n\n¿Quién será el campeón? 🏆`; }
+    else if(nw.special==='info'){ const adj=isWS(k)?'FMS World Series':(PV_ADJ[k]||liga);
       const intro = jn===1 ? `Arranca la ${adj}: estos son los primeros enfrentamientos de la temporada. 🎤` : (last ? (()=>{ const st=computeStandings(L); return st.length>1 && st[0].pts-st[1].pts>3 ? `Llega la última jornada de la ${adj}, con ${fname(st[0].id)} ya proclamado campeón. 🏆` : `Hoy viviremos la última jornada de la ${adj}, donde conoceremos al campeón del torneo. 🏆`; })() : pick([`Nueva jornada de la ${adj}. Estos son los enfrentamientos:`,`La ${adj} sigue: así quedan los cruces de la jornada ${jn}.`,`Vuelve la ${adj} con una nueva jornada.`]));
       const nm=(id,vm)=>vm?'GANADOR DEL VIDA O MUERTE':nrm(fname(id)).toUpperCase()+(nat(id)?'':' '+flagOf(fby(id).country));
       text=`¡Oficial! - Jornada ${jn} de ${liga} ${lf}\n\n${intro}\n\n${order.map(x=>`- ${nm(x.a,x.vmA)} vs ${nm(x.b,x.vmB)}${x.po?' (Vida o muerte)':(x.ex?'(Exhibición)':(x.ep?' (Extraplayer)':''))}`).join('\n')}`; }
@@ -7588,9 +7773,9 @@ function openPairs(key, j){
 /* =========================================================================
    X: CAMPEÓN DE LIGA (después de la animación de campeón)
 ========================================================================= */
-var WOMEN_FS=['Bellota','KMC','NG','Azuky','Marithea','Sara Socas','Pandora','Sumeria','Necia','Bohemia','Piromana','Roma','Sandra','Eskai','Arcoiris','Adriana','Dalia','Dalia Castella','Sophia','Papicha','Babi','La Prima','La Joaqui','Valex','Cristonita'];
+var WOMEN_FS=['Bellota','KMC','NG','Azuky','Marithea','Sara Socas','Pandora','Sumeria','Necia','Bohemia','Piromana','Roma','Sandra','Eskai','Arcoiris','Adriana','Dalia','Dalia Castella','Sophia','Papicha','Babi','La Prima','La Joaqui','Valex','Cristonita','Staner','Piba Cósmica','Saga'];
 function isWoman(id){ const f=fby(id); return !!(f && WOMEN_FS.some(n=>nrm(n)===nrm(f.name))); }
-var CH_COUNTRY={fms_espana:['ESPAÑA','españoles'],fms_argentina:['ARGENTINA','argentinos'],fms_mexico:['MÉXICO','mexicanos'],fms_chile:['CHILE','chilenos'],fms_peru:['PERÚ','peruanos'],fms_colombia:['COLOMBIA','colombianos'],fms_caribe:['CARIBE','caribeños']};
+var CH_COUNTRY={fms_venezuela:['VENEZUELA','venezolanos'],fms_uruguay:['URUGUAY','uruguayos'],fms_espana:['ESPAÑA','españoles'],fms_argentina:['ARGENTINA','argentinos'],fms_mexico:['MÉXICO','mexicanos'],fms_chile:['CHILE','chilenos'],fms_peru:['PERÚ','peruanos'],fms_colombia:['COLOMBIA','colombianos'],fms_caribe:['CARIBE','caribeños']};
 function champWord(n, fem){ const w=['','campeón','bicampeón','tricampeón','tetracampeón','pentacampeón','hexacampeón','heptacampeón','octacampeón'][n] || `${n} veces campeón`; return fem ? w.replace('campeón','campeona') : w; }
 function leagueTitles(k, id){ let n=0, streak=0, broken=false; for(let i=state.seasons.length-1;i>=0;i--){ const o=state.seasons[i]; const L=o.leagues&&o.leagues[k];
     const won=!!(L && (o.activeKeys||[]).includes(k) && (L.finalStandings||[])[0]===id); if(won) n++; if(!broken){ if(won) streak++; else broken=true; } } return {n, streak}; }
@@ -7847,7 +8032,7 @@ function openSettings(){
   flushSave();
   openModal(`<h3>⚙️ Ajustes</h3>
     <div class="set-list">
-      <button class="set-item" onclick="state.ui.edQ=''; openEditor()"><span class="set-ic">✏️</span><span><b>Modo editor</b><small>${state.company?'Cambia nivel, fama, hype y estilo de los freestylers. A los creados por ti también el nombre y la foto':'Edita el nombre, la foto y el estilo de tus competidores creados. Carga una partida para editar a todos'}</small></span></button>
+      <button class="set-item ${state.company&&isPandemic()?'locked':''}" onclick="state.ui.edQ=''; openEditor()"><span class="set-ic">${state.company&&isPandemic()?'🔒':'✏️'}</span><span><b>Modo editor</b><small>${state.company&&isPandemic()?'Bloqueado en el modo Pandemia':state.company?'Cambia nivel, fama, hype y estilo de los freestylers. A los creados por ti también el nombre y la foto':'Edita el nombre, la foto y el estilo de tus competidores creados. Carga una partida para editar a todos'}</small></span></button>
       ${fsAvailable()?`<button class="set-item" onclick="toggleFullscreen(); setTimeout(openSettings,250)"><span class="set-ic">🖥️</span><span><b>Pantalla completa: ${fsOn()?'activada':'desactivada'}</b><small>${fsOn()?'Pulsa para salir':'Pulsa para activarla'} · también con la tecla F11</small></span></button>`:''}
       <button class="set-item" onclick="openAchievements(true)"><span class="set-ic">${achImg(28)}</span><span><b>Logros</b><small>${achDone().length} de ${ACHIEVEMENTS.length} desbloqueados</small></span></button>
       <button class="set-item" onclick="openAddFS()"><span class="set-ic">➕</span><span><b>Añadir competidor</b><small>Crea un freestyler nuevo con su nacionalidad, foto y estilo</small></span></button>
@@ -7900,6 +8085,7 @@ function edList(){   // con partida: todos los freestylers de la partida; sin pa
 }
 function edFind(id){ return edList().find(f=>f.id===id); }
 function openEditor(){
+  if(state.company && isPandemic()){ toast('En el modo Pandemia el editor está bloqueado.'); closeModal(); return; }
   const q=(state.ui.edQ||'').toLowerCase();
   const all=edList(); const list=all.filter(f=>fMatch(f,q)).sort((a,b)=>(b.custom?1:0)-(a.custom?1:0) || b.fama-a.fama || a.name.localeCompare(b.name)).slice(0,80);
   openModal(`<h3>✏️ Modo editor</h3>
@@ -7935,7 +8121,7 @@ function edPhoto(inp){ const file=inp.files&&inp.files[0]; if(!file) return; con
   r.onload=()=>{ const im=new Image(); im.onload=()=>{ const S=160, c=document.createElement('canvas'); c.width=S; c.height=S; const g=c.getContext('2d');
       const k=Math.max(S/im.width, S/im.height), w=im.width*k, h=im.height*k; g.drawImage(im,(S-w)/2,(S-h)/2.6,w,h);
       state.ui.edFS.photo=c.toDataURL('image/jpeg',0.82); openEditFS(state.ui.edFS.id, true); }; im.src=r.result; }; r.readAsDataURL(file); }
-function edSave(){
+function edSave(){ if(state.company && isPandemic()){ toast('En el modo Pandemia el editor está bloqueado.'); return; }
   const d=state.ui.edFS; if(!d) return; const f=edFind(d.id); if(!f) return;
   const oldName=f.name; let name=oldName;
   if(f.custom){ name=(d.name||'').trim(); if(!name){ toast('El nombre no puede quedar vacío.'); return; }
@@ -7974,8 +8160,26 @@ function uqSnubs(s){
       if(Math.random()>=0.25) return;
       const key = natKeys(s).includes(pk) ? pk : natKeys(s)[0]; if(!key) return; const L=s.leagues[key];
       const nd=L.dates.slice().sort((a,b)=>a-b)[0]; const lu = nd!=null ? nd-LU_DAYS : 5;
-      uqPush(s, {day:Math.max(0, lu-rint(2,4)), type:'snub', key, prev:pk, pos:i+1, fid:id}); }); });
+      uqPush(s, {day:s.day, type:'snub', key, prev:pk, pos:i+1, fid:id}); }); });   // al empezar la temporada: antes que las bajas y sustituciones
 }
+var TW_SWAP={   // le quitaste el sitio para meter al extranjero que no quería viajar
+  comp:{
+    es:['Chicos, lo siento, pero este año no voy a estar en {liga}. {emp} me ha quitado el contrato a última hora. Perdón a todos los que me queríais ver competir en la liga','Pues nada, me caigo de {liga}. {emp} me quitó el contrato a última hora para meter a otro. Lo siento mucho por los que estabais esperando verme','Os tengo que dar una mala noticia: {emp} me ha dejado fuera de {liga} a última hora. No es decisión mía, tío. Gracias por el apoyo de siempre'],
+    ar:['Chicos, perdón, pero este año no voy a estar en {liga}. {emp} me sacó el contrato a último momento. Perdón a todos los que me querían ver competir','Bueno, me bajan de {liga}. {emp} me sacó el contrato a último momento para meter a otro, che. Lo siento por los que esperaban verme','Les tengo que dar una mala noticia: {emp} me dejó afuera de {liga} a último momento. No es decisión mía, boludo. Gracias por el aguante de siempre'],
+    mx:['Banda, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Pues ya, me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro, wey. Lo siento por los que esperaban verme','Les tengo una mala noticia, carnales: {emp} me dejó fuera de {liga} a última hora. No es decisión mía. Gracias por el apoyo de siempre'],
+    cl:['Cabros, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Ya po, me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro, weón. Lo siento por los que esperaban verme','Les tengo una mala noticia: {emp} me dejó fuera de {liga} a última hora po. No es decisión mía. Gracias por el apoyo de siempre'],
+    pe:['Causas, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Ya fue, me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro, mano. Lo siento por los que esperaban verme','Les tengo una mala noticia: {emp} me dejó fuera de {liga} a última hora. No es decisión mía, causa. Gracias por el apoyo de siempre'],
+    co:['Parceros, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Bueno, me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro, parce. Lo siento por los que esperaban verme','Les tengo una mala noticia: {emp} me dejó por fuera de {liga} a última hora. No es decisión mía. Gracias por el apoyo de siempre'],
+    car:['Mi gente, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Bueno, me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro, mano. Lo siento por los que esperaban verme','Les tengo una mala noticia: {emp} me dejó fuera de {liga} a última hora. No es decisión mía, pana. Gracias por el apoyo de siempre'],
+    neu:['Chicos, lo siento, pero este año no voy a estar en {liga}. {emp} me quitó el contrato a última hora. Perdón a todos los que me querían ver competir','Me bajan de {liga}. {emp} me quitó el contrato a última hora para meter a otro. Lo siento por los que esperaban verme','Mala noticia: {emp} me dejó fuera de {liga} a última hora. No es decisión mía. Gracias por el apoyo de siempre']},
+  fan:{
+    es:['Lo de {emp} con {n} es de vergüenza. Quitarle el contrato a última hora no se le hace a nadie','{emp} dejando tirado a {n} a última hora. Así no, eh','Sin {n} en {liga} por un cambio de última hora. {emp}, explicaos','Qué falta de respeto lo de {emp} con {n}. Me borro de {liga}'],
+    ar:['Lo de {emp} con {n} es una vergüenza. Sacarle el contrato a último momento no se hace, loco','{emp} dejando tirado a {n} a último momento. Así no, che','Sin {n} en {liga} por un cambio de último momento. {emp}, expliquen','Qué falta de respeto lo de {emp} con {n}, boludo'],
+    la:['Lo de {emp} con {n} es una vergüenza. Quitarle el contrato a última hora no se le hace a nadie','{emp} dejando tirado a {n} a última hora. Así no','Sin {n} en {liga} por un cambio de última hora. {emp}, expliquen','Qué falta de respeto lo de {emp} con {n}']},
+  good:{
+    es:['Un gran acierto quitar a {n} para traer a {y}','Por fin: fuera {n} y dentro {y}. {liga} gana con el cambio','Bien visto, {emp}. {y} por {n} es una mejora clarísima'],
+    ar:['Un golazo sacar a {n} para traer a {y}','Por fin: afuera {n} y adentro {y}. {liga} gana con el cambio, che','Bien ahí, {emp}. {y} por {n} es una mejora clarísima'],
+    la:['Un gran acierto quitar a {n} para traer a {y}','Por fin: fuera {n} y dentro {y}. {liga} gana con el cambio','Bien visto, {emp}. {y} por {n} es una mejora clarísima']} };
 var TW_SNUB={
   comp:{
     es:['Terminé {pos}º en {prev} y me quedo fuera de {liga}. Me lo gané en la tarima y aun así no me renuevan. Que cada uno saque sus conclusiones','Ni una llamada. Top {pos} en {prev} y fuera. Vaya tela','Viendo el line up de {liga}… Top {pos} el año pasado y no estoy. Esto no va de rendimiento, está claro'],
@@ -8153,10 +8357,18 @@ const ACH_KEY='fms_ceo_ach';
     desc:`Consigue ${n} estrella${n>1?'s':''} de empresa en el modo ${m==='empresario'?'Empresario':'Pandemia'}`, pts:PTS[m][n-1], iconFn:()=>achModeIcon(m,n)}); });
 })();
 ACHIEVEMENTS.push({id:'azuky_fans', name:'Enfada a las fans de Azuky', desc:'Haz que las fans de Azuky se rebelen contra FMS México', pts:20, iconFn:()=>{ const im=typeof EXTRA_IMG!=='undefined' && EXTRA_IMG.ach_angry; return im?`<img class="ach-img" src="${im}" alt="" style="width:80%;height:80%">`:'😡'; }});
+// El niño formato: Gazir campeón de todas las FMS posibles (nacionales originales, World Series e Internacional; no cuentan Venezuela ni Uruguay)
+ACHIEVEMENTS.push({id:'nino_formato', name:'El niño formato', desc:'Haz que Gazir gane todas las FMS posibles', pts:50, iconFn:()=>{ const im=typeof EXTRA_IMG!=='undefined' && EXTRA_IMG.emo_trophy; return im?`<img class="ach-img" src="${im}" alt="" style="width:80%;height:80%">`:'🏆'; }});
+function gazirAllFms(){ const g=state.freestylers.find(f=>!f.custom && f.name==='Gazir'); if(!g) return false;
+  const need=new Set([...LEAGUES.filter(l=>!l.sbx).map(l=>l.key), WS.key, INTL.key]); const won=new Set();
+  state.seasons.forEach(o=>{ (o.activeKeys||[]).forEach(k=>{ const L=o.leagues&&o.leagues[k]; if(L && L.finished && (L.finalStandings||[])[0]===g.id) won.add(k); });
+    if(o.intl && o.intl.played && o.intl.champion===g.id) won.add(INTL.key); });
+  return [...need].every(k=>won.has(k)); }
 function achModeIcon(m, n){ const im=typeof EXTRA_IMG!=='undefined' && EXTRA_IMG['mode_'+m]; return `<span class="ach-mode">${im?`<img src="${im}" alt="">`:(m==='pandemia'?'🦠':'💼')}<b>${'★'.repeat(n)}</b></span>`; }
 function achIcon(a, sz){ return a.iconFn ? a.iconFn() : (a.icon || achImg(sz)); }
 function checkAchievements(){ const c=state.company; if(!c) return; const m=c.mode||'empresario';
-  ACHIEVEMENTS.forEach(a=>{ if(a.mode && a.mode===m && (c.stars||0)>=a.stars) unlockAch(a.id); }); }
+  ACHIEVEMENTS.forEach(a=>{ if(a.mode && a.mode===m && (c.stars||0)>=a.stars) unlockAch(a.id); });
+  if(!achHas('nino_formato')){ try{ if(gazirAllFms()) unlockAch('nino_formato'); }catch(e){} } }
 function achStore(){ try{ return JSON.parse(localStorage.getItem(ACH_KEY)||'{}')||{}; }catch(e){ return {}; } }
 function achDone(){ const st=achStore(); return ACHIEVEMENTS.filter(a=>st[a.id]); }
 function achHas(id){ return !!achStore()[id]; }
@@ -8244,7 +8456,7 @@ function histMatch(m){ const r=m.result; const wa=r&&r.winner===m.a, wb=r&&r.win
    PALMARÉS: todas las competiciones y sus campeones (ranking de títulos)
 ========================================================================= */
 function palmaresComps(){
-  const L=LEAGUES.map(d=>({key:d.key, name:d.name, kind:'fms'}));
+  const L=LEAGUES.filter(d=>!d.sbx || isSandbox() || state.seasons.some(o=>(o.activeKeys||[]).includes(d.key))).map(d=>({key:d.key, name:d.name, kind:'fms'}));
   return [...L, {key:WS.key, name:WS.name, kind:'fms'}, {key:INTL.key, name:INTL.name, kind:'intl'}, {key:'fms_under', name:'FMS Under', kind:'fu'},
     ...RB_NATS.map(d=>({key:d.key, name:d.name, kind:'rb'})), {key:RB_INT.key, name:RB_INT.name, kind:'rbi'},
     ...UNDER_DEFS.map(d=>({key:d.key, name:d.name, kind:'under'})), ...UNDER2_DEFS.map(d=>({key:d.key, name:d.name, kind:'under'}))];
@@ -8299,15 +8511,48 @@ function fsPalmaresHtml(id){
 /* ---------- ranking histórico de MVPs de jornada (todas tus ligas, desde la primera temporada) ---------- */
 function allMVPs(){ const out=[]; state.seasons.forEach(s=>{ Object.keys(s.leagues||{}).forEach(k=>{ if(!(s.activeKeys||[]).includes(k)) return; const L=s.leagues[k];
     (L.mvps||[]).forEach((m,j)=>{ if(m && m.id && fby(m.id)) out.push({id:m.id, pts:m.pts||0, key:k, year:s.year, j}); }); }); }); return out; }
+function recTabs(){ const t=state.ui.recTab==='rec'?'rec':'mvp'; return `<div class="hs-tabs rec-tabs"><button class="hs-tab ${t==='mvp'?'on':''}" onclick="state.ui.recTab='mvp'; render()">⭐ <span>Ranking de MVPs</span></button><button class="hs-tab ${t==='rec'?'on':''}" onclick="state.ui.recTab='rec'; render()">🏅 <span>Récords</span></button></div>`; }
 function mvpCountOf(id){ return allMVPs().filter(m=>m.id===id).length; }
+/* ---------- RECORDS: ranking de MVPs + récords históricos de tus FMS ---------- */
+// recorre todas las batallas de FMS de todas tus temporadas (ligas, exhibiciones, Vida o muerte, World Series con extraplayers, Internacional y FMS Under)
+function recEachBattle(cb){ const ok=m=>m && m.result && m.a && m.b;
+  state.seasons.forEach(s=>{ (s.activeKeys||[]).forEach(k=>{ const L=s.leagues&&s.leagues[k]; if(!L) return;
+      (L.rounds||[]).flat().forEach(m=>{ if(ok(m)) cb(m,k,s.year); });
+      [...Object.values(L.exhib||{}), ...Object.values(L.fexhib||{})].forEach(x=>{ if(x && ok(x.m)) cb(x.m,k,s.year); });
+      poList(L).forEach(P=>{ if(ok(P.m)) cb(P.m,k,s.year); });
+      if(L.fu && L.fu.bracket) [...(L.fu.bracket.rounds||[]).flat(), L.fu.bracket.third].forEach(m=>{ if(ok(m)) cb(m,'fu',s.year); }); });
+    if(s.intlEnabled!==false && s.intl && s.intl.bracket) [...(s.intl.bracket.rounds||[]).flat(), s.intl.bracket.third].forEach(m=>{ if(ok(m)) cb(m,INTL.key,s.year); }); }); }
+function recTitles(){ const T={}; const add=(id,k,y)=>{ if(!id || !fby(id)) return; const t=T[id]||(T[id]={id, n:0, list:[]}); t.n++; t.list.push({k,y}); };
+  state.seasons.forEach(s=>{ (s.activeKeys||[]).forEach(k=>{ const L=s.leagues&&s.leagues[k]; if(L && L.finished) add((L.finalStandings||[])[0], k, s.year); });
+    if(s.intl && s.intl.played) add(s.intl.champion, INTL.key, s.year); });
+  return Object.values(T).sort((a,b)=>b.n-a.n || fname(a.id).localeCompare(fname(b.id),'es')); }
+function recData(){ const bat={}, vw={}, top={};
+  recEachBattle((m,k,y)=>{ [m.a,m.b].forEach(id=>{ if(!fby(id)) return; bat[id]=(bat[id]||0)+1; vw[id]=(vw[id]||0)+(m.views||0); });
+    if(k!=='fu' && m.views && (!top[k] || m.views>top[k].m.views)) top[k]={m, y}; });
+  const rank=o=>Object.entries(o).map(([id,v])=>({id,v})).sort((a,b)=>b.v-a.v || fname(a.id).localeCompare(fname(b.id),'es'));
+  const order=[...LEAGUES.map(d=>d.key), WS.key, INTL.key];
+  return {bat:rank(bat), vw:rank(vw), top:order.filter(k=>top[k]).map(k=>({k, ...top[k]})), titles:recTitles()}; }
+function recRows(list, val, emptyTxt){ if(!list.length) return `<p class="step-note">${emptyTxt}</p>`;
+  let pos=0, prev=null; return `<table class="standings rec-tab"><tbody>${list.slice(0,10).map((r,i)=>{ const v=val(r); if(v!==prev){ pos=i+1; prev=v; }
+    return `<tr class="${pos===1?'q':''}"><td class="pos">${pos}</td><td><span style="display:inline-flex;align-items:center;gap:8px;cursor:pointer" onclick="showFreestyler('${r.id}')">${miniAvatar(r.id,26)} ${fnameH(r.id)} <small class="step-note">${flagH(fby(r.id).country)}</small></span></td><td class="num pts">${v}</td></tr>`; }).join('')}</tbody></table>`; }
+function renderRecords(){ const R=recData(); const nf=n=>Number(n).toLocaleString('es-ES');
+  const card=(t,sub,body)=>`<div class="rec-card"><h3>${t}</h3>${sub?`<p class="step-note">${sub}</p>`:''}${body}</div>`;
+  return `<div class="rec-grid">
+    ${card('🎤 Más batallas en FMS','', recRows(R.bat, r=>nf(r.v), 'Todavía no se ha jugado ninguna batalla.'))}
+    ${card('👁️ Más visitas en FMS','', recRows(R.vw, r=>nf(r.v), 'Todavía no hay visitas.'))}
+    ${card('🏆 Más trofeos de FMS','', recRows(R.titles.map(t=>({id:t.id, v:t.n})), r=>r.v, 'Todavía no hay campeones.'))}
+    ${card('🔥 Batalla más vista de cada FMS','', R.top.length ? `<div class="rec-top">${R.top.map(x=>{ const m=x.m; const w=m.result.winner;
+      return `<div class="rec-bt">${leagueDot(x.k,22)}<div class="rec-bt-m"><b>${esc(ldef(x.k).short||ldef(x.k).name)} ${x.y}</b><span><span class="${w===m.a?'w':''}">${fnameH(m.a)}</span> vs <span class="${w===m.b?'w':''}">${fnameH(m.b)}</span>${m.ex?' <small>(exhibición)</small>':''}</span></div><span class="rec-bt-v">${nf(m.views)}</span></div>`; }).join('')}</div>` : '<p class="step-note">Todavía no hay batallas.</p>')}
+  </div>`; }
 function renderMVPs(){
+  if(state.ui.recTab==='rec') return `<div class="detail-head"><h1>Records</h1></div>${recTabs()}${renderRecords()}`;
   const all=allMVPs(); const keys=[...new Set(all.map(m=>m.key))].sort((a,b)=>{ const o=k=>k===WS.key?99:LEAGUES.findIndex(d=>d.key===k); return o(a)-o(b); });
   const flt=keys.includes(state.ui.mvpKey)?state.ui.mvpKey:'all'; const list=flt==='all'?all:all.filter(m=>m.key===flt);
   const by={}; list.forEach(m=>{ const r=by[m.id]||(by[m.id]={id:m.id, n:0, pts:0, best:null, keys:{}, seasons:new Set()}); r.n++; r.pts+=m.pts; r.keys[m.key]=(r.keys[m.key]||0)+1; r.seasons.add(m.year); if(!r.best || m.pts>r.best.pts) r.best=m; });
   const rows=Object.values(by).sort((a,b)=>b.n-a.n || b.pts-a.pts || fname(a.id).localeCompare(fname(b.id),'es'));
   let pos=0, prev=null; rows.forEach((r,i)=>{ if(r.n!==prev){ pos=i+1; prev=r.n; } r.pos=pos; });
   const top=list.slice().sort((a,b)=>b.pts-a.pts)[0];
-  return `<div class="detail-head"><h1>Ranking de MVPs</h1></div>
+  return `<div class="detail-head"><h1>Records</h1></div>${recTabs()}
   <p class="step-note">Todos los MVPs de jornada desde tu primera temporada. ${list.length} jornada${list.length===1?'':'s'} con MVP${top?` · Récord de puntos: <b>${fnameH(top.id)}</b> con ${fpt(top.pts)} (${esc(ldef(top.key).short)} ${top.year}, J${top.j+1})`:''}</p>
   ${keys.length?`<div class="hs-tabs"><button class="hs-tab ${flt==='all'?'on':''}" onclick="state.ui.mvpKey='all'; render()">⭐ <span>Todas</span></button>${keys.map(k=>`<button class="hs-tab ${flt===k?'on':''}" onclick="state.ui.mvpKey='${k}'; render()">${leagueDot(k,20)}<span>${esc(ldef(k).short)}</span></button>`).join('')}</div>`:''}
   ${rows.length?`<div style="overflow-x:auto;"><table class="standings mvp-rank"><thead><tr><th>#</th><th>Freestyler</th><th class="num">MVPs</th><th class="num">Puntos</th><th class="num">Media</th><th>Mejor jornada</th><th>Ligas</th></tr></thead><tbody>
@@ -8524,9 +8769,11 @@ const ASC_UNDER=[1500,1750,1500,1000];            // final, semis, cuartos, octa
 const ASC_RB=[1500,2000,1500,1500];               // final, semis, cuartos, octavos
 let ASC_GAIN=null;   // puntos que se van sumando en la competición que se está jugando
 function ascAdd(s, id, pts){ if(!id || !pts) return; if(signedLeagueOf(s, id)) return;   // los que compiten en cualquier FMS (aunque no sea la de su país) no suman para el ascenso
-  if(isTeamRQ(id, s)) pts=Math.round(pts*1.2); if(!s.ascPts) s.ascPts={}; s.ascPts[id]=(s.ascPts[id]||0)+pts; if(ASC_GAIN) ASC_GAIN[id]=(ASC_GAIN[id]||0)+pts; }
+  if(isTeamRQ(id, s)) pts=pts*1.2; pts=Math.round(pts/25)*25; if(!s.ascPts) s.ascPts={}; s.ascPts[id]=(s.ascPts[id]||0)+pts; if(ASC_GAIN) ASC_GAIN[id]=(ASC_GAIN[id]||0)+pts; }
 // liga nacional por la que asciende cada uno: la de su país; si su país no tiene FMS propia, cuenta para FMS Caribe
-function ascLeagueOf(f){ if(!f) return null; const c=fHome(f); const l=LEAGUES.find(x=>x.countries.includes(c)); return l ? l.key : 'fms_caribe'; }
+function ascLeagueOf(f){ if(!f) return null; const c=fHome(f); const s=typeof cur==='function'?cur():null;
+  const sb=s && isSandbox() && LEAGUES.find(x=>x.sbx && x.countries.includes(c) && (s.activeKeys||[]).includes(x.key)); if(sb) return sb.key;   // Sandbox: FMS Venezuela / Uruguay activas
+  const l=LEAGUES.find(x=>!x.sbx && x.countries.includes(c)); return l ? l.key : 'fms_caribe'; }
 function ascAwardKO(s, B, table, mult, third){ if(!B || !B.rounds) return; const R=B.rounds; const n=R.length;
   R.forEach((r,ri)=>{ const fromEnd=n-1-ri; const p=table[fromEnd]||0; if(p) r.forEach(m=>{ if(m.result) ascAdd(s, m.result.winner, p*mult); }); });
   if(third && B.third && B.third.result) ascAdd(s, B.third.result.winner, third*mult); }
@@ -8547,7 +8794,8 @@ function showAscGain(key, day){ const s=cur(); const rb=isRB(key); const ev=rb ?
       : '<p class="step-note">Nadie de esta competición suma para el ascenso de tus FMS (o ya compiten en ellas).</p>'}
     <div class="modal-actions"><button class="btn" onclick="closeModal(); showAscRanking('${rows[0]?rows[0].k:''}')">Ver ranking</button><button class="btn primary" onclick="closeModal(); render()">Seguir</button></div>`, 'agm');
   themeEl(document.getElementById('modalRoot'), key); document.body.classList.add('noscroll'); }
-function ascAwardRB(s, ids, B, mult, ev){ if(ascOf(s).mode!=='rank') return; ASC_GAIN={}; (ids||[]).forEach(id=>ascAdd(s, id, 500*mult)); ascAwardKO(s, B, ASC_RB, mult, 500); if(ev) ev.ascGain=ASC_GAIN; ASC_GAIN=null; }
+var RB_ASC_MULT=0.85;   // Red Bull da algo menos de ascenso que antes, pero sigue por encima de las Under
+function ascAwardRB(s, ids, B, mult, ev){ if(ascOf(s).mode!=='rank') return; ASC_GAIN={}; mult*=RB_ASC_MULT; (ids||[]).forEach(id=>ascAdd(s, id, 500*mult)); ascAwardKO(s, B, ASC_RB, mult, 500); if(ev) ev.ascGain=ASC_GAIN; ASC_GAIN=null; }
 // ranking de una liga: los de su país que no están en ella esta temporada
 function ascRanking(s, k){ const L=s.leagues[k]; const d=ldef(k); if(!L || !d || !d.countries) return []; const P=s.ascPts||{};
   return Object.keys(P).map(id=>({id, pts:P[id]})).filter(r=>{ const f=fby(r.id); return f && r.pts>0 && ascLeagueOf(f)===k && !signedLeagueOf(s, r.id); })
@@ -8592,7 +8840,7 @@ function ascLeagueInit(L, key, prev){
     else { L.poDef=st[7]||null; L.poDefPos=[8]; L.po={a:null, b:null, auto:true}; } }
 }
 function ascCandOk(s, k, id){ const f=fby(id); if(!f) return false; const L=s.leagues[k];
-  return !L.competitors.includes(id) && !signedLeagueOf(s,id) && !isJudgeId(s,id) && !isSpeakerId(s,id) && !isBanned(f) && !(s.refused||[]).includes(id); }
+  return !L.competitors.includes(id) && !signedLeagueOf(s,id) && !isJudgeId(s,id) && !isSpeakerId(s,id) && !isBanned(f) && !(s.refused||[]).includes(id) && !(foreignLocked() && isForeignTo(k,f)); }
 // firma al que asciende (fijo) y prepara el play off
 function ascSetup(s, k){ const L=s.leagues[k]; if(!L || !L.asc) return;
   if(!L.asc.noUp && !L.ascUp && !L.ascTie){ const up=L.asc.list.find(id=>ascCandOk(s,k,id)); if(up) ascSign(s,k,up); }
@@ -8669,7 +8917,7 @@ function poOpenManual(k){ const s=cur(); if(s.phase!=='pre') return; const L=s.l
     <div class="pick-grid uq-grid">${pool.map(f=>`<div class="pick-item ${d.b===f.id?'checked':''}" onclick="state.ui.poM.b='${f.id}'; poOpenManual('${k}')"><span class="mini-avatar" style="width:32px;height:32px;font-size:15px;${avatarDivStyle(f)}">${avatarContent(f)}</span><div style="min-width:0;"><div class="pname">${nameH(f)}</div>${styleTag(f)}<div class="pcountry">${esc(f.country)}</div></div><div class="pick-stats">Nivel <b>${f.nivel}</b><br>Fama <b>${f.fama}</b></div></div>`).join('')}</div>
     <div class="modal-actions"><button class="btn" onclick="state.ui.poM=null; closeModal()">Cancelar</button><button class="btn primary" ${d.a&&d.b?'':'disabled'} onclick="poSaveManual('${k}')">Crear Vida o muerte</button></div>`, 'uqwide');
 }
-function poSaveManual(k){ const s=cur(); const L=s.leagues[k]; const d=state.ui.poM; if(!d || !d.a || !d.b) return; if(foreignLocked() && isForeignTo(k,fby(d.b))){ toast(isPandemic()?'En Pandemia no se puede fichar fuera del país de la liga.':'Los fichajes de otros países se desbloquean con la primera estrella de la empresa.'); return; } const old=L.po; L.po={a:d.a, b:d.b, manual:true}; if(!poCanPay(s,L)){ toast(`No te llega: para este Vida o muerte necesitas ${money(poNeed(s,L))} en caja.`); L.po=old; if(!old) delete L.po; return; } state.ui.poM=null; closeModal(); toast(`Vida o muerte: ${fname(d.a)} contra ${fname(d.b)} en la J1.`); render(); }
+function poSaveManual(k){ const s=cur(); const L=s.leagues[k]; const d=state.ui.poM; if(!d || !d.a || !d.b) return; if(isJudgeId(s,d.b) || isSpeakerId(s,d.b)){ toast(`${fname(d.b)} está en el staff (jurado o host): no puede jugar el Vida o muerte.`); return; } if(foreignLocked() && isForeignTo(k,fby(d.b))){ toast(isPandemic()?'En Pandemia no se puede fichar fuera del país de la liga.':'Los fichajes de otros países se desbloquean con la primera estrella de la empresa.'); return; } const old=L.po; L.po={a:d.a, b:d.b, manual:true}; if(!poCanPay(s,L)){ toast(`No te llega: para este Vida o muerte necesitas ${money(poNeed(s,L))} en caja.`); L.po=old; if(!old) delete L.po; return; } state.ui.poM=null; closeModal(); toast(`Vida o muerte: ${fname(d.a)} contra ${fname(d.b)} en la J1.`); render(); }
 function renderPoBox(s, k){ const L=s.leagues[k]; if(isWS(k)) return '';
   const asc = (L.asc && L.asc.noUp) ? `<div class="asc-row">⬆️ En el formato de 11 jornadas, el campeón y el finalista de la FMS Under juegan el Vida o muerte contra el 10º y el 9º.</div>` : L.ascUp ? `<div class="asc-row">⬆️ <b>${fnameH(L.ascUp)}</b> asciende ${L.asc&&L.asc.src==='under'?'como campeón de la FMS Under':'como 1º del ranking de ascenso'}: está fijo en el line up.</div>` : (L.ascTie?`<div class="asc-row warn">⬆️ Empate en el ranking: elige quién sube ${L.ascTie.map(id=>`<button class="btn small" onclick="ascChoose('${k}','${id}')">${miniAvatar(id,18)} ${fnameH(id)}</button>`).join(' ')}</div>`:'');
   let po='';
@@ -8684,11 +8932,19 @@ function renderPoBox(s, k){ const L=s.leagues[k]; if(isWS(k)) return '';
 function poSwap(s, L, oldId, newId, fromRound){ const i=L.competitors.indexOf(oldId); if(i<0 || L.competitors.includes(newId)) return; L.competitors[i]=newId;
   if(L.contracts[newId]==null) L.contracts[newId]=L.contracts[oldId]||contractCost(fby(newId),L.key); delete L.contracts[oldId];
   L.rounds.forEach((r,ri)=>{ if(ri<fromRound) return; r.forEach(m=>{ if(m.po) return; if(m.a===oldId) m.a=newId; if(m.b===oldId) m.b=newId; }); }); }
+var PO_HUNGER=4;
+// Vida o muerte del ascenso con un aspirante que ya no vale (extranjero bloqueado, jurado o host): pasa al siguiente del ranking
+function poRepairAuto(s){ if(s.phase!=='pre') return; natKeys(s).forEach(k=>{ const L=s.leagues[k]; if(!L.asc) return;
+  poList(L).filter(P=>P.auto && P.b && !P.done && !ascCandOk(s,k,P.b)).forEach(P=>{ const taken=new Set(poList(L).map(x=>x.b));
+    const nx=(L.asc.list||[]).find(id=>id!==L.ascUp && !taken.has(id) && ascCandOk(s,k,id)); P.b=nx||null; });
+  if(L.po2 && !L.po2.b) delete L.po2; if(L.po && L.po.auto && !L.po.b){ if(L.po2){ L.po=L.po2; delete L.po2; } else delete L.po; } }); }
 function poRun(s, L, d, round){ if(L.played!==0) return; poList(L).filter(poActiveP).forEach(P=>poRun1(s, L, d, round, P)); }
 function poRun1(s, L, d, round, P){ let m;
   if(isWSF(L.key)){ m=round.find(x=>x.ep && x.a===P.a && x.b===P.b); if(!m) return; m.po=true; }
   else { m={id:uid('x'), a:P.a, b:P.b, result:null, ex:true, po:true}; }
+  const uq0=UQ_PERF; UQ_PERF={[P.b]:PO_HUNGER};   // el aspirante sale con hambre: sin esto el de la liga (más nivel) ganaba casi siempre
   simulateFMSBattle(m, lvFn(L.key, fxVal(L.key,'nivel')+spkLv(L.key), !isWSF(L.key)));
+  UQ_PERF=uq0;
   if(!isWSF(L.key)){ m.views=Math.round(battleViews(m, 0.8*(1+0.08*state.company.stars))*1.2); P.m=m; }
   const w=m.result.winner; P.done=true; P.winner=w;
   poPay(s, L, P, w);
@@ -8707,6 +8963,7 @@ function azukyCheck(s, k, d){ if(k!=='fms_mexico') return; const az=activos().fi
 function venueMap(key){ return (typeof FMS_MAPS!=='undefined' && FMS_MAPS[key]) || null; }
 function venueZone(key, id){ const M=venueMap(key); return M ? M.r.find(z=>z.id===id) : null; }
 function venueName(L, j){ if(!L || !L.venues) return ''; const z=venueZone(L.key, L.venues[j]); return z ? z.c : ''; }
+function venRepeat(key){ const M=venueMap(key); return !!(M && M.r.length < nJ(key)); }   // menos zonas que jornadas (Caribe con 11, p. ej.): se pueden repetir
 function venueFree(L, exceptJ){ const M=venueMap(L.key); if(!M) return []; const n=nJ(L.key); const used=new Set(Object.entries(L.venues||{}).filter(([jj])=>+jj!==exceptJ && +jj<n).map(([,v])=>v)); return M.r.filter(z=>!used.has(z.id)); }
 // ciudades más importantes de cada país (la primera es la capital, que se reserva para las últimas jornadas)
 var VEN_TOP={
@@ -8716,6 +8973,8 @@ var VEN_TOP={
   fms_chile:['Santiago','Valparaíso','Concepción','La Serena','Antofagasta','Temuco','Rancagua','Talca','Iquique','Puerto Montt'],
   fms_peru:['Lima','Arequipa','Trujillo','Chiclayo','Cusco','Piura','Callao','Iquitos','Huancayo','Tacna'],
   fms_colombia:['Bogotá','Medellín','Cali','Barranquilla','Cartagena','Bucaramanga','Cúcuta','Pereira','Santa Marta','Manizales','Ibagué'],
+  fms_venezuela:['Caracas','Maracaibo','Valencia','Barquisimeto','Maracay','Barcelona','Ciudad Bolívar','Mérida','Cumaná','San Cristóbal','Maturín','Porlamar'],
+  fms_uruguay:['Montevideo','Salto','Paysandú','Maldonado','Rivera','Colonia del Sacramento','Canelones','Tacuarembó','Melo','Mercedes'],
   fms_caribe:['Caracas','Santo Domingo','San Juan','La Habana','Ciudad de Panamá','San José','Ciudad de Guatemala','San Salvador','Tegucigalpa','Managua'] };
 function venCapFrom(n){ return n - (n<=5 ? 2 : 3); }   // 9 jornadas: J7-J9 · 11: J9-J11 · 5: J4-J5
 // elige la sede de una jornada priorizando las ciudades importantes; la capital, en una de las últimas jornadas
@@ -8730,7 +8989,7 @@ function venueEnsure(L, j){ if(isWS(L.key) || !venueMap(L.key)) return; if(!L.ve
 function venueSel(key){ const s=cur(); const L=s.leagues[key]; const n=nJ(key); let j=state.ui['venJ_'+key]; if(j==null || j<(s.phase==='pre'?0:L.played) || j>=n){ j=s.phase==='pre'?0:Math.min(n-1,L.played); } return j; }
 function venPick(key, id){ const s=cur(); const L=s.leagues[key]; const j=venueSel(key); if(s.phase!=='pre' && j<L.played){ toast('Esa jornada ya se ha jugado.'); return; }
   if(!L.venues) L.venues={}; const other=Object.entries(L.venues).find(([jj,v])=>v===id && +jj!==j);
-  if(other && +other[0]<nJ(key) && venueFree(L,j).length){ toast(`${venueZone(key,id).c} ya es la sede de la J${+other[0]+1}: cada zona solo una vez por temporada.`); return; }
+  if(other && +other[0]<nJ(key) && venueFree(L,j).length && !venRepeat(key)){ toast(`${venueZone(key,id).c} ya es la sede de la J${+other[0]+1}: cada zona solo una vez por temporada.`); return; }
   if(L.venues[j]===id){ delete L.venues[j]; render(); venAfter(key); return; }
   L.venues[j]=id; const n=nJ(key); let nx=j+1; while(nx<n && L.venues[nx]) nx++; if(nx<n) state.ui['venJ_'+key]=nx; render(); venAfter(key); }
 function venAfter(key){ if(VEN_ZOOM===key && document.querySelector('.ven-zoomed')) venZoom(key); }
@@ -8741,7 +9000,7 @@ function venRandom(key, all){ const s=cur(); const L=s.leagues[key]; if(!L.venue
   render(); venAfter(key); }
 function venHover(t){ const e=document.getElementById('venHov'); if(e) e.textContent=t||''; }
 function renderVenueBox(s, key){ if(isWS(key)) return ''; const M=venueMap(key); if(!M) return ''; const L=s.leagues[key]; if(!L.venues) L.venues={};
-  const n=nJ(key), j=venueSel(key), from=s.phase==='pre'?0:L.played; const usedBy={}; Object.entries(L.venues).forEach(([jj,v])=>{ if(+jj<n) usedBy[v]=+jj; });
+  const n=nJ(key), j=venueSel(key), from=s.phase==='pre'?0:L.played; const usedBy={}; const usedAll={}; Object.entries(L.venues).forEach(([jj,v])=>{ if(+jj<n){ if(usedBy[v]==null || +jj===j) usedBy[v]=+jj; (usedAll[v]=usedAll[v]||[]).push(+jj); } }); usedBy._all=usedAll;
   const chips=Array.from({length:n},(_,i)=>{ const z=venueZone(key,L.venues[i]); const done=i<from;
     return `<button class="ven-chip ${i===j?'on':''} ${done?'done':''}" ${done?'disabled':''} onclick="state.ui['venJ_${key}']=${i}; render()"><b>J${i+1}</b><span>${z?esc(z.c):'—'}</span></button>`; }).join('');
   const svg=venSvg(key, L, j, usedBy, M);
@@ -8750,7 +9009,7 @@ function renderVenueBox(s, key){ if(isWS(key)) return ''; const M=venueMap(key);
       <button class="btn small" onclick="venRandom('${key}',false)">🎲 Aleatorio</button><button class="btn small" onclick="venRandom('${key}',true)">🎲 Aleatorio todas</button></div>
     <div class="ven-chips">${chips}</div>
     <div class="ven-wrap">${svg}
-      <div class="ven-info"><div class="ven-cur">Jornada ${j+1}: <b>${zc?'FMS '+esc(zc.c):'sin sede'}</b></div>${venSelect(key, L, j, usedBy, M)}<button class="btn small ven-zoom" onclick="venZoom('${key}')">🔍 Ampliar mapa</button><div class="ven-hov" id="venHov"></div><small class="step-note">Toca una zona del mapa (o elígela en la lista) para que sea la sede de la J${j+1}. Cada zona solo puede ser sede una vez por temporada (en rojo las ya elegidas). Si no eliges, se sortea al jugarse.${M.rot?' El mapa está girado: el norte queda a la izquierda.':''}</small></div></div></div>`; }
+      <div class="ven-info"><div class="ven-cur">Jornada ${j+1}: <b>${zc?'FMS '+esc(zc.c):'sin sede'}</b></div>${venSelect(key, L, j, usedBy, M)}<button class="btn small ven-zoom" onclick="venZoom('${key}')">🔍 Ampliar mapa</button><div class="ven-hov" id="venHov"></div><small class="step-note">Toca una zona del mapa (o elígela en la lista) para que sea la sede de la J${j+1}. ${venRepeat(key)?'Hay menos zonas que jornadas: se pueden repetir sedes.':'Cada zona solo puede ser sede una vez por temporada (en rojo las ya elegidas).'} Si no eliges, se sortea al jugarse.${M.rot?' El mapa está girado: el norte queda a la izquierda.':''}</small></div></div></div>`; }
 
 /* =========================================================================
    EVENTOS DE CIUDAD: cuando un freestyler compite en una ciudad concreta pasa algo durante la jornada
@@ -8783,13 +9042,13 @@ function venSvg(key, L, j, usedBy, M){
   const zones=M.r.map(z=>{ const u=usedBy[z.id]; const cls = u===j ? 'sel' : (u!=null ? 'used' : ''); const lab=`${z.c}${z.c!==z.n?' ('+z.n+')':''}${u!=null?' · J'+(u+1):''}`;
     const ev=`onclick="venPick('${key}','${z.id}')" onmouseenter="venHover(${JSON.stringify(lab).replace(/"/g,'&quot;')})" onmouseleave="venHover('')"`;
     return `<path class="vz ${cls}" d="${z.d}" ${ev}><title>${esc(lab)}</title></path>${z.dot?`<circle class="vz vdot ${cls}" cx="${z.x}" cy="${z.y}" r="${Math.max(5, Math.min(M.w,M.h)/55)}" ${ev}><title>${esc(lab)}</title></circle>`:''}`; }).join('');
-  const labels=M.r.filter(z=>usedBy[z.id]!=null).map(z=>`<text class="vlab ${usedBy[z.id]===j?'sel':''}" x="${z.x}" y="${z.y}" text-anchor="middle" style="font-size:${Math.round(Math.max(13, Math.max(M.w,M.h)/40))}px">J${usedBy[z.id]+1}</text>`).join('');
+  const labels=M.r.filter(z=>usedBy[z.id]!=null).map(z=>{ const all=(usedBy._all&&usedBy._all[z.id])||[usedBy[z.id]]; return `<text class="vlab ${all.includes(j)?'sel':''}" x="${z.x}" y="${z.y}" text-anchor="middle" style="font-size:${Math.round(Math.max(13, Math.max(M.w,M.h)/40))}px">${all.sort((a,b)=>a-b).map(x=>'J'+(x+1)).join('·')}</text>`; }).join('');
   return `<svg class="ven-map ${M.rot?'rot':''}" viewBox="0 0 ${M.w} ${M.h}" preserveAspectRatio="xMidYMid meet">${zones}${labels}</svg>`; }
 function venSelect(key, L, j, usedBy, M){
-  const opts=M.r.slice().sort((a,b)=>a.c.localeCompare(b.c,'es')).map(z=>{ const u=usedBy[z.id]; return `<option value="${z.id}" ${u===j?'selected':''} ${u!=null&&u!==j?'disabled':''}>${esc(z.c)}${z.c!==z.n?' ('+esc(z.n)+')':''}${u!=null?' · J'+(u+1):''}</option>`; }).join('');
+  const opts=M.r.slice().sort((a,b)=>a.c.localeCompare(b.c,'es')).map(z=>{ const u=usedBy[z.id]; return `<option value="${z.id}" ${u===j?'selected':''} ${u!=null&&u!==j&&!venRepeat(key)?'disabled':''}>${esc(z.c)}${z.c!==z.n?' ('+esc(z.n)+')':''}${u!=null?' · J'+(u+1):''}</option>`; }).join('');
   return `<select class="ven-sel" onchange="if(this.value) venPick('${key}',this.value)"><option value="">Elegir ciudad para la J${j+1}…</option>${opts}</select>`; }
 function venZoom(key){ const s=cur(); const L=s.leagues[key]; const M=venueMap(key); if(!M || !L) return; if(!L.venues) L.venues={}; VEN_ZOOM=key;
-  const n=nJ(key), j=venueSel(key), from=s.phase==='pre'?0:L.played; const usedBy={}; Object.entries(L.venues||{}).forEach(([jj,v])=>{ if(+jj<n) usedBy[v]=+jj; });
+  const n=nJ(key), j=venueSel(key), from=s.phase==='pre'?0:L.played; const usedBy={}; const usedAll={}; Object.entries(L.venues||{}).forEach(([jj,v])=>{ if(+jj<n){ if(usedBy[v]==null || +jj===j) usedBy[v]=+jj; (usedAll[v]=usedAll[v]||[]).push(+jj); } }); usedBy._all=usedAll;
   const chips=Array.from({length:n},(_,i)=>{ const z=venueZone(key,L.venues[i]); const done=i<from;
     return `<button class="ven-chip ${i===j?'on':''} ${done?'done':''}" ${done?'disabled':''} onclick="state.ui['venJ_${key}']=${i}; render(); venZoom('${key}')"><b>J${i+1}</b><span>${z?esc(z.c):'—'}</span></button>`; }).join('');
   const zc=venueZone(key, L.venues[j]);
@@ -8822,14 +9081,16 @@ var TRF_FIXED={
 function trfFixed(f, k){ const e=Object.keys(TRF_FIXED).find(n=>nrm(n)===nrm(f.name)); return e && TRF_FIXED[e][k]!==undefined ? TRF_FIXED[e][k] : undefined; }
 function trfWasIn(id, k){ return state.seasons.slice(0,-1).some(o=>o.leagues && o.leagues[k] && (o.leagues[k].competitors||[]).includes(id)); }
 function trfInit(s, L, k){ if(isWS(k) || !ldef(k).countries) return;
-  L.competitors.forEach(id=>{ const f=fby(id); if(!f) return; if(!f.trf) f.trf={}; if(f.trf[k]) return;
+  L.competitors.forEach(id=>{ const f=fby(id); if(!f) return; if(!f.trf) f.trf={};
+    if(f.trf[k]){ const t=f.trf[k]; if(t.res && s.year-(t.last||t.y)>TRF_KEEP) t.res=0; t.last=s.year; return; }   // vuelve a esa liga: el efecto sigue si no han pasado más de 3 temporadas fuera
     if(trfWasIn(id,k)){ f.trf[k]={y:-1, res:0}; return; }
     const fx=trfFixed(f,k); let res=0;
     if(fx!==undefined) res = fx===0 ? (Math.random()<0.5?1:-1) : fx;
     else if(!ldef(k).countries.includes(fHome(f)) && Math.random()<TRF_P) res = Math.random()<0.5?1:-1;
-    f.trf[k]={y:s.year, res, fixed:fx!==undefined}; }); }
-// 1 éxito / -1 fracaso / 0 nada: activo la temporada del debut y la siguiente
-function trfRes(f, k, y){ const t=f && f.trf && f.trf[k]; if(!t || !t.res) return 0; return (y===t.y || y===t.y+1) ? t.res : 0; }
+    f.trf[k]={y:s.year, last:s.year, res, fixed:fx!==undefined}; }); }
+// 1 éxito / -1 fracaso / 0 nada: solo en esa liga; sigue mientras no pase más de 3 temporadas sin volver a ella
+var TRF_KEEP=3;
+function trfRes(f, k, y){ const t=f && f.trf && f.trf[k]; if(!t || !t.res) return 0; return (y>=t.y && y-(t.last||t.y)<=TRF_KEEP) ? t.res : 0; }
 function trfReveal(s, L, d){ if(isWS(L.key)) return;
   L.competitors.forEach(id=>{ const f=fby(id); const t=f && f.trf && f.trf[L.key]; if(!t || !t.res || t.y!==s.year) return;
     const rel=(L.relegated||[]).includes(id), po=poPosIds(s,L).includes(id);
@@ -8997,8 +9258,8 @@ function clearUiDrafts(){ try{ Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB
 // actual campeón de la Red Bull Internacional (la última que se ha jugado)
 function rbIntChampId(){ for(let i=state.seasons.length-1;i>=0;i--){ const o=state.seasons[i]; if(rbOn(o) && o.rb.inter && o.rb.inter.played && o.rb.inter.champion) return o.rb.inter.champion; } return null; }
 // la comunidad no lo quiere: fracasó en esta liga el año pasado o en Twitter le odian mucho más de lo que le quieren
-function commDislike(f){ const s=cur(); if(!f) return false;
-  return !!(f.trf && Object.values(f.trf).some(t=>t.res<0 && t.y===s.year-1)); }   // solo lo que ha pasado en esta partida (antes contaba Twitter y salía en partidas nuevas)
+function commDislike(f){ const s=cur(); if(!f || !f.trf) return null;   // devuelve las ligas extranjeras donde fracasó el año pasado (el castigo solo cuenta allí)
+  const ks=Object.keys(f.trf).filter(k=>{ const t=f.trf[k]; return t && t.res<0 && t.y===s.year-1 && ldef(k); }); return ks.length ? ks : null; }   // solo lo que ha pasado en esta partida (antes contaba Twitter y salía en partidas nuevas)
 
 /* =========================================================================
    EVENTOS POR WHATSAPP: rechazos, multas, Papo, Ortiz, tensiones y la réplica de Sweet Pain
@@ -9045,6 +9306,7 @@ function waActs(ev){ const s=cur(); const L=s.leagues[ev.key];
   if(ev.stage==='done'){ const last=(ev.ci||0)>=ev.chats.length-1;
     if(!last) return `<button class="btn primary" onclick="waNext('${ev.id}')">Continuar</button>`;
     if(ev.type==='refuse' && ev.ascRep) return `<button class="btn primary" onclick="uqClose('${ev.id}')">Entra ${esc(fname(ev.ascRep))}</button>`;
+    if(ev.type==='refuse' && ev.kind==='abroad' && abHomeKey(s,ev)) return `<button class="btn" onclick="uqClose('${ev.id}'); showReplace('${ev.key}')">Buscar sustituto</button><button class="btn primary" onclick="uqClose('${ev.id}'); state.ui.abSel=null; abSwapOpen('${ev.id}')">Meterlo en ${esc(ldef(abHomeKey(s,ev)).short||ldef(abHomeKey(s,ev)).name)}</button>`;
     return ev.after==='replace' ? `<button class="btn primary" onclick="uqClose('${ev.id}'); showReplace('${ev.key}')">Buscar sustituto</button>` : `<button class="btn primary" onclick="uqClose('${ev.id}')">Continuar</button>`; }
   if(ev.type==='fight' || ev.type==='navas' || ev.type==='spfor'){ const pct=ev.type==='navas'?0.10:0.05;
     return `<button class="btn" onclick="uqFine('${ev.id}', false)">No multar</button><button class="btn danger" onclick="uqFine('${ev.id}', true)">Multar · ${Math.round(pct*100)}% (${moneyK(Math.round((L.contracts[ev.fid]||0)*pct))})</button>`; }
@@ -9258,5 +9520,5 @@ var TW_CHOUT={
 };
 
 /* ---- versión del juego (esquina inferior derecha) ---- */
-var GAME_VERSION='1.2.3';
+var GAME_VERSION='1.2.4';
 (function(){ try{ const v=document.createElement('div'); v.id='verTag'; v.textContent=GAME_VERSION; document.body.appendChild(v); }catch(e){} })();

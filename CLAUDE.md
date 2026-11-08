@@ -1,6 +1,6 @@
 # FMS CEO
 
-Juego de fans, gratuito y sin ánimo de lucro: un manager de batallas de freestyle al estilo Football Manager. El jugador dirige la empresa de la FMS: ligas nacionales, FMS Internacional, World Series, Red Bull y torneos Under, con más de 340 freestylers reales, jornadas en directo, fichajes, patrocinadores, eventos y un Twitter/X interno.
+Juego de fans, gratuito y sin ánimo de lucro: un manager de batallas de freestyle al estilo Football Manager. El jugador dirige la empresa de la FMS: ligas nacionales, FMS Internacional, World Series, Red Bull y torneos Under, con más de 500 freestylers reales, jornadas en directo, fichajes, patrocinadores, eventos y un Twitter/X interno.
 
 ## Estructura
 
@@ -12,6 +12,6 @@ Juego de fans, gratuito y sin ánimo de lucro: un manager de batallas de freesty
 ## Reglas
 
 - Todos los textos (interfaz, comentarios, commits) en español.
-- No romper partidas guardadas: el CEO guarda en 3 ranuras (`fms_ceo_slot_N`, con las temporadas viejas comprimidas; `migrateSlots` pasa la clave antigua `fms_ceo_v1` a la ranura 1) y la carrera en `fms_ceo_carrera_v1`. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy `DBV_ACTUAL` = 18; nuestras v4-v9 y después las del creador renumeradas), nunca descartarlos.
+- No romper partidas guardadas: el CEO guarda en 3 ranuras (`fms_ceo_slot_N`, por trozos y comprimidas con LZ; `migrateSlots` pasa la clave antigua `fms_ceo_v1` a la ranura 1) y la carrera en `fms_ceo_carrera_v1`, también comprimida; los guardados viejos sin comprimir se siguen leyendo. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy `DBV_ACTUAL` = 22; nuestras v4-v9 y después las del creador renumeradas), nunca descartarlos.
 - Una fase por vez: presentar el plan o el modelo de datos y esperar el OK antes de ejecutar. Commits pequeños.
 - No cambiar las reglas del juego salvo que la fase lo pida.

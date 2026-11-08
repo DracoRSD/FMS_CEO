@@ -149,7 +149,7 @@ w.addEventListener('load', () => setTimeout(() => {
   }
   g('state').seasons = [{ format: FORMATO }];
   w.eval('WS_SHORT=false');
-  const LEAGUES = g('LEAGUES'), sim = g('simulateFMSBattle'), pickJudges = g('pickJudges'), standings = g('computeStandings'), fby = g('fby');
+  const LEAGUES = g('LEAGUES').filter(L => !L.sbx), sim = g('simulateFMSBattle'), pickJudges = g('pickJudges'), standings = g('computeStandings'), fby = g('fby');
 
   // Plantilla de cada liga: los 10 mejores de sus países (fija en toda la simulación)
   const plantillas = LEAGUES.map(L => ({ L, ids: pool.filter(f => L.countries.includes(f.country)).sort((a, b) => b.nivel - a.nivel).slice(0, 10).map(f => f.id) }));
