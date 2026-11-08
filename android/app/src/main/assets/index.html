@@ -7775,7 +7775,10 @@ var ROYAL_POOL=['Chuty','Skone','Arkano','Blon','Force','Davisito','Zasko','Mr. 
 var ROYAL_PTS=[1000,900,800,700,600,500,400,300,200,100];
 function runRoyal(s, ev, d){ const def=udef(ev.key);
   const pool=ROYAL_POOL.map(n=>activos().find(f=>!f.custom && f.name===n)).filter(f=>f && !isBanned(f));
-  const ids=shuffle(pool).slice(0,10).map(f=>f.id); const T={}; ids.forEach(id=>T[id]={id, pts:0, w:0, l:0});
+  const ids=shuffle(pool).slice(0,10).map(f=>f.id);
+  if(ids.length<10) ids.push(...activos().filter(f=>fHome(f)==='España' && !f.jugador && !f.custom && !ids.includes(f.id) && !isBanned(f)).sort((a,b)=>b.fama-a.fama).slice(0,10-ids.length).map(f=>f.id));   // los invitados que se retiraron: completan los españoles activos de más fama
+  if(ids.length<2){ ev.played=true; return; }
+  const T={}; ids.forEach(id=>T[id]={id, pts:0, w:0, l:0});
   for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){ const m={a:ids[i], b:ids[j], result:null}; simulateBattle(m, null); const w=m.result.winner, lo=w===m.a?m.b:m.a;
     const tb=!!m.result.tiebreak; T[w].pts+=tb?2:3; T[w].w++; T[lo].pts+=tb?1:0; T[lo].l++; }
   const isKhan=id=>(fby(id)||{}).name==='Khan';
