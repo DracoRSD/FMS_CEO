@@ -1371,7 +1371,7 @@ function simulateDay(auto, soloFid){ econMode();
   if(!carr && s.intlEnabled && s.intl.date!=null && !s.intl.played && !s.intl.jdDone && (d>=s.intl.date-15 || natKeys(s).every(k=>s.leagues[k].finished))){   // jurado de la Internacional (en carrera no hay)
     if(auto || intlJdCands(s).length<=5) intlJdAuto(s); else return {pause:'ijud'}; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && !(s.intl.lu && s.intl.lu.shown) && natKeys(s).every(k=>s.leagues[k].finished)){
-    if(intlNeedsVote(s)){ if(auto){ const c=intlVoteCands(s); intlVoteResolve(s, c.ids, c.need); } else return {pause:'ivote'}; }   // 7 ligas: votación de terceros antes del line up
+    if(intlNeedsVote(s)){ if(sola){ const c=intlVoteCands(s); intlVoteResolve(s, c.ids, c.need); } else return {pause:'ivote'}; }   // 7 ligas: votación de terceros antes del line up (en carrera nadie vota: entran los de más fama)
     if(!s.intl.lu) luGenerate(s, INTL.key);
     if(ver((s.intl.lu.order||[]).includes(soloFid))) return {pause:'lineup', key:INTL.key}; s.intl.lu.shown=true; }
   if(s.intlEnabled && s.intl.date!=null && !s.intl.played && s.intl.lu && s.intl.lu.shown && !s.intl.spkDone && natKeys(s).every(k=>s.leagues[k].finished)){
