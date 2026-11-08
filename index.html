@@ -2,8 +2,15 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <link rel="icon" type="image/png" href="assets/favicon.png">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="screen-orientation" content="landscape">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="build/icon-192.png">
 <title>FMS CEO</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -15,6 +22,7 @@
 <input type="file" id="gameFileInput" accept="application/json" style="display:none" onchange="importGameFile(event)">
 <input type="file" id="imgFileInput" accept="image/*" style="display:none" onchange="onImageFile(event)">
 <script src="js/images.js"></script>
+<script src="js/mapas.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

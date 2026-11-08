@@ -25,8 +25,11 @@ function inlineAssets(text) {
 
 let html = read('index.html');
 html = html.replace(/<link rel="stylesheet" href="css\/style\.css">/, () => '<style>\n' + inlineAssets(read('css/style.css')).trimEnd() + '\n</style>');
-html = html.replace(/<script src="js\/images\.js"><\/script>\n<script src="js\/game\.js"><\/script>/, () =>
-  '<script>\n' + inlineAssets(read('js/images.js')).trimEnd() + '\n' + inlineAssets(read('js/game.js')).trimEnd() + '\n</script>');
+// Los scripts de index.html, en su orden, se juntan en uno solo.
+const SCRIPTS = ['js/images.js', 'js/mapas.js', 'js/game.js'];
+const tags = SCRIPTS.map(s => `<script src="${s}"></script>`).join('\n');
+if (!html.includes(tags)) throw new Error('index.html no carga ' + SCRIPTS.join(', ') + ' en ese orden');
+html = html.replace(tags, () => '<script>\n' + SCRIPTS.map(s => inlineAssets(read(s)).trimEnd()).join('\n') + '\n</script>');
 html = inlineAssets(html); // favicon y cualquier otra ruta suelta
 
 if (/(["'(])(?:\.\.\/)?assets\//.test(html.replace(/'assets\/'/g, ''))) throw new Error('Quedan rutas a assets/ sin incrustar');
