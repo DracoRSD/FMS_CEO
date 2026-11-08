@@ -69,6 +69,9 @@ const COMPRADOR_MARGEN = 1, COMPRADOR_NIVEL_T5 = 1.5, COMPRADOR_NIVEL_MAX = 91; 
 const BAT_LIBRE_UNDER = [9, 14],   // suelo bajado de 10 a 9 en D3: Chile dio 9,9 con la semilla 2
       BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
 const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
+// Versión 1.2 del creador: las 3 ranuras del CEO llenas con la partida de 20 temporadas y la carrera de 20 años caben juntas en ALMACEN_MAX (el navegador da unos 5 MB por origen);
+// el % del favorito con un jurado real contratado se mide en JURADO_TEMPORADAS temporadas de una liga (informativo).
+const ALMACEN_MAX = 4.5 * 1048576, JURADO_TEMPORADAS = 200;
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
 // fijos del preset que se retiran y ningún novato hereda la prima, así que con ella el top 60 baja un 15 % haga lo que haga la fama.
@@ -287,6 +290,7 @@ w.addEventListener('load', () => setTimeout(() => {
       const carga = g('load')(modo); const ligeras = S.seasons.filter(s => s.phase === 'done' && s.ligera).length;
       r.migra = !!carga && S.company.dbv === g('DBV_ACTUAL') && ligeras === r.aligeradas && S.freestylers.map(f => f.id + ':' + g('titlesOf')(f.id).join(',')).join('|') === antes[1] && g('renderHistory')() === antes[4];
       g('saveNow')(); r.bytesMigrado = g('guardadoBytes')();
+      r.dump = g('saveStr')({ company: S.company, freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter });   // para la prueba de las 3 ranuras
     } catch (e) { r.excepciones.push(String(e && e.stack || e).split('\n').slice(0, 3).join(' · ')); }
     w.eval('aligerarAntiguas = _aligerarReal;');
     r.erroresJsdom = errores.splice(errAntes).length;   // los errores del bloque no cuentan como errores de carga
@@ -672,8 +676,75 @@ w.addEventListener('load', () => setTimeout(() => {
       console.log(`${okRueda ? 'OK  ' : 'FAIL'} la rueda de prensa no cambia la probabilidad de ganar: ${Q.iguales} de ${Q.total} batallas repetidas con la misma semilla dan el mismo resultado sin rueda y con cada tono · gana ${f1b(100 * Q.sinRueda / Math.max(1, Q.total))} % sin rueda y ${f1b(100 * Q.conRueda / Math.max(1, Q.total))} % tras una rueda polémica`);
       console.log(`${okTam4 ? 'OK  ' : 'FAIL'} guardado con prensa y retos: D4 ocupa ${f1b(m.d4Bytes / 1024)} KB (≤ ${D4_GUARDADO_MAX / 1024} KB) y la partida ${f1b(m.bytesFin / 1024)} KB tras ${m.anos} temporadas (≤ ${f1b(GUARDADO_MAX / 1024)} KB)`); }
   }
+  // ---- versión 1.2 del creador (va al final para no mover la semilla de los informes de arriba) ----
+  // 1) Almacenamiento: la partida de CEO de 20 temporadas en las 3 ranuras (writeSlot: temporadas viejas comprimidas por trozos) y la carrera de 20 años, todo junto, no pasa de ALMACEN_MAX.
+  // 2) Partida del juego del creador (su dbv 12, sin atributos, jurado contratado en L.judges con nombres): carga con nuestras v4-v9, queda en DBV_ACTUAL, no repite sus
+  //    migraciones (Azeta con nivel 70 no vuelve a 50) y el jurado pasa a L.jurado mientras L.judges vuelve a tener nuestros 5 jueces.
+  // 3) Jurado contratado (informativo): % del favorito en FMS España con sus 5 jurados reales y sin ninguno, con los mismos jueces.
+  let okCreador = true;
+  {
+    const S = g('state'); const mem = w._mem; const nf = g('nivelFromAttrs');
+    const bak = { company: S.company, freestylers: S.freestylers, seasons: S.seasons, counter: S._counter, view: S.view, slot: S.ui.slot };
+    limpiarGuardado(mem);
+    try {
+      const mc = mundos.find(r => r.modo === 'ceo'), mk = mundos.find(r => r.modo === 'carrera');
+      if (mc && mc.dump && mk && mk.dump) {
+        [1, 2, 3].forEach(n => { g('clearSlot')(n); g('writeSlot')(n, JSON.parse(mc.dump)); });
+        mem.set(g('CARRERA_KEY'), mk.dump);
+        const usa = pre => [...mem.entries()].filter(([k]) => k.startsWith(pre)).reduce((a, [k, v]) => a + k.length + v.length, 0);
+        const total = usa('fms_ceo'), ranura = usa(g('slotKey')(1));
+        S.company = null; const carga = g('load')(3) && S.seasons.length === JSON.parse(mc.dump).seasons.length;
+        const okAlm = total <= ALMACEN_MAX && carga;
+        okCreador = okCreador && okAlm;
+        console.log(`\n${okAlm ? 'OK  ' : 'FAIL'} almacenamiento: 3 ranuras de CEO de ${mc.anos} temporadas (${kb(ranura)} cada una con las temporadas viejas comprimidas; ${kb(mc.dump.length)} sin comprimir) y la carrera de ${mk.anos} años (${kb(mk.dump.length)}) ocupan ${kb(total)} juntas (límite ${kb(ALMACEN_MAX)}); la ranura 3 vuelve a cargar: ${carga}`);
+        // reparto del guardado (sin comprimir): qué ocupa cada parte
+        [mk, mc].forEach(r => { const d = JSON.parse(r.dump); const tam = x => JSON.stringify(x).length; const full = d.seasons.filter(sn => !sn.ligera), lig = d.seasons.filter(sn => sn.ligera);
+          const ultima = full[full.length - 1] || {}; const partes = ['leagues', 'under', 'rb', 'intl', 'log', 'uq'].map(k => k + ' ' + kb(tam(ultima[k] || null))).join(', ');
+          console.log(`INFO reparto del guardado de ${r.modo === 'ceo' ? 'CEO' : 'la carrera'} (${kb(r.dump.length)}): ${d.freestylers.length} freestylers ${kb(tam(d.freestylers))}, ${full.length} temporadas completas ${kb(tam(full))} (la última: ${partes}), ${lig.length} ligeras ${kb(tam(lig))}, empresa ${kb(tam(d.company))}`); });
+      }
+      // 2) partida del juego del creador
+      limpiarGuardado(mem);
+      const poolC = g('generatePool()');
+      const limpio = poolC.map(x => ({ id: x.id, name: x.name, country: x.country, nivel: x.nivel, fama: x.fama, hype: x.hype, photo: x.photo, legend: x.legend, style: x.style }));
+      const az = limpio.find(x => x.name === 'Azeta'); if (az) az.nivel = 70;   // su v4 lo deja en 50: si se repitiera, volvería a 50
+      const jur = g('JURADO_REAL').slice(0, 5).map(j => j.name);
+      S.company = { name: 'Partida del creador', stars: 1, reputation: 0, money: 100000, dbv: 12, mode: 'empresario' }; S.freestylers = limpio;
+      const sn = g('newSeason')(null); Object.values(sn.leagues).forEach(L => { L.judges = jur.slice(); }); sn.intl.judges = jur.slice();
+      mem.set(g('slotKey')(1), JSON.stringify({ company: S.company, freestylers: limpio, seasons: [sn], _counter: S._counter }));
+      S.company = null; S.freestylers = []; S.seasons = [];
+      const cargaC = g('load')(1); const L0 = cargaC ? Object.values(S.seasons[0].leagues)[0] : null;
+      const cr = {
+        carga: !!cargaC,
+        dbv: cargaC && S.company.dbv === g('DBV_ACTUAL') && S.company.modo === 'ceo' && S.company.dbvCreador == null,
+        atributos: cargaC && S.freestylers.every(x => x.attrs && nf(x.attrs) === x.nivel),
+        sinRepetir: !az || (cargaC && S.freestylers.find(x => x.name === 'Azeta').nivel === 70),
+        jurado: !!L0 && JSON.stringify(L0.jurado) === JSON.stringify(jur) && JSON.stringify(S.seasons[0].intl.jurado) === JSON.stringify(jur),
+        jueces: !!L0 && g('judgesOf')(L0).length === 5 && g('judgesOf')(L0).every(id => g('JUDGE_BY_ID')[id]),
+      };
+      const okC = Object.values(cr).every(Boolean);
+      okCreador = okCreador && okC;
+      console.log(`${okC ? 'OK  ' : 'FAIL'} partida del juego del creador (su dbv 12, sin atributos, jurado en L.judges): carga (${cr.carga}), queda en dbv ${g('DBV_ACTUAL')} y modo CEO (${cr.dbv}), atributos con media = nivel (${cr.atributos}), sin repetir sus migraciones (${cr.sinRepetir}), su jurado pasa a L.jurado (${cr.jurado}) y L.judges vuelve a tener 5 jueces nuestros (${cr.jueces})`);
+      // 3) jurado contratado en una liga de CEO
+      limpiarGuardado(mem);
+      const K = 'fms_espana';
+      S.company = { name: 'CEO de prueba', stars: 5, reputation: 0, money: 10000000, dbv: g('DBV_ACTUAL'), modo: 'ceo', mode: 'empresario' }; S.freestylers = pool;
+      const sJ = { format: FORMATO, year: 2027, number: 1, phase: 'live', day: 0, activeKeys: [K], leagues: { [K]: { key: K, jurado: [] } }, intl: {}, rb: { off: true }, under: [] };
+      S.seasons = [sJ];
+      const jl = g('JURADO_REAL').slice().sort((x, y) => (g('jdLocal')(y, K) - g('jdLocal')(x, K)) || (y.cost - x.cost)).slice(0, 5).map(j => j.name);
+      const idsJ = plantillas.find(p => p.L.key === K).ids, jj = pickJudges(K), lv = g('lvFn')(K, 0, false);
+      const medir = con => { sJ.leagues[K].jurado = con ? jl.slice() : []; let fv = 0, n = 0;
+        for (let k = 0; k < JURADO_TEMPORADAS; k++) for (let i = 0; i < idsJ.length; i++) for (let j = i + 1; j < idsJ.length; j++) {
+          const m = { a: idsJ[i], b: idsJ[j], result: null }; sim(m, lv, jj); const A = fby(m.a), B = fby(m.b);
+          if (A.nivel !== B.nivel) { n++; if (m.result.winner === (A.nivel > B.nivel ? A.id : B.id)) fv++; } }
+        return 100 * fv / n; };
+      const sinJ = medir(false), conJ = medir(true);
+      console.log(`INFO jurado contratado en ${g('ldef')(K).name} (${jl.join(', ')}): el favorito gana ${f1b(conJ)} % con ellos y ${f1b(sinJ)} % sin jurado (${conJ - sinJ >= 0 ? '+' : ''}${f1b(conJ - sinJ)} puntos; ${JURADO_TEMPORADAS} temporadas de liga con los mismos 5 jueces)`);
+    } catch (e) { okCreador = false; console.log('FAIL pruebas de la versión 1.2 del creador: ' + String(e && e.stack || e).split('\n').slice(0, 3).join(' · ')); }
+    limpiarGuardado(mem);
+    S.company = bak.company; S.freestylers = bak.freestylers; S.seasons = bak.seasons; S._counter = bak.counter; S.view = bak.view; S.ui.slot = bak.slot;
+  }
   const attrsBytes = JSON.stringify(pool.map(x => ({ attrs: x.attrs }))).length, judgesBytes = JSON.stringify({ judges: pickJudges('fms_espana') }).length * 7;
   console.log(`Además, desde la fase 1: atributos de los ${pool.length} freestylers ${kb(attrsBytes)} (una sola vez) y jueces de las 7 ligas ${kb(judgesBytes)} por temporada (${kb(judgesBytes * 10)} en 10).`);
   w.close();
-  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas && okCambio && okEleccion ? 0 : 1);
+  process.exit(ok && okKO && okUnder && okProg && okCarrera && okModos && okCarreras && okFechas && okCambio && okEleccion && okCreador ? 0 : 1);
 }, 800));

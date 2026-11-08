@@ -3554,6 +3554,12 @@ function syncRealPool(){
     const fixes={'Azeta':[45,35],'Godlemon':[45,35],'Ortiz':[45,35]};
     state.freestylers.forEach(f=>{ if(STYLE_PRESET[f.name]) f.style=STYLE_PRESET[f.name]; if(fixes[f.name]){ f.nivel=fixes[f.name][0]; f.fama=fixes[f.name][1]; } if(f.name==='Yartzi') f.country='Puerto Rico'; });
     state.company.dbv=3; }
+  // Partida del juego del creador (MedsterRM, 1.2 a 1.2.4): trae su propia versión de guardado (4 a 16) y ningún freestyler con atributos. Se trata como una 1.0 (dbv 3)
+  // para que corran nuestras v4-v9 y después se salta las suyas que ya traía hechas (su v4 es nuestra v10). Su jurado contratado (L.judges con nombres) pasa a L.jurado.
+  if(state.company && (state.company.dbv||0)>=4 && (state.company.dbv||0)<=16 && state.freestylers.length && !state.freestylers.some(f=>f.attrs)){
+    state.company.dbvCreador=state.company.dbv; state.company.dbv=3;
+    const mover=o=>{ if(o && Array.isArray(o.judges) && o.judges.some(x=>typeof x==='string' && !JUDGE_BY_ID[x])){ o.jurado=o.judges.filter(x=>typeof x==='string'); delete o.judges; } };
+    state.seasons.forEach(sn=>{ Object.values(sn.leagues||{}).forEach(mover); mover(sn.intl); }); }
   if(state.company && (state.company.dbv||0)<4){   // v4: atributos por freestyler y jueces por liga. Aditivo: no borra nada
     state.freestylers.forEach(ensureAttrs);
     state.seasons.forEach(sn=>Object.values(sn.leagues||{}).forEach(judgesOf));
@@ -3572,6 +3578,7 @@ function syncRealPool(){
   if(state.company && (state.company.dbv||0)<9){   // v9: guardado ligero. Las temporadas cerradas salvo las dos últimas se quedan en versión ligera
     aligerarAntiguas();
     state.company.dbv=9; }
+  if(state.company && state.company.dbvCreador){ state.company.dbv=Math.max(state.company.dbv, state.company.dbvCreador+6); delete state.company.dbvCreador; }   // partida del creador: sus migraciones hasta su versión ya estaban hechas
   if(state.company && (state.company.dbv||0)<10){   // (creador v4) ajustes de la actualización de competidores
     const sty={'Fusok':'Showman','Bigtamina':'Métrico','Destello':'Métrico','Esezeta':'Poético','Joqerr':'Coherencia'};
     state.freestylers.forEach(f=>{ if(sty[f.name]) f.style=sty[f.name]; if(f.name==='Azeta'||f.name==='Ortiz') setNivel(f, 50); if(f.name==='Cafú') f.country='Perú'; });
