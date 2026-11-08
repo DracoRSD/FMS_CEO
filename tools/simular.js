@@ -5,6 +5,7 @@
 // El código del juego no se toca.
 const fs = require('fs'), path = require('path');
 const { JSDOM, VirtualConsole } = require('jsdom');
+const { performance } = require('perf_hooks');
 
 const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
@@ -68,7 +69,9 @@ const COMPRADOR_MARGEN = 1, COMPRADOR_NIVEL_T5 = 1.5, COMPRADOR_NIVEL_MAX = 91; 
 // nivel medio a T5 y T10 al menos igual que el clon, a T5 como mucho COMPRADOR_NIVEL_T5 por encima, primera oferta sin adelantarse más de COMPRADOR_MARGEN y nivel a los 10 años como mucho 91 (era 90: con la semilla 1 salió 90, justo en el tope; el comprador queda unos 2 por encima del activo, que acaba en 87-88; con estos cambios, 89)
 const BAT_LIBRE_UNDER = [9, 14],   // suelo bajado de 10 a 9 en D3: Chile dio 9,9 con la semilla 2
       BAT_LIBRE_SIN = [8, 12], BAT_LIGA = [13, 19], PAISES_CON_UNDER = ['España', 'Argentina', 'México', 'Chile'];   // con liga sube a 19 desde que el jugador entra al Under sin tope de fama   // base medida con la semilla 1 antes de la fase T: 60,2 % de plantillas repetidas
-const GUARDADO_MAX = 1.5 * 1048576;   // una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras, no pasa de 1,5 MB
+// Una carrera o una partida de CEO de 20 temporadas, con temporadas ligeras: lo que se guarda de verdad (comprimido con LZ) no pasa de GUARDADO_MAX, sin comprimir no pasa
+// de GUARDADO_SIN_MAX, y un guardado (el de cada cambio, con los trozos viejos ya escritos) no tarda más de GUARDAR_MS_MAX en esta máquina.
+const GUARDADO_MAX = 1.5 * 1048576, GUARDADO_SIN_MAX = 2.5 * 1048576, GUARDAR_MS_MAX = 200;
 // Versión 1.2 del creador: las 3 ranuras del CEO llenas con la partida de 20 temporadas y la carrera de 20 años caben juntas en ALMACEN_MAX (el navegador da unos 5 MB por origen);
 // el % del favorito con un jurado real contratado se mide en JURADO_TEMPORADAS temporadas de una liga (informativo).
 const ALMACEN_MAX = 4.5 * 1048576, JURADO_TEMPORADAS = 200;
@@ -110,6 +113,9 @@ const dom = new JSDOM(html, {
 const w = dom.window;
 // borra del localStorage simulado todas las claves del juego (ranuras del CEO y sus trozos, carrera, metadatos)
 const limpiarGuardado = mem => { [...mem.keys()].filter(k => /^fms_ceo/.test(k)).forEach(k => mem.delete(k)); };
+// lo que ocupa de verdad en el localStorage una partida: la carrera es una clave; el CEO, su ranura con sus trozos y sus metadatos
+const guardadoReal = (mem, modo, slot) => modo === 'carrera' ? (mem.get('fms_ceo_carrera_v1') || '').length
+  : [...mem.entries()].filter(([k]) => k === 'fms_ceo_slot_' + (slot || 1) || k.startsWith('fms_ceo_slot_' + (slot || 1) + '_s') || k === 'fms_ceo_slotmeta_' + (slot || 1)).reduce((a, [k, v]) => a + k.length + v.length, 0);
 
 w.addEventListener('load', () => setTimeout(() => {
   if (errores.length) { console.error('El juego dio errores al cargar:\n' + errores.join('\n')); process.exit(2); }
@@ -282,7 +288,9 @@ w.addEventListener('load', () => setTimeout(() => {
       const sinImg = (k, v) => (k === 'img' && typeof v === 'string' && (v.startsWith('data:') || v.startsWith('assets/'))) ? undefined : v;
       const dumpViejo = JSON.stringify({ company: Object.assign({}, S.company, { dbv: 8 }), freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter }, sinImg);
       w.eval('aligerarAntiguas = _aligerarReal;');
-      r.aligeradas = g('aligerarAntiguas')(); g('saveNow')(); r.bytesDespues = g('guardadoBytes')(); r.d4 = (((modo === 'carrera' ? mem.get(key) : g('saveStr')({ company: S.company, freestylers: S.freestylers, seasons: S.seasons })) || '').match(/"(prensa|retos|rivales|prensaAuto)":/g) || []).length;   // fase D4
+      r.aligeradas = g('aligerarAntiguas')(); let t0 = performance.now(); g('saveNow')(); r.msPrimero = performance.now() - t0; r.bytesDespues = g('guardadoBytes')(); r.real = guardadoReal(mem, modo);
+      t0 = performance.now(); g('saveNow')(); r.msGuardar = performance.now() - t0;   // un guardado normal: en el CEO los trozos viejos ya están escritos
+      r.d4 = ((g('saveStr')({ company: S.company, freestylers: S.freestylers, seasons: S.seasons }) || '').match(/"(prensa|retos|rivales|prensaAuto)":/g) || []).length;   // fase D4
       const despues = [foto(), titulos(), clasif(), fatiga(), g('renderHistory')()];
       r.identicos = antes.every((x, i) => x === despues[i]);
       // migración: la misma partida sin podar y en dbv 8 carga, queda en DBV_ACTUAL y podada, con los mismos títulos e historial
@@ -386,7 +394,7 @@ w.addEventListener('load', () => setTimeout(() => {
       console.log(`\n${c.modo === 'carrera' ? 'Modo carrera' : 'Mundo de CEO con piloto automático'}: ${CARRERA} temporadas sin CEO (7 ligas)`);
       if (c.modo === 'carrera') c.filas.forEach(l => console.log('  ' + l));
       const sinPausas = c.pausas.length === 0 && c.excepciones.length === 0 && c.erroresJsdom === 0 && c.anos === CARRERA;
-      const okTam = c.bytesDespues > 0 && c.bytesDespues <= GUARDADO_MAX;
+      const okTam = c.real > 0 && c.real <= GUARDADO_MAX && c.bytesDespues <= GUARDADO_SIN_MAX, okMs = c.msGuardar <= GUARDAR_MS_MAX;
       const dFama = c.fama1 && c.fama0 ? c.fama1.fama - c.fama0.fama : NaN, dSal = c.fama1 && c.fama0 ? 100 * (c.fama1.salarioSinPrima / c.fama0.salarioSinPrima - 1) : NaN, dSalPrima = c.fama1 && c.fama0 ? 100 * (c.fama1.salario / c.fama0.salario - 1) : NaN;
       const okFama = Math.abs(dFama) <= FAMA_TOL, okSal = Math.abs(dSal) <= SALARIO_TOL;
       const T = c.tw; const pctTpl = T.n ? 100 * T.repTpl / T.n : 0; const okTw = c.modo !== 'carrera' || (T.n > 0 && (TW_BASE_PLANTILLA === 0 || pctTpl <= TW_BASE_PLANTILLA * (1 - TW_MEJORA)) && T.textosMas === 0);
@@ -396,12 +404,13 @@ w.addEventListener('load', () => setTimeout(() => {
         okRedes = min >= 1 && bajo.length > 0 && alto.length > 0 && ma >= REDES_CRECE * mb && c.feed <= g('REDES_FEED_MAX');
         redesTxt = `${R.length} batallas del jugador con ${R.reduce((x, y) => x + y.n, 0)} tuits (mínimo ${min} por batalla) · con fama < ${REDES_FAMA_BAJA}: ${f1b(mb)} por batalla (${bajo.length} batallas), con fama ≥ ${REDES_FAMA_ALTA}: ${f1b(ma)} (${alto.length}; al menos ×${REDES_CRECE}) · feed guardado ${c.feed} de ${g('REDES_FEED_MAX')} · hitos ${Object.keys(c.hitos).length}: ${Object.entries(c.hitos).map(([h, y]) => h + ' ' + y).join(', ') || '—'}`; }
       const okLocales = c.modo === 'ceo' ? c.locales === 0 : c.locales > 0; const okCeoD4 = c.modo !== 'ceo' || c.d4 === 0;
-      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales && okCeoD4;
+      const okMundo = sinPausas && c.arranquesMal.length === 0 && c.intlMal.length === 0 && okTam && okMs && c.identicos === true && c.migra === true && okFama && okSal && okTw && okRedes && okLocales && okCeoD4;
       okCarrera = okCarrera && okMundo;
       console.log(`${sinPausas ? 'OK  ' : 'FAIL'} ${c.anos} de ${CARRERA} temporadas seguidas sin pausa ni error${c.pausas.length ? ' · ' + c.pausas.join('; ') : ''}${c.excepciones.length ? ' · excepción: ' + c.excepciones.join('; ') : ''}${c.erroresJsdom ? ' · errores de página: ' + c.erroresJsdom : ''}`);
       console.log(`${c.arranquesMal.length === 0 ? 'OK  ' : 'FAIL'} las 7 ligas arrancan cada año con 10 fichados y 9 fechas${c.arranquesMal.length ? ' · ' + c.arranquesMal.join('; ') : ''}`);
       console.log(`${c.intlMal.length === 0 ? 'OK  ' : 'FAIL'} la Internacional tiene cada año 16 clasificados distintos con 7 ligas${c.intlMal.length ? ' · ' + c.intlMal.join('; ') : ''}`);
-      console.log(`${okTam ? 'OK  ' : 'FAIL'} guardado tras ${c.anos} temporadas: ${kb(c.bytesDespues)} con temporadas ligeras (límite ${kb(GUARDADO_MAX)}; sin podar serían ${kb(c.bytesAntes)}; ${c.aligeradas} temporadas aligeradas)`);
+      console.log(`${okTam ? 'OK  ' : 'FAIL'} guardado tras ${c.anos} temporadas: ${kb(c.real)} guardados de verdad, comprimidos (límite ${kb(GUARDADO_MAX)}), y ${kb(c.bytesDespues)} sin comprimir (tope ${kb(GUARDADO_SIN_MAX)}; sin podar serían ${kb(c.bytesAntes)}; ${c.aligeradas} temporadas aligeradas)`);
+      console.log(`${okMs ? 'OK  ' : 'FAIL'} tiempo de guardado tras ${c.anos} temporadas: ${f1b(c.msGuardar)} ms un guardado normal (límite ${GUARDAR_MS_MAX} ms) · ${f1b(c.msPrimero)} ms el primero tras aligerar${c.modo === 'ceo' ? ', que reescribe las temporadas viejas' : ''}`);
       console.log(`${c.identicos === true ? 'OK  ' : 'FAIL'} resumen de temporada, historial, títulos, clasificaciones y fatiga de carteles idénticos antes y después de podar`);
       console.log(`${c.migra === true ? 'OK  ' : 'FAIL'} la misma partida sin podar en dbv 8 carga, queda en dbv ${g('DBV_ACTUAL')} con ${c.aligeradas} temporadas ligeras (${kb(c.bytesMigrado)}) y los mismos títulos e historial`);
       if (c.fama1) { const sg = x => (x >= 0 ? '+' : '') + f1b(x); const eur = x => Math.round(x).toLocaleString('es-ES');
@@ -646,7 +655,7 @@ w.addEventListener('load', () => setTimeout(() => {
       }
       if (r.anos === FECHA_ANOS) {   // fase D4: lo que ocupa en el guardado y batallas repetidas con y sin rueda de prensa
         const f = g('fby')(fid); const p = g('planDe')(f); r.d4Bytes = JSON.stringify({ prensa: p.prensa, retos: p.retos, rivales: p.rivales }).length;
-        w.eval('aligerarAntiguas = _aligerarReal3;'); g('aligerarAntiguas')(); g('saveNow')(); r.bytesFin = (mem.get(g('slotKey')(1)) || '').length + (mem.get(g('CARRERA_KEY')) || '').length;
+        w.eval('aligerarAntiguas = _aligerarReal3;'); g('aligerarAntiguas')(); g('saveNow')(); r.bytesFin = guardadoReal(mem, 'carrera'); r.bytesFinSin = g('guardadoBytes')();
         const s = g('cur')(); const P = g('prensaDe')(f); const bak = { rueda: P.rueda, presion: P.presion }; const J = g('judgesOf')(s.leagues[g('natKeys')(s)[0]]); const riv = g('activos')().filter(o => !o.jugador).sort((a, b) => a.nivel - b.nivel); const rnd = w.Math.random;
         const q = { iguales: 0, total: 0, conRueda: 0, sinRueda: 0 };
         for (let i = 0; i < RUEDA_PRUEBAS; i++) { const o = riv[Math.floor(i * riv.length / RUEDA_PRUEBAS)];
@@ -670,11 +679,11 @@ w.addEventListener('load', () => setTimeout(() => {
     console.log(`${okResto ? 'OK  ' : 'FAIL'} «Saltar el resto del año»: ${x.anos} temporadas, ${x.paradas} paradas y ${x.pausasRegistradas} pausas registradas (${x.batallas} batallas del jugador)${x.excepciones.length ? ' · ' + x.excepciones.join('; ') : ''}`);
     console.log(`${okReg ? 'OK  ' : 'FAIL'} registro y calendario de carrera sin textos de empresa: ${m.registroEmpresa.length + x.registroEmpresa.length} entradas del registro y ${m.calendarioEmpresa.length} meses del calendario con taquilla, euros, reputación, estrellas, caja, patrocinio o plantilla${m.registroEmpresa.length ? ' · ' + [...new Set(m.registroEmpresa)].slice(0, 3).join(' | ') : ''}${m.calendarioEmpresa.length ? ' · ' + m.calendarioEmpresa.slice(0, 3).join(' | ') : ''}`);
     { const Q = m.rueda || { iguales: 0, total: 0, conRueda: 0, sinRueda: 0 }; const pmax = m.prensaAno.length ? Math.max(...m.prensaAno) : 0;   // fase D4
-      const okPrensa = m.porTipo.prensa > 0 && pmax <= PRENSA_PAUSAS_MAX && x.prensaAno.every(n => n === 0), okRueda = Q.total === RUEDA_PRUEBAS && Q.iguales === Q.total, okTam4 = m.d4Bytes > 0 && m.d4Bytes <= D4_GUARDADO_MAX && m.bytesFin > 0 && m.bytesFin <= GUARDADO_MAX;
+      const okPrensa = m.porTipo.prensa > 0 && pmax <= PRENSA_PAUSAS_MAX && x.prensaAno.every(n => n === 0), okRueda = Q.total === RUEDA_PRUEBAS && Q.iguales === Q.total, okTam4 = m.d4Bytes > 0 && m.d4Bytes <= D4_GUARDADO_MAX && m.bytesFin > 0 && m.bytesFin <= GUARDADO_MAX && m.bytesFinSin <= GUARDADO_SIN_MAX;
       okFechas = okFechas && okPrensa && okRueda && okTam4;
       console.log(`${okPrensa ? 'OK  ' : 'FAIL'} pausas de prensa: ${m.porTipo.prensa || 0} en ${m.anos} temporadas con «Hasta mi próxima batalla», como mucho ${pmax} en una (≤ ${PRENSA_PAUSAS_MAX}) · ${x.prensaAno.reduce((a, b) => a + b, 0)} con «Saltar el resto» · el jugador lanzó ${m.retos} retos y jugó ${m.retosJug} exhibiciones de reto, contando las que aceptó`);
       console.log(`${okRueda ? 'OK  ' : 'FAIL'} la rueda de prensa no cambia la probabilidad de ganar: ${Q.iguales} de ${Q.total} batallas repetidas con la misma semilla dan el mismo resultado sin rueda y con cada tono · gana ${f1b(100 * Q.sinRueda / Math.max(1, Q.total))} % sin rueda y ${f1b(100 * Q.conRueda / Math.max(1, Q.total))} % tras una rueda polémica`);
-      console.log(`${okTam4 ? 'OK  ' : 'FAIL'} guardado con prensa y retos: D4 ocupa ${f1b(m.d4Bytes / 1024)} KB (≤ ${D4_GUARDADO_MAX / 1024} KB) y la partida ${f1b(m.bytesFin / 1024)} KB tras ${m.anos} temporadas (≤ ${f1b(GUARDADO_MAX / 1024)} KB)`); }
+      console.log(`${okTam4 ? 'OK  ' : 'FAIL'} guardado con prensa y retos: D4 ocupa ${f1b(m.d4Bytes / 1024)} KB (≤ ${D4_GUARDADO_MAX / 1024} KB) y la partida ${f1b(m.bytesFin / 1024)} KB guardados de verdad (≤ ${f1b(GUARDADO_MAX / 1024)} KB) y ${f1b(m.bytesFinSin / 1024)} KB sin comprimir (≤ ${f1b(GUARDADO_SIN_MAX / 1024)} KB) tras ${m.anos} temporadas`); }
   }
   // ---- versión 1.2 del creador (va al final para no mover la semilla de los informes de arriba) ----
   // 1) Almacenamiento: la partida de CEO de 20 temporadas en las 3 ranuras (writeSlot: temporadas viejas comprimidas por trozos) y la carrera de 20 años, todo junto, no pasa de ALMACEN_MAX.
@@ -690,12 +699,14 @@ w.addEventListener('load', () => setTimeout(() => {
       const mc = mundos.find(r => r.modo === 'ceo'), mk = mundos.find(r => r.modo === 'carrera');
       if (mc && mc.dump && mk && mk.dump) {
         [1, 2, 3].forEach(n => { g('clearSlot')(n); g('writeSlot')(n, JSON.parse(mc.dump)); });
-        mem.set(g('CARRERA_KEY'), mk.dump);
+        mem.set(g('CARRERA_KEY'), g('packSave')(mk.dump));   // como la guarda saveCarrera
         const usa = pre => [...mem.entries()].filter(([k]) => k.startsWith(pre)).reduce((a, [k, v]) => a + k.length + v.length, 0);
         const total = usa('fms_ceo'), ranura = usa(g('slotKey')(1));
         S.company = null; const carga = g('load')(3) && S.seasons.length === JSON.parse(mc.dump).seasons.length;
         const okAlm = total <= ALMACEN_MAX && carga;
-        okCreador = okCreador && okAlm;
+        const cuadrosLigeras = [mc, mk].reduce((a, r) => a + JSON.parse(r.dump).seasons.filter(sn => sn.ligera).reduce((b, sn) => b + (sn.under || []).filter(e => e.bracket || e.battles || e.table).length, 0), 0);
+        okCreador = okCreador && okAlm && cuadrosLigeras === 0;
+        console.log(`${cuadrosLigeras === 0 ? 'OK  ' : 'FAIL'} las temporadas ligeras no guardan cuadros de las Under (tampoco de las nuevas del creador): ${cuadrosLigeras} con cuadro`);
         console.log(`\n${okAlm ? 'OK  ' : 'FAIL'} almacenamiento: 3 ranuras de CEO de ${mc.anos} temporadas (${kb(ranura)} cada una con las temporadas viejas comprimidas; ${kb(mc.dump.length)} sin comprimir) y la carrera de ${mk.anos} años (${kb(mk.dump.length)}) ocupan ${kb(total)} juntas (límite ${kb(ALMACEN_MAX)}); la ranura 3 vuelve a cargar: ${carga}`);
         // reparto del guardado (sin comprimir): qué ocupa cada parte
         [mk, mc].forEach(r => { const d = JSON.parse(r.dump); const tam = x => JSON.stringify(x).length; const full = d.seasons.filter(sn => !sn.ligera), lig = d.seasons.filter(sn => sn.ligera);

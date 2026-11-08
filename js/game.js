@@ -597,6 +597,7 @@ function unpackSave(raw){ if(raw && raw.slice(0,4)===LZ_TAG){ const d=LZ.decompr
 function chunkKey(n,i){ return slotKey(n)+'_s'+i; }
 const _chunks={};   // slot -> Map(índice de temporada -> objeto ya guardado)
 function chunkMap(n){ return _chunks[n]||(_chunks[n]=new Map()); }
+function chunkSucio(s){ Object.values(_chunks).forEach(m=>m.forEach((v,i)=>{ if(v===s) m.delete(i); })); }   // la temporada cambió en el sitio (aligerada): su trozo se vuelve a escribir
 function readSlot(n, track){ const raw=localStorage.getItem(slotKey(n)); if(!raw) return null; const d=JSON.parse(unpackSave(raw));
   if(d && d.v===2){ const olds=[]; for(let i=0;i<(d.nOld||0);i++){ const c=localStorage.getItem(chunkKey(n,i)); if(c==null) throw new Error('falta la temporada '+i); olds.push(JSON.parse(unpackSave(c))); }
     d.seasons=olds.concat(d.seasons||[]); if(track){ const m=chunkMap(n); m.clear(); olds.forEach((o,i)=>m.set(i,d.seasons[i])); } delete d.v; delete d.nOld; }
@@ -605,8 +606,7 @@ function writeSlot(n, d){
   const ss=d.seasons||[]; const cut=Math.max(0, ss.length-2); const m=chunkMap(n);
   for(let i=0;i<cut;i++){ if(m.get(i)!==ss[i]){ localStorage.setItem(chunkKey(n,i), packSave(saveStr(ss[i]))); m.set(i, ss[i]); } }
   const main=saveStr({v:2, nOld:cut, company:d.company, freestylers:d.freestylers, _counter:d._counter, seasons:ss.slice(cut)});
-  try{ localStorage.setItem(slotKey(n), main); }
-  catch(e){ localStorage.setItem(slotKey(n), packSave(main)); }   // casi sin espacio: también se comprime lo principal
+  localStorage.setItem(slotKey(n), packSave(main));   // lo principal también va comprimido (readSlot lee igual los guardados viejos sin comprimir)
   try{ localStorage.setItem(slotMetaKey(n), JSON.stringify(metaOf(d))); localStorage.setItem('fms_ceo_lastslot', String(n)); }catch(e){} }
 function clearSlot(n){ try{ localStorage.removeItem(slotKey(n)); localStorage.removeItem(slotMetaKey(n)); if(localStorage.getItem('fms_ceo_lastslot')===String(n)) localStorage.removeItem('fms_ceo_lastslot');
     for(let i=0;i<5000 && localStorage.getItem(chunkKey(n,i))!=null;i++) localStorage.removeItem(chunkKey(n,i)); }catch(e){} chunkMap(n).clear(); }
@@ -642,11 +642,11 @@ function saveNow(){
     if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(saveFailModal, 60); }
   }
 }
-// modo carrera: un solo guardado en CARRERA_KEY, al momento, sin ranuras ni compresión (como antes de las ranuras; el simulador mide su tamaño)
+// modo carrera: un solo guardado en CARRERA_KEY, al momento y comprimido (LZ), sin ranuras. Las carreras viejas sin comprimir se leen igual (unpackSave)
 function saveCarrera(){
   try{
     const dump = {company:state.company, freestylers:state.freestylers, seasons:state.seasons, _counter:state._counter};
-    localStorage.setItem(CARRERA_KEY, saveStr(dump));
+    localStorage.setItem(CARRERA_KEY, packSave(saveStr(dump)));
     state.ui.saveFailed=false;
   }catch(e){
     if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(saveFailModal, 60); }
@@ -663,7 +663,7 @@ function load(n){   // n: ranura de CEO (1-3; sin n, la actual o la 1) o 'carrer
   flushSave(); clearUiDrafts();
   try{
     let d=null;
-    if(n==='carrera'){ const raw=localStorage.getItem(CARRERA_KEY); if(!raw) return false; d=JSON.parse(raw); }
+    if(n==='carrera'){ const raw=localStorage.getItem(CARRERA_KEY); if(!raw) return false; d=JSON.parse(unpackSave(raw)); }
     else { if(n==='ceo') n=null; n=n||state.ui.slot||1; d=readSlot(n, true); }
     if(!d || !d.company) return false;
     state.company=d.company; state.freestylers=d.freestylers||[]; state.seasons=d.seasons||[]; state._counter=d._counter||1; state.ui.slot = n==='carrera' ? null : n;
@@ -1584,7 +1584,7 @@ function importGameFile(ev){
     let d; try{ d=JSON.parse(r.result); if(!d || !d.company || !Array.isArray(d.seasons)) throw 0; }catch(e){ toast('Ese archivo no es una partida de FMS CEO.'); return; }
     state.ui.menuMode=null; closeModal();
     if(d.company.modo==='carrera'){   // una carrera va a su propio guardado, sin ranuras
-      try{ localStorage.setItem(CARRERA_KEY, saveStr(d)); }catch(e){ toast('No cabe la carrera en el guardado del navegador.'); return; }
+      try{ localStorage.setItem(CARRERA_KEY, packSave(saveStr(d))); }catch(e){ toast('No cabe la carrera en el guardado del navegador.'); return; }
       if(load('carrera')){ toast('Carrera importada.'); goto('carrera'); } else toast('No se pudo cargar la carrera.');
       return; }
     const n=state.ui.importSlot||state.ui.slot||1; state.ui.importSlot=null;
@@ -1770,7 +1770,7 @@ function renderView(){
 function hayPartida(modo){ try{ return !!localStorage.getItem(storageKey(modo)); }catch(e){ return false; } }
 // Resumen de una partida guardada para la portada, sin cargarla en el estado
 function resumenPartida(modo){
-  try{ const d=JSON.parse(localStorage.getItem(storageKey(modo))||'null'); if(!d || !d.company) return null;
+  try{ const raw=localStorage.getItem(storageKey(modo)); const d=raw ? JSON.parse(unpackSave(raw)) : null; if(!d || !d.company) return null;
     const s=(d.seasons||[]).slice(-1)[0]; const f=(modo==='carrera' && d.company.carrera) ? (d.freestylers||[]).find(x=>x.id===d.company.carrera.fid) : null;
     return { titulo: modo==='carrera' ? (f ? f.name : 'Carrera') : d.company.name, sub: s ? `Temporada ${s.year}${s.phase==='pre'?' · pretemporada':(s.phase==='done'?' · cerrada':'')}` : 'Sin temporadas' };
   }catch(e){ return null; } }
@@ -4444,13 +4444,13 @@ function aligerarTemporada(s){
       events:(s.rb.events||[]).map(e=>({key:e.key, day:e.day, played:e.played, champion:e.champion, runnerUp:e.runnerUp, third:e.third})) }; }
   s.under=(s.under||[]).map(e=>({key:e.key, day:e.day, played:e.played, n:e.n, champion:e.champion, runnerUp:e.runnerUp}));
   s.log=[]; delete s.streams; delete s.uq; delete s.exEvents; delete s.twUsados; delete s.twTextos;
-  s.ligera=true; return true;
+  s.ligera=true; chunkSucio(s); return true;
 }
 // Aligera todas las temporadas cerradas salvo las LIGERA_TRAS más recientes. Devuelve cuántas aligeró.
 // Torneos locales de temporadas cerradas: solo campeón, finalista y tercero; los que jugó el jugador se conservan enteros (su historia y sus rivales salen de ahí). Devuelve cuántos podó.
 function aligerarLocales(){ const fid=state.company && state.company.carrera ? state.company.carrera.fid : null; let n=0;
   state.seasons.filter(s=>s.phase==='done' && !s.ligera).forEach(s=>{ (s.under||[]).forEach((e,i)=>{ if(!esLocal(e.key) || !e.bracket) return; if(fid && (e.participants||[]).includes(fid)) return;
-    s.under[i]={key:e.key, day:e.day, played:e.played, size:e.size, champion:e.champion, runnerUp:e.runnerUp, third:e.third, podado:true}; n++; }); });
+    s.under[i]={key:e.key, day:e.day, played:e.played, size:e.size, champion:e.champion, runnerUp:e.runnerUp, third:e.third, podado:true}; n++; chunkSucio(s); }); });
   return n; }
 function aligerarAntiguas(){ const cerradas=state.seasons.filter(s=>s.phase==='done'); let n=0; cerradas.slice(0, Math.max(0, cerradas.length-LIGERA_TRAS)).forEach(s=>{ if(aligerarTemporada(s)) n++; }); return n; }
 function topFreestylersHtml(s){
