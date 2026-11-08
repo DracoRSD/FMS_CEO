@@ -765,7 +765,8 @@ const EXTRA_IMG = {
   "tw_kileo90": "assets/img/extra/tw_kileo90.jpg",
   "tw_pylluko20": "assets/img/extra/tw_pylluko20.jpg",
   "tw_fabrizicerrano": "assets/img/extra/tw_fabrizicerrano.jpg",
-  "tw_elneisinsentido": "assets/img/extra/tw_elneisinsentido.jpg"
+  "tw_elneisinsentido": "assets/img/extra/tw_elneisinsentido.jpg",
+  "tw_torreth_data3": "assets/img/extra/tw_torreth_data3.jpg"
 };
 
 const LOGOS = {

@@ -675,6 +675,7 @@ function load(n){   // n: ranura de CEO (1-3; sin n, la actual o la 1) o 'carrer
       if(last) Object.values(s.leagues||{}).forEach(L=>{ if(!L.finished) L.manual=true; }); });
     syncRealPool(); mergeCustoms();
     { const ls=state.seasons[state.seasons.length-1]; if(ls){ Object.values(ls.leagues||{}).forEach(L=>{ if(L.jurado) L.jurado=L.jurado.filter(n=>jdBy(n)); }); if(ls.intl && ls.intl.jurado) ls.intl.jurado=ls.intl.jurado.filter(n=>jdBy(n)); } }   // jurados creados que ya se borraron
+    state.seasons.forEach(fmtRepair);
     { const ls=state.seasons[state.seasons.length-1]; if(ls) rbSanitize(ls); if(ls && ls.phase==='live' && !ls.under2){ try{ under2Generate(ls, ls.day+1); }catch(e){ console.error(e); } } }
     setTimeout(()=>{ try{ offerOfficialMerge(); }catch(e){ console.error(e); } }, 400);
     return true;
@@ -755,14 +756,15 @@ function clearSchedule(){
    la World Series entera en un mes a mitad de temporada (sin nacionales ese mes) y el Internacional al final. */
 function autoCalendar(){
   const s=cur(); if(s.phase!=='pre') return;
-  if(!rostersComplete(s)){ toast('Primero completa los fichajes de todas las ligas (10 por liga).'); return; }
+  if(!rostersComplete(s)){ toast('Primero completa los fichajes de todas las ligas.'); return; }
   const y=s.year, diy=daysInYear(y);
   s.activeKeys.forEach(k=>{ s.leagues[k].dates=[]; delete s.leagues[k].fuDate; }); s.intl.date=null;
   const busy=new Set([...rbEventsList(s).map(e=>e.day), ...(s.under||[]).map(e=>e.day)]); if(rbOn(s) && s.rb.inter && s.rb.inter.voteDay!=null) busy.add(s.rb.inter.voteDay);
   const used=new Set();
   const mStart=m=>Math.max(dateToDay(y,m,1), LU_RESERVED), mEnd=m=> m===11 ? diy-1 : dateToDay(y,m+1,1)-1;
   const wkend=d=>{ const w=dayToDate(y,d).getUTCDay(); return w===5||w===6||w===0; };
-  const free=(d,key)=> d>=LU_RESERVED && d<diy && !busy.has(d) && !used.has(d) && !(key && s.leagues[key].dates.some(x=>Math.abs(x-d)<=1));
+  const capEnd = diy-1 - (fuOn(s) ? 10 : 0) - (s.intlEnabled ? 8 : 0);   // con FMS Under y/o Internacional se deja hueco al final de la temporada
+  const free=(d,key)=> d>=LU_RESERVED && d<diy && !busy.has(d) && !used.has(d) && !(key && !isWS(key) && d>capEnd) && !(key && s.leagues[key].dates.some(x=>Math.abs(x-d)<=1));
   // el día libre más cercano al objetivo dentro del mes (mejor viernes a domingo)
   const pick=(target, a, b, key)=>{ let best=null, bs=1e9;
     for(let d=a; d<=b; d++){ if(!free(d,key)) continue; const sc=Math.abs(d-target)+(wkend(d)?0:5); if(sc<bs){ bs=sc; best=d; } } return best; };
@@ -785,12 +787,14 @@ function autoCalendar(){
   nat.forEach(k=>{ const L=s.leagues[k]; let guard=0; while(L.dates.length<nJ(k) && guard++<40){ const last=Math.max(LU_RESERVED, ...L.dates); const r=wsRange(s);
     let d=null; for(let x=last+2; x<diy; x++){ if(r && x>=r[0] && x<=r[1]) continue; if(free(x,k)){ d=x; break; } } if(d==null) break; L.dates.push(d); used.add(d); } });
   // FMS Under: unos días después de la última jornada de cada liga
-  if(fuOn(s)) nat.forEach(k=>{ const L=s.leagues[k]; if(!L.dates.length) return; const last=Math.max(...L.dates); const d=pick(last+7, last+3, Math.min(diy-1,last+40), k); if(d!=null){ L.fuDate=d; used.add(d); } });
+  if(fuOn(s)) nat.forEach(k=>{ const L=s.leagues[k]; if(!L.dates.length) return; const last=Math.max(...L.dates); let d=null;
+    for(const [t,a,b] of [[last+7,last+3,last+40],[last+3,last+2,diy-1],[last+2,last+1,diy-1]]){ d=pick(t, a, Math.min(diy-1,b), null); if(d!=null) break; }
+    if(d!=null){ L.fuDate=d; used.add(d); } });
   // Internacional: después de la última nacional
   if(intl){ const ln=Math.max(lastNationalDay(s), ...nat.map(k=>s.leagues[k].fuDate!=null?s.leagues[k].fuDate:-1)); const d=pick(Math.max(ln+10, dateToDay(y,11,1)+12), ln+1, diy-1, null); s.intl.date=d; }
-  const miss=s.activeKeys.filter(k=>s.leagues[k].dates.length<nJ(k));
+  const miss=s.activeKeys.filter(k=>s.leagues[k].dates.length<nJ(k) || (fuOn(s) && !isWS(k) && s.leagues[k].fuDate==null)); if(intl && s.intl.date==null) miss.push(INTL.key);
   state.ui.calMonth=0; state.ui.calTool=s.activeKeys[0];
-  toast(miss.length ? `No han cabido todas las fechas de ${miss.map(k=>ldef(k).short).join(', ')}: complétalas a mano.` : 'Calendario completo: 1 jornada por mes y liga, World Series a mitad de temporada' + (intl?' e Internacional al final.':'.'));
+  toast(miss.length ? `No han cabido todas las fechas de ${miss.map(k=>ldef(k).short||ldef(k).name).join(', ')}: complétalas a mano.` : 'Calendario completo'+(hasWS?', World Series a mitad de temporada':'')+(fuOn(s)?', FMS Under al final de cada liga':'')+(intl?' e Internacional al final.':'.'));
   render();
 }
 function calClick(day){
@@ -804,7 +808,7 @@ function calClick(day){
     if(ev){ if(ev.key===INTL.key) goto('intl'); else { state.ui['jnav_'+ev.key]=ev.j-1; goto('league',{key:ev.key}); } }
     return;
   }
-  if(!rostersComplete(s)){ toast('Primero completa los fichajes de todas las ligas (10 por liga).'); return; }
+  if(!rostersComplete(s)){ toast('Primero completa los fichajes de todas las ligas.'); return; }
   if(ev){
     if(ev.key===INTL.key) s.intl.date=null;
     else { const L=s.leagues[ev.key]; L.dates.splice(L.dates.indexOf(day),1); }
@@ -972,8 +976,7 @@ function computeStandings(L){
     if(!m.result) return; const w=t[S(m.result.winner)], l=t[S(m.result.loser)]; if(!w && !l) return;
     if(w) w.pj++; if(l) l.pj++;
     { const p=battlePTB(m); if(p){ if(t[S(m.a)]) t[S(m.a)].ptb+=p[0]; if(t[S(m.b)]) t[S(m.b)].ptb+=p[1]; } }
-    if(m.ep){ if(w){ w.v++; w.pts+=3; } if(l) l.d++; }   // contra un extraplayer: 3 o 0, haya réplica o no
-    else if(m.result.tiebreak){ if(w){ w.vr++; w.pts+=2; } if(l){ l.dr++; l.pts+=1; } } else { if(w){ w.v++; w.pts+=3; } if(l) l.d++; }
+    if(m.result.tiebreak){ if(w){ w.vr++; w.pts+=2; } if(l){ l.dr++; l.pts+=1; } } else { if(w){ w.v++; w.pts+=3; } if(l) l.d++; }
   });
   // desempate a puntos: entre dos, el enfrentamiento directo; si no se han enfrentado o empatan tres o más, el PTB acumulado.
   // Después: más victorias directas, menos derrotas, más nivel y, por último, el nombre (nunca queda nada al azar)
@@ -1043,6 +1046,11 @@ function styleVariety(ids){
   const bonus = rep.length ? -25 : Math.round(Math.max(0,n-3)*2.5);
   return {n, max, rep, bonus, counts:c};
 }
+// una temporada ya empezada conserva su formato (5 / 9 / 11 jornadas) aunque algo lo hubiera cambiado: se deduce de las jornadas ya creadas
+function fmtRepair(s){ if(!s || s.phase==='pre') return; if(s.formatLocked){ s.format=s.formatLocked; return; }
+  const n=natKeys(s).map(k=>(s.leagues[k].rounds||[]).length).find(x=>x>0); if(!n) return;
+  if(n===WS_JORNADAS) s.format='ws'; else if(n===11) s.format='f11'; else if(s.format==='ws'||s.format==='f11') s.format='short';
+  s.formatLocked=s.format; }
 function startSeason(){
   const s=cur(); const issues=preseasonIssues(s);
   if(issues.length){ toast(issues[0]); return; }
@@ -1068,7 +1076,7 @@ function startSeason(){
     L.lastEventDay = -14; L.played=0; L.finished=false;
   });
   s.lastFmsDay=-14; jdSeasonStart(s);
-  s.phase='live'; s.day=0; state.ui.calMonth=null;
+  s.phase='live'; s.day=0; state.ui.calMonth=null; s.formatLocked=s.format;   // el formato ya no puede cambiar en toda la temporada
   try{ teamRQSelect(s); }catch(e){ console.error(e); }
   rbDraw(s);
   try{ under2Generate(s, 0); }catch(e){ console.error(e); }
@@ -1384,7 +1392,7 @@ function advance(mode){
       if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day);
       render(); openLineup(ev.key); return;
     }
-    if(ev && (ev.pause==='ispk' || ev.pause==='ijud')){ render(); state.ui.ispk=[]; state.ui.idj=null; state.ui.ijd=[]; showIntlStaff(); return; }
+    if(ev && (ev.pause==='ispk' || ev.pause==='ijud')){ render(); state.ui.ispk=[]; state.ui.idj=null; state.ui.ijd=[]; try{ showIntlStaff(); }catch(e){ console.error(e); intlJdAuto(s); intlSpkAuto(s); toast('Staff del Internacional elegido automáticamente.'); render(); } return; }
     if(ev && ev.pause==='replace'){ render(); showReplace(ev.key); return; }
     if(ev && ev.pause==='exhib'){
       if(state.view.name==='calendar') state.ui.calMonth=monthOf(s.year,s.day);
@@ -2560,7 +2568,7 @@ function renderPreseason(s){
           return `<button class="seg ${s.format==='f11'?'on':''} ${lk11?'locked':''}" onclick="setFormat('f11')" aria-pressed="${s.format==='f11'}" title="${isPandemic()?'No disponible en el modo Pandemia':((state.company.stars||0)<2?'Se desbloquea con 2 estrellas':'12 competidores y 11 jornadas')}">${lk11?'🔒 ':''}11 Jornadas</button>
         <button class="seg ${s.format==='ws'?'on':''} ${lk5?'locked':''}" onclick="setFormat('ws')" aria-pressed="${s.format==='ws'}" title="${isPandemic()?'No disponible en el modo Pandemia':((state.company.stars||0)<4?'Se desbloquea con 4 estrellas':'5 jornadas, 2 batallas por competidor y extraplayers')}">${lk5?'🔒 ':''}5 Jornadas</button>`; })()}
       </div>
-      <p class="step-note" style="margin-top:8px;">${s.format==='f11' ? 'Formato de 11 Jornadas: 12 competidores por liga, todos contra todos en 11 jornadas (6 batallas por jornada), en formato corto. Descienden el 11º y el 12º; con el Vida o muerte activado hay dos play offs (10º y 9º).' : s.format==='ws' ? 'Formato de 5 Jornadas: las ligas nacionales se juegan como la World Series, con 5 jornadas, cada competidor hace 2 batallas por jornada y hay 2 batallas contra extraplayers. Siempre en formato corto. Ganar a un extraplayer da 3 puntos; perder, 0 (también en réplica). Después, la comunidad opina de los extraplayers como en las exhibiciones.' : seasonFormat(s)==='short' ? 'Random Mode, 2 minutos libres y Deluxe. Cada juez puntúa del 1 al 10 por ronda.'+(s.activeKeys.includes(WS.key)?' La World Series siempre se juega en formato corto.':'') : 'Easy Mode (0-30), Hard Mode (0-30), Temáticas (0-44), Random Mode (0-38), 2 minutos libres (0-30 cada uno) y Deluxe (0-42). Más rondas, más peso de los estilos.'+(s.activeKeys.includes(WS.key)?' La World Series siempre se juega en formato corto.':'')}</p>
+      <p class="step-note" style="margin-top:8px;">${s.format==='f11' ? 'Formato de 11 Jornadas: 12 competidores por liga, todos contra todos en 11 jornadas (6 batallas por jornada), en formato corto. Descienden el 11º y el 12º; con el Vida o muerte activado hay dos play offs (10º y 9º).' : s.format==='ws' ? 'Formato de 5 Jornadas: las ligas nacionales se juegan como la World Series, con 5 jornadas, cada competidor hace 2 batallas por jornada y hay 2 batallas contra extraplayers. Siempre en formato corto. Contra los extraplayers se puntúa igual que en el resto de batallas. Después, la comunidad opina de los extraplayers como en las exhibiciones.' : seasonFormat(s)==='short' ? 'Random Mode, 2 minutos libres y Deluxe. Cada juez puntúa del 1 al 10 por ronda.'+(s.activeKeys.includes(WS.key)?' La World Series siempre se juega en formato corto.':'') : 'Easy Mode (0-30), Hard Mode (0-30), Temáticas (0-44), Random Mode (0-38), 2 minutos libres (0-30 cada uno) y Deluxe (0-42). Más rondas, más peso de los estilos.'+(s.activeKeys.includes(WS.key)?' La World Series siempre se juega en formato corto.':'')}</p>
     </div>
     <div class="step ${rostersOk?'ok':''}">
       <div class="step-head"><div class="step-num">3</div><h3>Fichajes</h3>${state.seasons.length>1?`<span class="top-spacer"></span><button class="btn small" onclick="repeatStaff()">🔁 Repetir staff</button>`:''}</div>
@@ -2724,7 +2732,7 @@ function renderCalendar(){
     if(jug) return h+`<p class="step-note">El calendario del año se dibuja al empezar la temporada: 9 jornadas por liga, Red Bull, Under e Internacional.</p>`;
     if(!rostersComplete(s)){
       const pend=s.activeKeys.filter(k=>s.leagues[k].competitors.length<lgSize(k,s));
-      return h+`<div class="empty-state"><span class="big">Primero el line up</span>El calendario se elige cuando todas las ligas tienen su line up completo.${pend.length?` Falta: ${pend.map(k=>`${ldef(k).name} (${s.leagues[k].competitors.length}/10)`).join(', ')}.`:''}<div style="margin-top:14px;"><button class="btn primary" onclick="goto('dashboard')">Ir a fichajes</button></div></div>`;
+      return h+`<div class="empty-state"><span class="big">Primero el line up</span>El calendario se elige cuando todas las ligas tienen su line up completo.${pend.length?` Falta: ${pend.map(k=>`${ldef(k).name} (${s.leagues[k].competitors.length}/${lgSize(k,s)})`).join(', ')}.`:''}<div style="margin-top:14px;"><button class="btn primary" onclick="goto('dashboard')">Ir a fichajes</button></div></div>`;
     }
     h+=`<div class="banner">Elige una liga y toca días vacíos para poner sus jornadas. Toca una fecha ya puesta para quitarla. No puede haber dos eventos el mismo día, y los días de Red Bull están ocupados. De lunes a jueves la taquilla es un ${Math.round((1-WEEKDAY_TICKET)*100)}% menor que de viernes a domingo (🎟).${s.intlEnabled?' El Internacional se coloca cuando estén todas las jornadas nacionales, y siempre después de la última.':''}</div>
     <div class="cal-tools">
@@ -2791,7 +2799,7 @@ function renderCalendar(){
 function renderLeagues(){
   const s=cur();
   return `<div class="detail-head"><h1>Ligas ${s.year}</h1></div>
-  ${s.activeKeys.length? `<div class="league-toggle-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr));">${s.activeKeys.map(k=> s.phase==='pre' ? `<div class="step" style="cursor:pointer" onclick="goto('league',{key:'${k}'})"><div style="display:flex;gap:8px;align-items:center;font-weight:700;">${leagueDot(k)} ${ldef(k).name}<span class="top-spacer"></span><span class="status ${s.leagues[k].competitors.length===10?'done':'pending'}">${s.leagues[k].competitors.length}/10</span></div></div>` : leagueCard(s,k)).join('')}</div>` : `<div class="empty-state"><span class="big">Sin ligas activas</span>Actívalas en Inicio.</div>`}`;
+  ${s.activeKeys.length? `<div class="league-toggle-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr));">${s.activeKeys.map(k=> s.phase==='pre' ? `<div class="step" style="cursor:pointer" onclick="goto('league',{key:'${k}'})"><div style="display:flex;gap:8px;align-items:center;font-weight:700;">${leagueDot(k)} ${ldef(k).name}<span class="top-spacer"></span><span class="status ${s.leagues[k].competitors.length===lgSize(k,s)?'done':'pending'}">${s.leagues[k].competitors.length}/${lgSize(k,s)}</span></div></div>` : leagueCard(s,k)).join('')}</div>` : `<div class="empty-state"><span class="big">Sin ligas activas</span>Actívalas en Inicio.</div>`}`;
 }
 function renderLeague(key){
   const s=cur(); const L=s.leagues[key]; const def=ldef(key);
@@ -2818,7 +2826,7 @@ function renderLeague(key){
     return `<tr class="${isQ?'q':''} ${rel?'rel':''} ${pot?'pot':''}"><td class="pos">${i+1}</td><td><span style="display:inline-flex;align-items:center;gap:8px;cursor:pointer" onclick="showFreestyler('${r.id}')">${miniAvatar(r.id,24)} ${fnameH(r.id)}</span>${isQ?'<span class="qbadge">INTL</span>':''}${(()=>{ const n=L.rounds.flat().filter(m=>m.postponed&&!m.result&&(m.a===r.id||m.b===r.id)).length; return n?`<span class="tag-mini pend">⏳ ${n} batalla${n>1?'s':''} pendiente${n>1?'s':''}</span>`:''; })()}${rel&&L.played?'<span class="tag-mini" style="background:#2a2a2e;color:var(--gray)">Descenso</span>':''}${pot&&L.played?'<span class="tag-mini po-tag">⚔️ Play Off</span>':''}</td>
     <td class="num">${r.pj}</td><td class="num">${r.v}</td><td class="num">${r.vr}</td><td class="num">${r.dr}</td><td class="num">${r.d}</td><td class="num ptb">${fpt(r.ptb)}</td><td class="pts num">${r.pts}</td></tr>`; }).join('')}
   </tbody></table></div>
-  <p class="step-note" style="margin-top:-14px; margin-bottom:10px;">Victoria 3 · Victoria en réplica 2 · Derrota en réplica 1 · Derrota 0 · Empate a puntos: enfrentamiento directo (si empatan dos y ya se han enfrentado) y si no, PTB${isWSF(key)?' · Contra un extraplayer: ganar 3, perder 0 (también en réplica)':''}</p>`;
+  <p class="step-note" style="margin-top:-14px; margin-bottom:10px;">Victoria 3 · Victoria en réplica 2 · Derrota en réplica 1 · Derrota 0 · Empate a puntos: enfrentamiento directo (si empatan dos y ya se han enfrentado) y si no, PTB${isWSF(key)?' · Contra un extraplayer se puntúa igual (en réplica, 2 o 1)':''}</p>`;
   const navKey='jnav_'+key;
   let j = state.ui[navKey]; if(j==null) j=Math.max(0,Math.min(nJ(key)-1, L.played? L.played-1 : 0));
   const round=L.rounds[j]||[];
@@ -3473,7 +3481,7 @@ function devAutoSign(){
   s.activeKeys.forEach(k=>{
     const L=s.leagues[k]; const def=ldef(k);
     const pool=activos().filter(f=>!signedLeagueOf(s,f.id) && !L.blocked.includes(f.id)).sort((a,b)=>(def.countries.includes(b.country)-def.countries.includes(a.country)) || b.nivel-a.nivel);
-    for(const f of pool){ if(L.competitors.length>=10) break; if(state.company.money<contractCost(f,k)) continue; toggleSign(k,f.id); }
+    for(const f of pool){ if(L.competitors.length>=lgSize(k,s)) break; if(state.company.money<contractCost(f,k)) continue; toggleSign(k,f.id); }
   });
   render();
 }
@@ -4043,7 +4051,7 @@ function shFit(){
   const wrap=document.getElementById('shWrap'); const st=shStage(); if(!wrap||!st) return;
   const top=wrap.getBoundingClientRect().top + (document.getElementById('rbShow').querySelector('.rbs').scrollTop||0);
   const D=shDims();
-  const k = (shPortrait() || window.innerHeight<520) ? Math.min(wrap.clientWidth/D.W, 1.15) : Math.min(wrap.clientWidth/D.W, Math.max(0.3,(window.innerHeight-top-96)/D.H), 1.3);
+  const k = shPortrait() ? Math.min(wrap.clientWidth/D.W, 1.15) : Math.min(wrap.clientWidth/D.W, Math.max(0.3,(window.innerHeight-top-(window.innerHeight<520?64:96))/D.H), window.innerHeight<520?1.15:1.3);   // en móvil horizontal el cuadro cabe entero y los botones quedan a la vista
   st.style.transform=`translateX(-50%) scale(${k})`; wrap.style.height=Math.ceil(D.H*k)+'px';
 }
 function shSpeedBtns(){
@@ -4080,7 +4088,7 @@ function openRBShow(key){
   let root=document.getElementById('rbShow');
   if(!root){ root=document.createElement('div'); root.id='rbShow'; document.body.appendChild(root); }
   themeEl(root, key);
-  root.innerHTML=`<div class="rbs rbs-enter ${key===INTL.key?'fms':''}" ${isUnder(key)||isFU(key)?`style="background:radial-gradient(ellipse at top, color-mix(in srgb, ${isFU(key)?ldef(key.slice(3)).badge:udef(key).color} 55%, #07070c) 0%, #07070c 62%)"`:''} role="dialog" aria-label="${showName(key)}">
+  root.innerHTML=`<div class="rbs rbs-enter ko ${key===INTL.key?'fms':''}" ${isUnder(key)||isFU(key)?`style="background:radial-gradient(ellipse at top, color-mix(in srgb, ${isFU(key)?ldef(key.slice(3)).badge:udef(key).color} 55%, #07070c) 0%, #07070c 62%)"`:''} role="dialog" aria-label="${showName(key)}">
     <div class="rbs-top"><img class="rb-mark sm ${key===INTL.key?'fm-logo':''}" src="${showLogo(key)}" alt=""><div style="min-width:0"><div class="rbs-title">${showName(key)} ${s.year}</div>
       <div class="rbs-sub">${fmtDay(s.year,ev.day??ev.date)}${SHOW.sede?' · 📍 '+SHOW.sede+' (locales +'+LOCAL_BONUS+' de nivel)':''} · cruces por sorteo</div></div>
       <span class="top-spacer"></span><button class="btn small ghost x2-btn ${state.ui.x2?'on':''}" id="shX2" aria-pressed="${state.ui.x2?'true':'false'}" title="Doble de velocidad" onclick="shToggleX2()">X2</button><button class="btn small ghost" onclick="shSkip()">Saltar</button></div>
@@ -4283,6 +4291,9 @@ function simulateFMSBattle(m, lvB, judges, opts){
           if(fB && sb<sa+mg){ if(sb<sa){ const t=sa; sa=sb; sb=t; } if(sb<sa+mg){ if(sb+mg<=R.max) sb+=mg; else sa=Math.max(R.min, sa-mg); } } }
         { const sA=stS(A); if(sA && sA===stS(B)){ const dd=(fmt==='long'?6:2)*(sA>0?1:-1);   // Navas: dos Disonantes -> notas infladas; dos Ingenios -> notas hundidas
             sa=clamp(sa+dd, R.min, R.max); sb=clamp(sb+dd, R.min, R.max); } } }
+      { const kA=A.name==='Khan' && B.name!=='Khan', kB=B.name==='Khan' && A.name!=='Khan', st=fmt==='long'?1:0.5;   // Khan: todos los jueces le puntúan por debajo del rival
+        if(kA && sa>=sb){ const t=sa; sa=sb; sb=t; if(sa>=sb){ if(sb+st<=R.max) sb+=st; else sa=Math.max(R.min, sa-st); } }
+        if(kB && sb>=sa){ const t=sb; sb=sa; sa=t; if(sb>=sa){ if(sa+st<=R.max) sa+=st; else sb=Math.max(R.min, sb-st); } } }
       ra.push(sa); rb.push(sb); tA[j]+=sa; tB[j]+=sb;
     }
     s+=ra.map(x=>scoreChar(x*2)).join('')+rb.map(x=>scoreChar(x*2)).join('');
@@ -4299,6 +4310,7 @@ function simulateFMSBattle(m, lvB, judges, opts){
     aWins=ha>=3; h=aWins?[ha,5-ha]:[5-ha,ha];
   } else aWins=nA>nB;
   if(A.name==='Khan' && B.name!=='Khan') aWins=false; else if(B.name==='Khan' && A.name!=='Khan') aWins=true;
+  if(tiebreak && (A.name==='Khan')!==(B.name==='Khan')){ const hw=rint(3,5); h=aWins?[hw,5-hw]:[5-hw,hw]; }   // la réplica también la pierde Khan
   const W=aWins?A:B, Lo=aWins?B:A;
   m.d={s, v, h, e:2, j:judges.slice()}; if(fmt==='long') m.d.f='L'; if(JD.some(Boolean)) m.d.jr=JD.map(x=>x?x.name:null);   // asientos con jurado contratado
   m.result={winner:W.id, loser:Lo.id, tiebreak};
@@ -4397,8 +4409,7 @@ function seasonTopBattles(s, n){
   const push=(m, logo, comp, k)=>{ if(m && m.result && m.views) out.push({m, logo, comp, k}); };
   s.activeKeys.forEach(k=>{ const L=s.leagues[k]; (L.rounds||[]).forEach((r,ri)=> r.forEach(m=>push(m, LOGOS[k], `${ldef(k).name} · J${ri+1}`, k))); });
   if(s.intl && s.intl.bracket){ s.intl.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, LOGOS.fms_internacional, `${INTL.name} · ${KO[ri]}`, INTL.key))); push(s.intl.bracket.third, LOGOS.fms_internacional, `${INTL.name} · 3er puesto`, INTL.key); }
-  if(rbOn(s)){ [...s.rb.events, s.rb.inter].forEach(ev=>{ if(!ev.bracket) return; const nm=ev===s.rb.inter?RB_INT.name:rbdef(ev.key).name;
-    ev.bracket.rounds.forEach((r,ri)=>r.forEach(m=>push(m, RB_LOGO, `${nm} · ${KO[ri]}`, 'rb'))); push(ev.bracket.third, RB_LOGO, `${nm} · 3er puesto`, 'rb'); }); }
+  s.activeKeys.forEach(k=>{ const L=s.leagues[k]; [...Object.entries(L.exhib||{}), ...Object.entries(L.fexhib||{})].forEach(([j,x])=>{ if(x && x.m) push(x.m, LOGOS[k], `${ldef(k).name} · Exhibición J${+j+1}`, k); }); });   // el resumen es de las FMS: sin Red Bull
   return out.sort((a,b)=>b.m.views-a.m.views).slice(0,n||10);
 }
 function seasonTopFreestylers(s, n){
@@ -4502,7 +4513,7 @@ function fmData(){ const s=cur(); const L=s.leagues[SHOW.key]; const base=L.roun
   o0.forEach(([i,h])=>{ const m=base[i]; if(m && m.result && !m.recup) list.push([m,h]); });
   const round=list.map(x=>x[0]); const ord=list.map((x,i)=>[i,x[1]]);
   return {s, L, round, ord}; }
-function fmStage(){ return document.getElementById('fmStage'); }
+function fmStage(){ return document.getElementById('fmStage') || document.createElement('div'); }   // si se cierra el show a mitad, no rompe
 function fmK(){ return shSpeed().k; }
 function fmAlive(tok){ return SHOW && SHOW.kind==='fms' && SHOW.tok===tok; }
 function fmSkip(){ if(!SHOW) return; SHOW.tok++; SHOW.nextRes=null; fmSkipBtn(false); fmSummary(); }
@@ -4517,12 +4528,16 @@ function countUp(el, from, to, ms, fmt){
 function fmFace(id, cls){ const f=fby(id); return `<span class="fm-face ${cls||''}" style="${avatarDivStyle(f)}">${avatarContent(f)}</span>`; }
 async function fmRun(tok){
   const {L, round, ord}=fmData(); const k=fmK;
+  // Vida o muerte: en el cartel no se desvela quién lo ha ganado (sale como "Ganador del Vida o muerte")
+  const poW={}; if(SHOW.j===0 && !SHOW.replay) poList(L).forEach(P=>{ if(P.done && P.winner && P.winner===P.b) poW[P.b]=P; });
+  const cSide=(m,id,r)=> (!m.po && poW[id]) ? (r ? `<span class="fm-cn r">Ganador del V/M</span><span class="fm-face" style="display:inline-flex;align-items:center;justify-content:center;font-weight:900;background:#2a2a33">?</span>` : `<span class="fm-face" style="display:inline-flex;align-items:center;justify-content:center;font-weight:900;background:#2a2a33">?</span><span class="fm-cn">Ganador del V/M</span>`)
+    : (r ? `<span class="fm-cn r">${fnameH(id)}</span>${fmFace(id)}` : `${fmFace(id)}<span class="fm-cn">${fnameH(id)}</span>`);
   // 1. intro
   fmStage().innerHTML=`<div class="fm-intro"><img src="${LOGOS[SHOW.key]}" alt=""><div class="fm-intro-small">Empieza la</div><div class="fm-intro-big">Jornada ${SHOW.j+1}</div></div>`;
   await shWait(3200*k()); if(!fmAlive(tok)) return;
   // 2. cartel, de menos a más hype
   fmStage().innerHTML=`<div class="fm-lineup"><div class="fm-lineup-t">Cartel de la jornada <small>de menos a más nivel</small></div>${ord.map(([i,hs],n)=>{ const m=round[i];
-    return `<div class="fm-card" id="fmCard${n}"><span class="fm-n">${n+1}</span>${fmFace(m.a)}<span class="fm-cn">${fnameH(m.a)}</span><span class="fm-cvs">VS</span><span class="fm-cn r">${fnameH(m.b)}</span>${fmFace(m.b)}<span class="fm-hs">${m.po?'<b class="fm-ex po">VIDA O MUERTE</b> ':(m.ex?'<b class="fm-ex">EXHIBICIÓN</b> ':'')}🔥 ${Math.round(hs)}</span></div>`; }).join('')}</div>`;
+    return `<div class="fm-card" id="fmCard${n}"><span class="fm-n">${n+1}</span>${cSide(m,m.a,false)}<span class="fm-cvs">VS</span>${cSide(m,m.b,true)}<span class="fm-hs">${m.po?'<b class="fm-ex po">VIDA O MUERTE</b> ':(m.ex?'<b class="fm-ex">EXHIBICIÓN</b> ':'')}🔥 ${Math.round(hs)}</span></div>`; }).join('')}</div>`;
   for(let n=0;n<ord.length;n++){ await shWait(950*k()); if(!fmAlive(tok)) return; document.getElementById('fmCard'+n)?.classList.add('in'); }
   await shWait(2200*k()); if(!fmAlive(tok)) return;
   // 3. batallas
@@ -4858,7 +4873,11 @@ const MFU_ES=['Zasko','Sweet Pain','Arkano','Davisito','Sara Socas','Navas','Mr.
 const MFU_INT=['Teorema','Ricto','Bigtamina','Anubis','Scub','Replik','Klan','Lit Killah','Acru','Abel','Kodigo','MP','CTZ','Issy','Sophia','KG','Skill','Necia','Rasta'];
 const UNDER_EXC = ['Teorema','El Menor','Acru','Dyse','Alek','Segrelles','Dalia','Mr. Ego','Kodigo','HDR','Abel','Mecha','Naista','MP','Stick','Replik','NQP','Fat N','Dani VK','Tirpa','Anubis','Bélico','Jesse Pungaz','Exe','Sophia','Kmbra','Nez','Rodamiento','Joqerr','Fabiuki','CTZ','Tata','Fat Tony','Potencia'];
 const UNDER_RARE = ['El Menor','Acru'];
-function ulogo(key){ const d=typeof udef==='function' && udef(key); const k=(d && d.logo) || key; return (typeof EXTRA_IMG!=='undefined' && EXTRA_IMG[k]) || null; }
+function ulogo(key){ const d=typeof udef==='function' && udef(key); const k=(d && d.logo) || key; return (typeof EXTRA_IMG!=='undefined' && EXTRA_IMG[k]) || (d && d.u2 ? ubadge(d) : null); }
+// competiciones sin logo propio: una insignia con sus siglas (antes salía el logo de Red Bull en el sorteo)
+function ubadge(d){ const t=String(d.short||'').slice(0,4); const fs=t.length<=2?52:(t.length===3?42:34);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="24" fill="${d.color||'#333'}"/><text x="64" y="64" dy=".35em" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="${fs}" fill="#fff">${t}</text></svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg); }
 function udef(key){ return key===MFU.key ? MFU : (esLocal(key) ? LOCAL_DEFS.find(d=>d.key===key) : (UNDER_DEFS.find(d=>d.key===key) || UNDER2_DEFS.find(d=>d.key===key))); }
 /* ---- competiciones under nuevas: cualquier día de la semana, menos hype y menos puntos de ascenso; solo si su FMS está activa ---- */
 const ASC_UNDER2=[250,500,150,100];   // final, semis, cuartos, octavos
@@ -5183,6 +5202,7 @@ function uqSeasonStart(s){ try{ uqSnubs(s); }catch(e){ console.error(e); }
     if(Math.random()<p) uqPush(s, {day:s.day, type:r.papo?'papo':'refuse', key:k, fid:id, kind:r.kind||'no'}); }); });
   try{ uqTiredAbroad(s); }catch(e){ console.error(e); }
   try{ tensionSeasonStart(s); }catch(e){ console.error(e); }
+  try{ poRefuseRoll(s); }catch(e){ console.error(e); }
   try{ joaquiSeasonStart(s); }catch(e){ console.error(e); }
   try{ jinchoSeasonStart(s); }catch(e){ console.error(e); }
   try{ intlGovSeasonStart(s); }catch(e){ console.error(e); }
@@ -5266,6 +5286,7 @@ function uqApply(s, ev){
     R.forEach(m=>{ if(!m || !m.views) return; const b=m.views; m.views=Math.round(b*0.8); lost+=b-m.views; });
     const money0=Math.round(lost*VIEW_RATE*(1+djVal(ev.key,'ytmoney'))); state.company.money-=money0; s.fin.income-=money0; s.fin.views=(s.fin.views||0)-money0; L.income-=money0; ev.lost=lost; ev.loss=money0; ev.done=true; ev.show=true;
     addLog(s, ev.day, `${TECH_EV[ev.v][0]} ${TECH_EV[ev.v][1]} en la J${ev.j+1} de ${ldef(ev.key).short}: −20% de visitas (−${moneyK(money0)}).`, 'bad'); }
+  else if(ev.type==='porefuse'){ ev.done=true; ev.show=true; }
   else if(ev.type==='teamrq'){ const T=s.teamRQ; if(!T || !T.ids.length){ ev.done=true; ev.show=false; } else { ev.done=true; ev.show=true; T.shown=true; addLog(s, ev.day, `🔥 Team RQ: Rodrigo Quesada patrocina a ${T.ids.map(fname).join(', ')} esta temporada.`, 'gold'); } }
   else if(ev.type==='azecat'){ ev.done=true; ev.show=true; addLog(s, ev.day, `🎟️ Azuky agota las entradas en Ecatepec: +10 de nivel para ella en la J${ev.j+1}.`, 'good'); }
   else if(ev.type==='cdmx'){ ev.done=true; ev.show=true; addLog(s, ev.day, `🇲🇽 En Ciudad de México el público no dejó rapear a los extranjeros.${ev.skone?' Skone se libró.':''}`, 'bad'); }
@@ -5510,6 +5531,9 @@ function showUQ(ev){
   else if(ev.type==='tech'){ kick='📡 Directo'; title=TECH_EV[ev.v][2];
     body=`<p>${TECH_EV[ev.v][0]} ${TECH_EV[ev.v][1]} durante la J${ev.j+1} de ${esc(ldef(ev.key).name)} y mucha gente se fue del directo.</p>
       <p>La jornada tuvo <b class="neg-v">−20% de visitas</b> (${fmtViews(ev.lost||0)} menos · <b class="neg-v">−${money(ev.loss||0)}</b>).</p>`; }
+  else if(ev.type==='porefuse'){ kick='⚔️ Vida o muerte'; title=`${f.name} no jugará el Vida o muerte`;
+    body=`<p>${ev.kind==='streams'?`${nameH(f)} no puede por el calendario de sus streams`:ev.kind==='concert'?`${nameH(f)} no puede compaginarlo con sus conciertos`:ev.kind==='retired'?`${nameH(f)} está retirado de las batallas`:ev.kind==='melody'?`${nameH(f)} le perdió el gusto a la compe`:`${nameH(f)} no está interesado en estar en la FMS`} y se baja del Vida o muerte de ${esc(ldef(ev.key).name)}.</p>
+      <p class="pos-v"><b>${fnameH(ev.rival)} se queda en el line up.</b></p>${isWSF(ev.key)?`<p class="step-note">Como no habrá Vida o muerte, en la J1 ${fnameH(ev.rival)} tendrá su batalla contra un extraplayer como el resto.</p>`:''}`; }
   else if(ev.type==='teamrq'){ kick='🔥 Team RQ'; title='Rodrigo Quesada presenta el Team RQ'; const T=s.teamRQ||{ids:[]}; const q=STREAMERS.quesada&&STREAMERS.quesada.photo;
     body=`<div class="rq-head">${q?`<img src="${q}" alt="">`:''}<p>Rodrigo Quesada va a patrocinar a estos competidores esta temporada. Tendrán más opciones de entrar en las competiciones under y en Red Bull, y les irá mejor en el ranking de ascenso.</p></div>
       <div class="rq-grid">${T.ids.map(id=>{ const f=fby(id); const k=ascLeagueOf(f); return `<div class="rq-card"><span class="rq-ph" style="${avatarDivStyle(f)}">${avatarContent(f)}</span><b>${esc(f.name)}</b><span class="rq-lg">${leagueDot(k,16)} ${esc(ldef(k).short)}</span></div>`; }).join('')}</div>
@@ -5566,7 +5590,7 @@ function showUQ(ev){
     body=`<div class="ex-row" style="justify-content:center; font-size:18px">${miniAvatar(m.a,28)} ${fnameH(m.a)} <span class="vs">vs</span> ${fnameH(m.b)} ${miniAvatar(m.b,28)}</div>
       <p style="text-align:center">Gana <b>${fnameH(m.result.winner)}</b> ${esc(m.lb||'')} · PTB ${fpt(p[0])}–${fpt(p[1])} · ▶ ${fmtViews(m.views)}</p>`;
     acts=`<button class="btn" onclick="showBattle('${ev.key}',${ev.j},${ev.mi})">Ver notas</button>`+acts; }
-  openModal(`<div class="uq">${['prep','driu','zasko','refuse','papo','unavail','sweet','reggae','khan','local','ego','snub','trabado','tiago','navas','azuky','city','skone','trf','azecat'].includes(ev.type)&&f?`<div class="uq-face">${uqFace(f.id)}</div>`:''}<div class="st-kicker">${kick} · ${fmtDay(s.year,ev.day)}</div><h3 style="margin:4px 0 10px">${title}</h3>${body}</div>
+  openModal(`<div class="uq">${['prep','driu','zasko','refuse','papo','unavail','sweet','reggae','khan','local','ego','snub','trabado','tiago','navas','azuky','city','skone','trf','azecat','porefuse'].includes(ev.type)&&f?`<div class="uq-face">${uqFace(f.id)}</div>`:''}<div class="st-kicker">${kick} · ${fmtDay(s.year,ev.day)}</div><h3 style="margin:4px 0 10px">${title}</h3>${body}</div>
     <div class="modal-actions">${acts}</div>`, ev.type==='unavail' ? 'uqwide' : undefined, true);
   themeEl(document.getElementById('modalRoot'), ev.key);
 }
@@ -5977,7 +6001,7 @@ var TWITTEROS = [
   {"handle": "FabriziCerrano", "name": "...", "country": "Perú", "verified": false, "img": "tw_fabrizicerrano", "fav": ["Venti", "El Menor", "Sweet Pain"], "hate": ["Azuky", "Jair Wong", "Nitro"]},
   {"handle": "elneisinsentido", "name": "NeisMasterMC", "country": "Argentina", "verified": false, "img": "tw_elneisinsentido", "fav": ["Teorema", "Stuart", "Mecha"], "hate": ["MP", "Segrelles", "HDR"]},
   {"handle":"Quesadacid","name":"Rodrigo Quesada","country":"España","verified":true,"img":"@quesada","fav":[],"hate":[],"special":"quesada"},
-  {"handle":"torreth_data3","name":"Torreth Data 🇦🇷","country":"Argentina","verified":false,"img":null,"fav":[],"hate":[],"special":"torreth"},
+  {"handle":"torreth_data3","name":"Torreth Data 🇦🇷","country":"Argentina","verified":false,"img":"tw_torreth_data3","fav":[],"hate":[],"special":"torreth"},
   {"handle": "CTZismo", "name": "CTZismo", "country": "España", "verified": false, "img": "tw_ctzismo", "fav": [], "hate": []},
   {"handle": "SawiEleskizo", "name": "SawiEleskizo", "country": "México", "verified": false, "img": "tw_sawieleskizo", "fav": ["Gazir", "Bnet", "Mecha"], "hate": ["Cacha", "Stick", "Nitro"]},
   {"handle": "AhiDiceYuji", "name": "Yuji", "country": "España", "verified": false, "img": "tw_ahidiceyuji", "fav": ["Skone", "Chuty", "Gazir"], "hate": ["Navas", "Kodigo", "Vijay Kesh"]},
@@ -6909,7 +6933,7 @@ function renderDJBox(s, key){
     ${open?`<div class="spk-grid">${all.filter(d=>d.name!==L.dj).map(d=>card(d,false)).join('')}</div>`:''}</div>`;
 }
 /* ---- DJ del Internacional: uno de los DJs de tus ligas ---- */
-function intlDjCands(s){ return [...new Set(natKeys(s).map(k=>s.leagues[k].dj).filter(Boolean))]; }
+function intlDjCands(s){ return [...new Set(natKeys(s).map(k=>s.leagues[k].dj).filter(n=>n && djBy(n)))]; }
 /* =========================================================================
    JURADOS: 5 por liga (obligatorio, también World Series e Internacional).
    Favorecen un poco a sus compatriotas y a los estilos que les gustan. Los de fuera cuestan 100 € más (viajes).
@@ -7075,7 +7099,8 @@ function istInit(){ const s=cur();
   if(!state.ui.ispk || !state.ui.ispk.length) state.ui.ispk=intlSpkCands(s).sort((a,b)=>spkBy(b).cost-spkBy(a).cost).slice(0,intlSpkMax(s));
   const dc=intlDjCands(s); if(!state.ui.idj || !dc.includes(state.ui.idj)) state.ui.idj=dc.sort((a,b)=>djBy(b).cost-djBy(a).cost)[0]||null;
   if(!state.ui.ijd || !state.ui.ijd.length){ const out=jdAutoList(s); state.ui.ijd=out; } }
-function istReady(){ const s=cur(); const sp=(state.ui.ispk||[]).length===intlSpkMax(s); const dj=!intlDjCands(s).length || !!state.ui.idj; const jd=(state.ui.ijd||[]).length===Math.min(5,intlJdCands(s).length); return {sp,dj,jd,all:sp&&dj&&jd}; }
+function intlJdNeed(s){ return Math.max(1, Math.min(5, jdAutoList(s).length)); }   // con conflictos (Quesada) puede que no se lleguen a 5
+function istReady(){ const s=cur(); const sp=(state.ui.ispk||[]).length===intlSpkMax(s); const dj=!intlDjCands(s).length || !!state.ui.idj; const jd=(state.ui.ijd||[]).length===intlJdNeed(s); return {sp,dj,jd,all:sp&&dj&&jd}; }
 function showIntlStaff(){
   const s=cur(); istInit(); const R=istReady();
   const faces=list=>`<span class="ist-faces">${list.map(x=>x.img?`<img src="${x.img}" alt="" title="${esc(x.n)}">`:`<i title="${esc(x.n)}">${esc(x.n[0])}</i>`).join('')||'<small>Sin elegir</small>'}</span>`;
@@ -7085,7 +7110,7 @@ function showIntlStaff(){
     <div class="ist-list">
       ${btn('🎙️','Speakers',spk.length,intlSpkMax(s),R.sp,'showIntlSpeakers()',spk)}
       ${intlDjCands(s).length?btn('🎧','DJ',dj.length,1,R.dj,'showIntlDJ()',dj):''}
-      ${btn('⚖️','Jurado',jd.length,Math.min(5,intlJdCands(s).length),R.jd,'showIntlJudges()',jd)}
+      ${btn('⚖️','Jurado',jd.length,intlJdNeed(s),R.jd,'showIntlJudges()',jd)}
     </div>
     <div class="modal-actions"><button class="btn primary" ${R.all?'':'disabled'} onclick="istConfirm()">Continuar</button></div>`, 'wide', true);
   themeEl(document.getElementById('modalRoot'), INTL.key);
@@ -7117,7 +7142,7 @@ function showIntlDJ(){
 }
 function idjPick(n){ state.ui.idj=n; document.querySelectorAll('.idj-card').forEach(b=>{ const on=b.dataset.n===n; b.classList.toggle('on',on); const ck=b.querySelector('.vote-check'); if(on && !ck) b.insertAdjacentHTML('beforeend','<span class="vote-check">✓</span>'); if(!on && ck) ck.remove(); }); const bt=document.getElementById('idjOk'); if(bt) bt.disabled=false; }
 function showIntlJudges(){
-  const s=cur(); const sel=state.ui.ijd||(state.ui.ijd=[]); const cands=intlJdCands(s).sort((a,b)=>b.cost-a.cost); const need=Math.min(5,cands.length);
+  const s=cur(); const sel=state.ui.ijd||(state.ui.ijd=[]); const cands=intlJdCands(s).sort((a,b)=>b.cost-a.cost); const need=intlJdNeed(s);
   const cnt={}; sel.forEach(n=>{ const c=jdCountry(jdBy(n)); cnt[c]=(cnt[c]||0)+1; });
   const warn=Object.entries(cnt).filter(([c,n])=>n>2);
   openModal(`<h3>⚖️ Jurado del ${INTL.name}</h3><p class="step-note">Elige <b>${need}</b> jurados de tus ligas. Ojo: si pones más de 2 del mismo país, el resto de países se va a quejar.</p>
@@ -7163,7 +7188,7 @@ var TW_JD={
 };
 function jdTw(set, c){ const d=twDia(c); const T=TW_JD[set]; return pick(T[d]||T.neu); }
 /* ---- speakers del Internacional ---- */
-function intlSpkCands(s){ return [...new Set(s.activeKeys.flatMap(k=>spkList(s.leagues[k])))]; }
+function intlSpkCands(s){ return [...new Set(s.activeKeys.flatMap(k=>spkList(s.leagues[k])))].filter(n=>spkBy(n)); }
 function intlSpkMax(s){ return Math.min(2, intlSpkCands(s).length); }
 function intlSpkAuto(s){ s.intl.speakers=intlSpkCands(s).sort((a,b)=>spkBy(b).cost-spkBy(a).cost).slice(0,intlSpkMax(s)); if(!s.intl.dj){ const dj=intlDjCands(s).sort((a,b)=>djBy(b).cost-djBy(a).cost)[0]; s.intl.dj=dj||null; } s.intl.spkDone=true; }
 
@@ -7578,7 +7603,7 @@ function torrethTweet(add, k){ const acc=TWITTEROS.find(t=>t.special==='torreth'
     if(id && fby(id)){ cnt[id]=(cnt[id]||0)+1; last[id]=i; } });
   const ids=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a] || last[b]-last[a]); if(!ids.length) return;
   const multi = k===INTL.key || isWS(k) || k==='fms_caribe'; const lc=multi ? null : ldef(k).countries;
-  const tag='#'+ldef(k).name.replace(/\s+/g,''); const head=`Campeones ${tag}${multi?'':' '+flagOf(lc[0])}`;
+  const tag='#'+ldef(k).name; const head=`Campeones ${tag}${multi?'':' '+flagOf(lc[0])}`;
   const lines=ids.map(id=>{ const f=fby(id); const fl = multi || !lc.includes(f.country) ? ' '+flagOf(f.country) : ''; return `${f.name}${fl} x${cnt[id]}`; });
   add(twAcc(acc), head+'\n\n'+lines.join('\n'), 0); }
 function chGenerate(s, k){
@@ -8151,12 +8176,13 @@ document.addEventListener('keydown', e=>{ if(e.key==='F11' && fsAvailable()){ e.
 ========================================================================= */
 function renderHistSeason(num, key){
   const s=state.seasons.find(x=>x.number===num); if(!s) return renderHistory();
-  const keys=(s.activeKeys||[]).filter(k=>s.leagues[k]); if(!key || !keys.includes(key)) key=keys[0];
+  const keys=(s.activeKeys||[]).filter(k=>s.leagues[k]); const hasI=!!(s.intl && s.intl.bracket && s.intl.champion); if(!key || (!keys.includes(key) && !(key===INTL.key && hasI))) key=keys[0];
   let h=`<div class="back-link" onclick="goto('history')">‹ Historial</div>
   <div class="detail-head"><h1>Temporada ${s.year}</h1><span class="top-spacer"></span>${s.summary?`<button class="btn small" onclick="showSeasonSummary(${s.number})">📊 Balance y campeones</button>`:''}</div>
   ${seasonChampsHtml(s)}${ascOn(s)?`<div class="section-title"><h2>⬆️ ${ascOf(s).mode==='under'?'FMS Under':'Ranking de ascenso'}</h2></div>${ascSeasonHtml(s, true)}`:''}
   <div class="section-title"><h2>Ligas</h2></div>
-  <div class="hs-tabs">${keys.map(k=>`<button class="hs-tab ${k===key?'on':''}" onclick="goto('hseason',{num:${num}, key:'${k}'})">${leagueDot(k,20)}<span>${esc(ldef(k).short)}</span></button>`).join('')}</div>`;
+  <div class="hs-tabs">${keys.map(k=>`<button class="hs-tab ${k===key?'on':''}" onclick="goto('hseason',{num:${num}, key:'${k}'})">${leagueDot(k,20)}<span>${esc(ldef(k).short)}</span></button>`).join('')}${hasI?`<button class="hs-tab ${key===INTL.key?'on':''}" onclick="goto('hseason',{num:${num}, key:'${INTL.key}'})">${leagueDot(INTL.key,20)}<span>INTER</span></button>`:''}</div>`;
+  if(key===INTL.key && hasI) return h+histIntlHtml(s);
   if(!key) return h+'<div class="empty-state">Sin ligas esta temporada.</div>';
   const L=s.leagues[key], def=ldef(key);
   const rows=computeStandings(L); const fsd=L.finalStandings||[]; if(fsd.length===rows.length) rows.sort((a,b)=>fsd.indexOf(a.id)-fsd.indexOf(b.id));
@@ -8178,6 +8204,15 @@ function renderHistSeason(num, key){
   ${L.mvps && L.mvps[j]?`<div class="jornada-foot"><span>⭐ MVP: <b>${fnameH(L.mvps[j].id)}</b> · ${fpt(L.mvps[j].pts)} pts</span></div>`:''}`;
   return h;
 }
+function histIntlHtml(s){ const I=s.intl, b=I.bracket; const names=['Octavos','Cuartos','Semifinal','Final'];
+  return `<div class="detail-head" style="margin-top:6px">${leagueHeadLogo(INTL.key)}<h2 style="margin:0">${esc(INTL.name)} ${s.year}</h2></div>
+  <div class="banner">${I.sede?'📍 '+esc(I.sede)+'. ':''}${esc(I.note||'')}</div>
+  <div class="bracket-scroll"><div class="bracket">${b.rounds.map((r,ri)=>`<div class="round"><div class="rlabel">${names[ri]||'Ronda '+(ri+1)}</div>${r.map(m=>bm(m)).join('')}</div>`).join('')}
+  ${b.third?`<div class="round"><div class="rlabel">3er puesto</div>${bm(b.third)}</div>`:''}</div></div>
+  <div class="podium3"><div class="podium-card p1"><div class="medal">1º</div><div class="pname">${fnameH(I.champion)}</div><div class="plabel">Campeón</div></div>
+    <div class="podium-card p2"><div class="medal">2º</div><div class="pname">${fnameH(I.runnerUp)}</div><div class="plabel">Subcampeón</div></div>
+    <div class="podium-card p3"><div class="medal">3º</div><div class="pname">${fnameH(I.third)}</div><div class="plabel">Tercer puesto</div></div></div>
+  <div class="section-title"><h2>Batallas</h2></div><div class="matches-grid">${[...b.rounds.flat(), b.third].filter(Boolean).map(m=>histMatch(m)).join('')}</div>`; }
 function histMatch(m){ const r=m.result; const wa=r&&r.winner===m.a, wb=r&&r.winner===m.b; const p=battlePTB(m);
   return `<div class="match" style="min-height:0;"><div class="match-head">
     <div class="match-side left ${wa?'win':''}">${miniAvatar(m.a,22)}<span class="side-name">${fnameH(m.a)}</span></div><div class="vs">vs</div>
@@ -8603,7 +8638,7 @@ function poPickA(k, id, n){ const s=cur(); if(s.phase!=='pre') return; const L=s
 function poRemove(k){ const s=cur(); if(s.phase!=='pre') return; const L=s.leagues[k]; if(L.po && L.po.auto){ toast('Este Vida o muerte viene del ascenso: no se puede quitar, pero puedes elegir quién lo juega.'); return; } delete L.po; render(); }
 function poOpenManual(k){ const s=cur(); if(s.phase!=='pre') return; const L=s.leagues[k]; if(L.competitors.length<lgSize(k)){ toast(`Completa antes el line up (${lgSize(k)} competidores).`); return; }
   const d=state.ui.poM=(state.ui.poM && state.ui.poM.k===k) ? state.ui.poM : {k, a:null, b:null, q:''};
-  const pool=activos().filter(f=>ascCandOk(s,k,f.id) && fMatch(f,(d.q||'').toLowerCase())).sort((a,b)=>b.fama-a.fama).slice(0,40);
+  const pool=activos().filter(f=>ascCandOk(s,k,f.id) && !(foreignLocked() && isForeignTo(k,f)) && fMatch(f,(d.q||'').toLowerCase())).sort((a,b)=>b.fama-a.fama).slice(0,40);
   openModal(`<h3>⚔️ Vida o muerte · ${esc(ldef(k).name)}</h3>
     <p class="step-note">Elige quién de tu line up se juega el sitio y contra quién. El play off es la primera batalla de la J1${isWSF(k)?' y cuenta como su batalla de extraplayer':' (como una exhibición)'}: si gana el de fuera, entra en la liga en su lugar.</p>
     <div class="field-label" style="margin-top:8px">De tu line up</div>
@@ -8613,7 +8648,7 @@ function poOpenManual(k){ const s=cur(); if(s.phase!=='pre') return; const L=s.l
     <div class="pick-grid uq-grid">${pool.map(f=>`<div class="pick-item ${d.b===f.id?'checked':''}" onclick="state.ui.poM.b='${f.id}'; poOpenManual('${k}')"><span class="mini-avatar" style="width:32px;height:32px;font-size:15px;${avatarDivStyle(f)}">${avatarContent(f)}</span><div style="min-width:0;"><div class="pname">${nameH(f)}</div>${styleTag(f)}<div class="pcountry">${esc(f.country)}</div></div><div class="pick-stats">Nivel <b>${f.nivel}</b><br>Fama <b>${f.fama}</b></div></div>`).join('')}</div>
     <div class="modal-actions"><button class="btn" onclick="state.ui.poM=null; closeModal()">Cancelar</button><button class="btn primary" ${d.a&&d.b?'':'disabled'} onclick="poSaveManual('${k}')">Crear Vida o muerte</button></div>`, 'uqwide');
 }
-function poSaveManual(k){ const s=cur(); const L=s.leagues[k]; const d=state.ui.poM; if(!d || !d.a || !d.b) return; const old=L.po; L.po={a:d.a, b:d.b, manual:true}; if(!poCanPay(s,L)){ toast(`No te llega: para este Vida o muerte necesitas ${money(poNeed(s,L))} en caja.`); L.po=old; if(!old) delete L.po; return; } state.ui.poM=null; closeModal(); toast(`Vida o muerte: ${fname(d.a)} contra ${fname(d.b)} en la J1.`); render(); }
+function poSaveManual(k){ const s=cur(); const L=s.leagues[k]; const d=state.ui.poM; if(!d || !d.a || !d.b) return; if(foreignLocked() && isForeignTo(k,fby(d.b))){ toast(isPandemic()?'En Pandemia no se puede fichar fuera del país de la liga.':'Los fichajes de otros países se desbloquean con la primera estrella de la empresa.'); return; } const old=L.po; L.po={a:d.a, b:d.b, manual:true}; if(!poCanPay(s,L)){ toast(`No te llega: para este Vida o muerte necesitas ${money(poNeed(s,L))} en caja.`); L.po=old; if(!old) delete L.po; return; } state.ui.poM=null; closeModal(); toast(`Vida o muerte: ${fname(d.a)} contra ${fname(d.b)} en la J1.`); render(); }
 function renderPoBox(s, k){ const L=s.leagues[k]; if(isWS(k)) return '';
   const asc = (L.asc && L.asc.noUp) ? `<div class="asc-row">⬆️ En el formato de 11 jornadas, el campeón y el finalista de la FMS Under juegan el Vida o muerte contra el 10º y el 9º.</div>` : L.ascUp ? `<div class="asc-row">⬆️ <b>${fnameH(L.ascUp)}</b> asciende ${L.asc&&L.asc.src==='under'?'como campeón de la FMS Under':'como 1º del ranking de ascenso'}: está fijo en el line up.</div>` : (L.ascTie?`<div class="asc-row warn">⬆️ Empate en el ranking: elige quién sube ${L.ascTie.map(id=>`<button class="btn small" onclick="ascChoose('${k}','${id}')">${miniAvatar(id,18)} ${fnameH(id)}</button>`).join(' ')}</div>`:'');
   let po='';
@@ -8942,9 +8977,7 @@ function clearUiDrafts(){ try{ Object.keys(state.ui).filter(x=>/^(jnav_|exA_|exB
 function rbIntChampId(){ for(let i=state.seasons.length-1;i>=0;i--){ const o=state.seasons[i]; if(rbOn(o) && o.rb.inter && o.rb.inter.played && o.rb.inter.champion) return o.rb.inter.champion; } return null; }
 // la comunidad no lo quiere: fracasó en esta liga el año pasado o en Twitter le odian mucho más de lo que le quieren
 function commDislike(f){ const s=cur(); if(!f) return false;
-  if(f.trf && Object.values(f.trf).some(t=>t.res<0 && t.y===s.year-1)) return true;
-  const n=nrm(f.name); let fav=0, hate=0; TWITTEROS.forEach(t=>{ if((t.fav||[]).some(x=>nrm(x)===n)) fav++; if((t.hate||[]).some(x=>nrm(x)===n)) hate++; });
-  return hate>=4 && hate>=fav*2; }
+  return !!(f.trf && Object.values(f.trf).some(t=>t.res<0 && t.y===s.year-1)); }   // solo lo que ha pasado en esta partida (antes contaba Twitter y salía en partidas nuevas)
 
 /* =========================================================================
    EVENTOS POR WHATSAPP: rechazos, multas, Papo, Ortiz, tensiones y la réplica de Sweet Pain
@@ -9037,6 +9070,11 @@ function uqTension(id, choice, silent){ const s=cur(); const ev=(s.uq||[]).find(
     else if(r<2/3){ M.push({w:'them', t:'Bueno… me lo aguantaré. Pero que conste.'}); }
     else { M.push({w:'them', t:'Pues me bajo. No pienso compartir line up con él.'}); uqRemove(s, L, f.id); ev.after='replace'; addLog(s, ev.day, `${f.name} se baja de ${ldef(ev.key).name} por no compartir line up con ${o.name}.`, 'bad'); } }
   ev.done=true; ev.stage='done'; if(!silent){ render(); waShow(ev); } }
+
+/* ---------- Vida o muerte: si el aspirante es de los que rechazan la FMS, puede bajarse; el de tu line up se queda ---------- */
+function poRefuseRoll(s){ if(state.company.infinite) return; natKeys(s).forEach(k=>{ const L=s.leagues[k]; poList(L).filter(poActiveP).forEach(P=>{ const f=fby(P.b); const r=f && UQ_REFUSE[f.name]; if(!r || r.papo) return;
+    if(Math.random()>=Math.max(0, r.p-spkVal(k,'refuse'))) return; P.done=true; P.refused=true; P.winner=P.a; if(r.kind && r.kind!=='melody' && r.kind!=='streams') f.exOffer=s.year;
+    uqPush(s, {day:s.day, type:'porefuse', key:k, fid:P.b, rival:P.a, kind:r.kind||'no'}); addLog(s, s.day, `⚔️ ${f.name} se baja del Vida o muerte de ${ldef(k).name}: ${fname(P.a)} se queda en la liga.`, 'bad'); }); }); }
 
 /* ---------- Papo y La Joaqui no comparten line up (día 3 de la temporada; no en sandbox) ---------- */
 function exNoPair(a, b){ const n=[fby(a),fby(b)].map(f=>f&&f.name); return n.includes('Papo') && n.includes('La Joaqui'); }
@@ -9190,5 +9228,5 @@ var TW_CHOUT={
 };
 
 /* ---- versión del juego (esquina inferior derecha) ---- */
-var GAME_VERSION='1.2';
+var GAME_VERSION='1.2.1';
 (function(){ try{ const v=document.createElement('div'); v.id='verTag'; v.textContent=GAME_VERSION; document.body.appendChild(v); }catch(e){} })();

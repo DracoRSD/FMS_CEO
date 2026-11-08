@@ -1533,11 +1533,11 @@ html.cel-open, html.cel-open body{overflow:hidden !important; overscroll-behavio
 .mvp-rank td small{white-space:nowrap;}
 /* jornada FMS en móvil horizontal: la tabla + MVP caben enteros y "Continuar" va abajo a la derecha, sin franja negra encima */
 @media (max-height:600px){
-  #rbShow .rbs.fms{overflow:hidden;}
-  #rbShow .rbs.fms .fm-stage{overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none;}
-  #rbShow .rbs.fms .fm-stage::-webkit-scrollbar{display:none;}
-  #rbShow .rbs.fms .rbs-bottom{position:static; background:none; padding-top:2px; margin-top:2px; justify-content:flex-end; flex:none;}
-  #rbShow .rbs.fms .rbs-bottom:empty{display:none;}
+  #rbShow .rbs.fms:not(.ko){overflow:hidden;}
+  #rbShow .rbs.fms:not(.ko) .fm-stage{overflow-y:auto; overflow-x:hidden; min-height:0; scrollbar-width:none;}
+  #rbShow .rbs.fms:not(.ko) .fm-stage::-webkit-scrollbar{display:none;}
+  #rbShow .rbs.fms:not(.ko) .rbs-bottom{position:static; background:none; padding-top:2px; margin-top:2px; justify-content:flex-end; flex:none;}
+  #rbShow .rbs.fms:not(.ko) .rbs-bottom:empty{display:none;}
   .fm-mvpwrap{margin:0 auto; align-items:center;}
   .fm-mvpwrap .fm-table-side .fm-lineup-t{font-size:16px !important; margin:0 0 2px;}
   .fm-mvpwrap.split .fm-st th{padding:1px 6px; font-size:10px;}
