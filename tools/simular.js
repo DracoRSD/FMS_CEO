@@ -113,8 +113,8 @@ const dom = new JSDOM(html, {
 const w = dom.window;
 // borra del localStorage simulado todas las claves del juego (ranuras del CEO y sus trozos, carrera, metadatos)
 const limpiarGuardado = mem => { [...mem.keys()].filter(k => /^fms_ceo/.test(k)).forEach(k => mem.delete(k)); };
-// lo que ocupa de verdad en el localStorage una partida: la carrera es una clave; el CEO, su ranura con sus trozos y sus metadatos
-const guardadoReal = (mem, modo, slot) => modo === 'carrera' ? (mem.get('fms_ceo_carrera_v1') || '').length
+// lo que ocupa de verdad en el localStorage una partida: la carrera, su clave con sus trozos; el CEO, su ranura con sus trozos y sus metadatos
+const guardadoReal = (mem, modo, slot) => modo === 'carrera' ? [...mem.entries()].filter(([k]) => k === 'fms_ceo_carrera_v1' || k.startsWith('fms_ceo_carrera_v1_s')).reduce((a, [k, v]) => a + k.length + v.length, 0)
   : [...mem.entries()].filter(([k]) => k === 'fms_ceo_slot_' + (slot || 1) || k.startsWith('fms_ceo_slot_' + (slot || 1) + '_s') || k === 'fms_ceo_slotmeta_' + (slot || 1)).reduce((a, [k, v]) => a + k.length + v.length, 0);
 
 w.addEventListener('load', () => setTimeout(() => {
@@ -289,7 +289,7 @@ w.addEventListener('load', () => setTimeout(() => {
       const dumpViejo = JSON.stringify({ company: Object.assign({}, S.company, { dbv: 8 }), freestylers: S.freestylers, seasons: S.seasons, _counter: S._counter }, sinImg);
       w.eval('aligerarAntiguas = _aligerarReal;');
       r.aligeradas = g('aligerarAntiguas')(); let t0 = performance.now(); g('saveNow')(); r.msPrimero = performance.now() - t0; r.bytesDespues = g('guardadoBytes')(); r.real = guardadoReal(mem, modo);
-      t0 = performance.now(); g('saveNow')(); r.msGuardar = performance.now() - t0;   // un guardado normal: en el CEO los trozos viejos ya están escritos
+      t0 = performance.now(); g('saveNow')(); r.msGuardar = performance.now() - t0;   // un guardado normal: los trozos viejos ya están escritos
       r.d4 = ((g('saveStr')({ company: S.company, freestylers: S.freestylers, seasons: S.seasons }) || '').match(/"(prensa|retos|rivales|prensaAuto)":/g) || []).length;   // fase D4
       const despues = [foto(), titulos(), clasif(), fatiga(), g('renderHistory')()];
       r.identicos = antes.every((x, i) => x === despues[i]);
@@ -699,7 +699,7 @@ w.addEventListener('load', () => setTimeout(() => {
       const mc = mundos.find(r => r.modo === 'ceo'), mk = mundos.find(r => r.modo === 'carrera');
       if (mc && mc.dump && mk && mk.dump) {
         [1, 2, 3].forEach(n => { g('clearSlot')(n); g('writeSlot')(n, JSON.parse(mc.dump)); });
-        mem.set(g('CARRERA_KEY'), g('packSave')(mk.dump));   // como la guarda saveCarrera
+        g('clearSlot')('carrera'); g('writeSlot')('carrera', JSON.parse(mk.dump));   // como la guarda saveCarrera, por trozos
         const usa = pre => [...mem.entries()].filter(([k]) => k.startsWith(pre)).reduce((a, [k, v]) => a + k.length + v.length, 0);
         const total = usa('fms_ceo'), ranura = usa(g('slotKey')(1));
         S.company = null; const carga = g('load')(3) && S.seasons.length === JSON.parse(mc.dump).seasons.length;
@@ -712,6 +712,13 @@ w.addEventListener('load', () => setTimeout(() => {
         [mk, mc].forEach(r => { const d = JSON.parse(r.dump); const tam = x => JSON.stringify(x).length; const full = d.seasons.filter(sn => !sn.ligera), lig = d.seasons.filter(sn => sn.ligera);
           const ultima = full[full.length - 1] || {}; const partes = ['leagues', 'under', 'rb', 'intl', 'log', 'uq'].map(k => k + ' ' + kb(tam(ultima[k] || null))).join(', ');
           console.log(`INFO reparto del guardado de ${r.modo === 'ceo' ? 'CEO' : 'la carrera'} (${kb(r.dump.length)}): ${d.freestylers.length} freestylers ${kb(tam(d.freestylers))}, ${full.length} temporadas completas ${kb(tam(full))} (la última: ${partes}), ${lig.length} ligeras ${kb(tam(lig))}, empresa ${kb(tam(d.company))}`); });
+        // la carrera guardada de una pieza con LZ, como la guardaba la versión anterior, carga y al guardar pasa a trozos (lo principal con LZR)
+        g('clearSlot')('carrera'); mem.set(g('CARRERA_KEY'), g('packSave')(mk.dump)); S.company = null;
+        const cargaV = g('load')('carrera') && S.company.modo === 'carrera' && S.seasons.length === JSON.parse(mk.dump).seasons.length;
+        g('saveNow')(); const trozosV = [...mem.keys()].filter(k => k.startsWith(g('CARRERA_KEY') + '_s')).length;
+        const okV = !!cargaV && trozosV > 0 && mem.get(g('CARRERA_KEY')).startsWith('LZR:');
+        okCreador = okCreador && okV;
+        console.log(`${okV ? 'OK  ' : 'FAIL'} carrera guardada de una pieza con LZ (versión anterior): carga (${!!cargaV}) y al guardar pasa a trozos (${trozosV} trozos de temporadas viejas, lo principal con LZR)`);
       }
       // 2) partida del juego del creador
       limpiarGuardado(mem);

@@ -12,6 +12,6 @@ Juego de fans, gratuito y sin ánimo de lucro: un manager de batallas de freesty
 ## Reglas
 
 - Todos los textos (interfaz, comentarios, commits) en español.
-- No romper partidas guardadas: el CEO guarda en 3 ranuras (`fms_ceo_slot_N`, por trozos y comprimidas con LZ; `migrateSlots` pasa la clave antigua `fms_ceo_v1` a la ranura 1) y la carrera en `fms_ceo_carrera_v1`, también comprimida; los guardados viejos sin comprimir se siguen leyendo. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy `DBV_ACTUAL` = 22; nuestras v4-v9 y después las del creador renumeradas), nunca descartarlos.
+- No romper partidas guardadas: el CEO guarda en 3 ranuras (`fms_ceo_slot_N`; `migrateSlots` pasa la clave antigua `fms_ceo_v1` a la ranura 1) y la carrera en `fms_ceo_carrera_v1`, las dos por trozos: las temporadas viejas se comprimen una sola vez con LZ (`fms_ceo_slot_N_sI`, `fms_ceo_carrera_v1_sI`) y lo principal con LZR, rápido, en cada guardado (agrupado cada 1,5 s y al cerrar la temporada, al salir al menú y al cerrar la app). Los guardados viejos, sin comprimir o de una pieza con LZ, se siguen leyendo. Si cambia el formato, migrar los datos viejos al cargar y subir la versión interna del guardado (`company.dbv`, hoy `DBV_ACTUAL` = 22; nuestras v4-v9 y después las del creador renumeradas), nunca descartarlos.
 - Una fase por vez: presentar el plan o el modelo de datos y esperar el OK antes de ejecutar. Commits pequeños.
 - No cambiar las reglas del juego salvo que la fase lo pida.
