@@ -3247,6 +3247,48 @@ var LZ=(function(){
     decompressFromUTF16(c){ if(c==null) return ''; if(c=='') return null; return _decompress(c.length,16384,i=>c.charCodeAt(i)-32); }
   };
 })();
+// LZR: compresión rápida (LZ77 con tabla hash) para la parte principal del guardado, que se escribe a menudo: unas 20 veces más rápida que LZ
+// (15 ms frente a 325 ms con 1 MB) y ocupa un tercio más. La salida son palabras de 15 bits + 32
+// (como compressToUTF16: caracteres de 32 a 32799, sin sustitutos sueltos). Palabra con el bit 14: dos caracteres ASCII; con el bit 13: un carácter
+// (8191 = escape, el carácter va en las dos palabras siguientes); sin ninguno: copia de longitud palabra+5 a la distancia de la palabra siguiente
+// (con su bit 14, la distancia ocupa dos palabras).
+const LZR=(()=>{
+  const MIN=5, MAXL=0x1FFF+MIN, HB=16;
+  const imul=Math.imul, fcc=String.fromCharCode, mn=Math.min, I32=Int32Array, U16=Uint16Array;   // locales: los globales dentro del bucle son lentos en algunos motores (jsdom)
+  function compress(s){
+    const n=s.length; const head=new I32(1<<HB).fill(-1); let out=new U16(Math.max(64, n>>1)), o=0, pend=-1;
+    const put=w=>{ if(o>=out.length){ const b=new U16(out.length*2); b.set(out); out=b; } out[o++]=w+32; };
+    const lit1=c=>{ if(c<8191) put(0x2000|c); else { put(0x2000|8191); put(c>>15); put(c&0x7FFF); } };
+    const flush=()=>{ if(pend>=0){ lit1(pend); pend=-1; } };
+    const hash=p=>(imul(s.charCodeAt(p) ^ (s.charCodeAt(p+1)<<5) ^ (s.charCodeAt(p+2)<<10) ^ (s.charCodeAt(p+3)<<15), 2654435761)>>>(32-HB));
+    let i=0;
+    while(i<n){
+      if(i+MIN<=n){ const h=hash(i), c=head[h]; head[h]=i;
+        if(c>=0){ let L=0; const max=mn(MAXL, n-i); while(L<max && s.charCodeAt(c+L)===s.charCodeAt(i+L)) L++; const d=i-c-1;
+          if(L>=MIN && (d<0x4000 || L>=MIN+2)){ flush(); put(L-MIN); if(d<0x4000) put(d); else { put(0x4000|(d>>15)); put(d&0x7FFF); }
+            const e=mn(i+L, n-MIN+1); for(let p=i+1;p<e;p++) head[hash(p)]=p; i+=L; continue; } } }
+      const ch=s.charCodeAt(i++);
+      if(ch<128){ if(pend>=0){ put(0x4000|(pend<<7)|ch); pend=-1; } else pend=ch; } else { flush(); lit1(ch); }
+    }
+    flush();
+    let r=''; for(let k=0;k<o;k+=8192) r+=fcc.apply(null, out.subarray(k, mn(o, k+8192)));
+    return r;
+  }
+  function decompress(c){
+    const n=c.length; let out=new U16(Math.max(64, n*4)), o=0;
+    const need=k=>{ if(o+k>out.length){ let len=out.length*2; while(o+k>len) len*=2; const b=new U16(len); b.set(out.subarray(0,o)); out=b; } };
+    for(let i=0;i<n;i++){ const w=c.charCodeAt(i)-32;
+      if(w<0 || w>0x7FFF) throw new Error('LZR: carácter fuera de rango');
+      if(w&0x4000){ need(2); out[o++]=(w>>7)&0x7F; out[o++]=w&0x7F; }
+      else if(w&0x2000){ let v=w&0x1FFF; if(v===8191){ if(i+2>=n) throw new Error('LZR: corto'); v=((c.charCodeAt(i+1)-32)<<15)|(c.charCodeAt(i+2)-32); i+=2; } need(1); out[o++]=v; }
+      else { const L=w+MIN; if(i+1>=n) throw new Error('LZR: corto'); let d=c.charCodeAt(++i)-32; if(d&0x4000){ if(i+1>=n) throw new Error('LZR: corto'); d=((d&0x3FFF)<<15)|(c.charCodeAt(++i)-32); }
+        const from=o-d-1; if(from<0) throw new Error('LZR: distancia fuera'); need(L); for(let k=0;k<L;k++) out[o+k]=out[from+k]; o+=L; }
+    }
+    let r=''; for(let k=0;k<o;k+=8192) r+=fcc.apply(null, out.subarray(k, mn(o, k+8192)));
+    return r;
+  }
+  return {compress, decompress};
+})();
 /* ---- slots de guardado (3) ---- */
 const SLOTS=[1,2,3];
 function slotKey(n){ return 'fms_ceo_slot_'+n; }
@@ -3257,16 +3299,19 @@ function metaOf(d){ const ss=d.seasons||[]; const last=ss[ss.length-1]||{};
 function slotMeta(n){ try{ const m=localStorage.getItem(slotMetaKey(n)); if(m) return JSON.parse(m); }catch(e){}
   try{ const d=readSlot(n); if(!d||!d.company) return null; const mm=metaOf(d); mm.t=null; return mm; }
   catch(e){ try{ if(localStorage.getItem(slotKey(n))!=null) return {broken:true, inf:false, mode:'empresario', name:'Partida (no se puede leer)', stars:0, money:0, year:null, seasons:0, phase:'pre', lost:false, t:null}; }catch(e2){} return null; } }
-// GUARDADO por trozos: las temporadas antiguas (ya cerradas) se guardan una sola vez y comprimidas (LZ, ~10 veces menos);
+// GUARDADO por trozos: las temporadas antiguas (ya cerradas) se guardan una sola vez y comprimidas (LZ, ~7 veces menos);
 // en el guardado principal solo van la empresa, los freestylers y las 2 últimas temporadas. Así guardar es rápido y caben cientos de temporadas.
-const LZ_TAG='LZ1:';
-function packSave(str){ try{ const c=LZ.compressToUTF16(str); if(c && c.length<str.length) return LZ_TAG+c; }catch(e){} return str; }
-function unpackSave(raw){ if(raw && raw.slice(0,4)===LZ_TAG){ const d=LZ.decompressFromUTF16(raw.slice(4)); if(d==null) throw new Error('save corrupto'); return d; } return raw; }
-function chunkKey(n,i){ return slotKey(n)+'_s'+i; }
-const _chunks={};   // slot -> Map(índice de temporada -> objeto ya guardado)
+const LZ_TAG='LZ1:', LZR_TAG='LZR:';
+function packSave(str, rapido){   // rapido: LZR, para lo que se guarda a menudo; si no, LZ, que ocupa menos y se usa para lo que se escribe una vez
+  try{ const c = rapido ? LZR.compress(str) : LZ.compressToUTF16(str); if(c && c.length<str.length) return (rapido ? LZR_TAG : LZ_TAG)+c; }catch(e){} return str; }
+function unpackSave(raw){ if(raw && raw.slice(0,4)===LZR_TAG) return LZR.decompress(raw.slice(4));
+  if(raw && raw.slice(0,4)===LZ_TAG){ const d=LZ.decompressFromUTF16(raw.slice(4)); if(d==null) throw new Error('save corrupto'); return d; } return raw; }
+function baseKey(n){ return n==='carrera' ? CARRERA_KEY : slotKey(n); }   // n: ranura del CEO (1-3) o 'carrera', que se guarda igual, por trozos, en su propia clave
+function chunkKey(n,i){ return baseKey(n)+'_s'+i; }
+const _chunks={};   // ranura (1-3 o 'carrera') -> Map(índice de temporada -> objeto ya guardado)
 function chunkMap(n){ return _chunks[n]||(_chunks[n]=new Map()); }
 function chunkSucio(s){ Object.values(_chunks).forEach(m=>m.forEach((v,i)=>{ if(v===s) m.delete(i); })); }   // la temporada cambió en el sitio (aligerada): su trozo se vuelve a escribir
-function readSlot(n, track){ const raw=localStorage.getItem(slotKey(n)); if(!raw) return null; const d=JSON.parse(unpackSave(raw));
+function readSlot(n, track){ const raw=localStorage.getItem(baseKey(n)); if(!raw) return null; const d=JSON.parse(unpackSave(raw));
   if(d && d.v===2){ const olds=[]; let lost=0; for(let i=0;i<(d.nOld||0);i++){ const c=localStorage.getItem(chunkKey(n,i)); let o=null;
       try{ if(c!=null) o=JSON.parse(unpackSave(c)); }catch(e){ o=null; }
       if(o && o.year!=null) olds.push(o); else { lost++; console.warn('temporada antigua '+i+' perdida en el slot '+n); if(track) state.ui.lostOld=(state.ui.lostOld||0)+1; } }
@@ -3276,9 +3321,10 @@ function writeSlot(n, d){
   const ss=d.seasons||[]; const cut=Math.max(0, ss.length-2); const m=chunkMap(n);
   for(let i=0;i<cut;i++){ if(m.get(i)!==ss[i]){ localStorage.setItem(chunkKey(n,i), packSave(saveStr(ss[i]))); m.set(i, ss[i]); } }
   const main=saveStr({v:2, nOld:cut, company:d.company, freestylers:d.freestylers, _counter:d._counter, seasons:ss.slice(cut)});
-  localStorage.setItem(slotKey(n), packSave(main));   // lo principal también va comprimido (readSlot lee igual los guardados viejos sin comprimir)
+  localStorage.setItem(baseKey(n), packSave(main, true));   // lo principal también va comprimido, con LZR para que guardar sea rápido (readSlot lee igual los guardados viejos, con LZ o sin comprimir)
+  if(n==='carrera') return;   // la carrera no tiene metadatos de ranura
   try{ localStorage.setItem(slotMetaKey(n), JSON.stringify(metaOf(d))); localStorage.setItem('fms_ceo_lastslot', String(n)); }catch(e){} }
-function clearSlot(n){ try{ localStorage.removeItem(slotKey(n)); localStorage.removeItem(slotMetaKey(n)); if(localStorage.getItem('fms_ceo_lastslot')===String(n)) localStorage.removeItem('fms_ceo_lastslot');
+function clearSlot(n){ try{ localStorage.removeItem(baseKey(n)); if(n!=='carrera') localStorage.removeItem(slotMetaKey(n)); if(localStorage.getItem('fms_ceo_lastslot')===String(n)) localStorage.removeItem('fms_ceo_lastslot');
     for(let i=0;i<5000 && localStorage.getItem(chunkKey(n,i))!=null;i++) localStorage.removeItem(chunkKey(n,i)); }catch(e){} chunkMap(n).clear(); }
 function migrateSlots(){   // la partida de versiones antiguas pasa al slot 1
   try{ const old=localStorage.getItem(STORAGE_KEY); if(!old) return;
@@ -3296,9 +3342,9 @@ function sandboxUnlocked(){   // el Sandbox se gana llegando al modo infinito en
       if(!inf){ const d=readSlot(n); inf=sbxEarned(d); }
       if(inf){ unlockSandbox(); return true; } } }catch(e){}
   return false; }
-// guardado automático: se agrupan los cambios y se escribe como mucho cada 1,5 s (y siempre al cerrar o salir de la app)
+// guardado automático (CEO y carrera): se agrupan los cambios y se escribe como mucho cada 1,5 s, y siempre al cerrar la temporada, al salir al menú o al cerrar la app
 let _saveT=null, _saveDirty=false;
-function save(){ if(modoCarrera()){ saveCarrera(); return; } _saveDirty=true; if(_saveT) return; _saveT=setTimeout(flushSave, 1500); }
+function save(){ _saveDirty=true; if(_saveT) return; _saveT=setTimeout(flushSave, 1500); }
 function flushSave(){ if(_saveT){ clearTimeout(_saveT); _saveT=null; } if(!_saveDirty || !state.company) return; _saveDirty=false; saveNow(); }
 ['pagehide','beforeunload'].forEach(e=>window.addEventListener(e, ()=>flushSave()));
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushSave(); });
@@ -3315,11 +3361,12 @@ function saveNow(){
     if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(saveFailModal, 60); }
   }
 }
-// modo carrera: un solo guardado en CARRERA_KEY, al momento y comprimido (LZ), sin ranuras. Las carreras viejas sin comprimir se leen igual (unpackSave)
+// modo carrera: su propio guardado en CARRERA_KEY, por trozos como una ranura del CEO (las temporadas viejas comprimidas una sola vez y lo principal comprimido).
+// Las carreras guardadas de una sola pieza, comprimidas o no, se leen igual (readSlot)
 function saveCarrera(){
   try{
     const dump = {company:state.company, freestylers:state.freestylers, seasons:state.seasons, _counter:state._counter};
-    localStorage.setItem(CARRERA_KEY, packSave(saveStr(dump)));
+    writeSlot('carrera', dump);
     state.ui.saveFailed=false;
   }catch(e){
     if(!state.ui.saveFailed){ state.ui.saveFailed=true; setTimeout(saveFailModal, 60); }
@@ -3336,7 +3383,7 @@ function load(n){   // n: ranura de CEO (1-3; sin n, la actual o la 1) o 'carrer
   flushSave(); clearUiDrafts();
   try{
     let d=null;
-    if(n==='carrera'){ try{ const raw=localStorage.getItem(CARRERA_KEY); if(!raw) return false; d=JSON.parse(unpackSave(raw)); }catch(e){ console.error(e); return false; } }
+    if(n==='carrera'){ try{ d=readSlot('carrera', true); }catch(e){ console.error(e); return false; } }
     else { if(n==='ceo') n=null; n=n||state.ui.slot||1; try{ d=readSlot(n, true); }catch(e){ console.error(e); return false; } }
     if(!d || !d.company) return false;
     state.company=d.company; state.freestylers=d.freestylers||[]; state.seasons=d.seasons||[]; state._counter=d._counter||1; state.ui.slot = n==='carrera' ? null : n;
@@ -4218,6 +4265,7 @@ function endSeason(s){
     else if(!isSandbox()){ const need=minLineupCost(s); if(state.company.money<need){ state.company.lost=s.year; s.summary.lost=true; s.summary.noLU=need;
       addLog(s, daysInYear(s.year)-1, `💀 Terminas la temporada ${s.year} con ${money(state.company.money)}: no te llega ni para el line up más barato (${money(need)}). Bancarrota.`, 'bad'); } } }
   addLog(s, daysInYear(s.year)-1, modoCarrera() ? `Fin de la temporada ${s.year}.` : `Fin de la temporada ${s.year}. ${state.company.stars>before?'Subes a '+state.company.stars+'★.':(state.company.stars<before?'Bajas a '+state.company.stars+'★.':'Te mantienes en '+state.company.stars+'★.')}`, 'gold');
+  save(); flushSave();   // al cerrar la temporada se guarda en el momento, sin esperar al guardado agrupado
 }
 function showTutorial(t){
   const c=state.company;
@@ -4316,7 +4364,7 @@ function importGameFile(ev){
     let d; try{ d=JSON.parse(r.result); if(!d || !d.company || !Array.isArray(d.seasons)) throw 0; }catch(e){ toast('Ese archivo no es una partida de FMS CEO.'); return; }
     state.ui.menuMode=null; closeModal();
     if(d.company.modo==='carrera'){   // una carrera va a su propio guardado, sin ranuras
-      try{ localStorage.setItem(CARRERA_KEY, packSave(saveStr(d))); }catch(e){ toast('No cabe la carrera en el guardado del navegador.'); return; }
+      try{ clearSlot('carrera'); writeSlot('carrera', d); }catch(e){ clearSlot('carrera'); toast('No cabe la carrera en el guardado del navegador.'); return; }
       if(load('carrera')){ toast('Carrera importada.'); goto('carrera'); } else toast('No se pudo cargar la carrera.');
       return; }
     const n=state.ui.importSlot||state.ui.slot||1; state.ui.importSlot=null;
@@ -4329,7 +4377,7 @@ function resetGame(){
   openModal(`<h3>Borrar partida</h3><p class="step-note">Se pierde la empresa, las temporadas y los freestylers. Exporta antes si quieres conservarla.</p>
   <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn danger" onclick="doReset()">Borrar partida</button></div>`);
 }
-function doReset(){ if(modoCarrera()){ try{ localStorage.removeItem(CARRERA_KEY); }catch(e){} state.company=null; state.seasons=[]; state.freestylers=[]; state.ui.slot=null; state.ui.menuMode='carrera'; closeModal(); goto('dashboard'); return; }
+function doReset(){ if(modoCarrera()){ clearSlot('carrera'); state.company=null; state.seasons=[]; state.freestylers=[]; state.ui.slot=null; state.ui.menuMode='carrera'; closeModal(); goto('dashboard'); return; }
   const n=state.ui.slot||1; clearSlot(n); try{ localStorage.removeItem(STORAGE_KEY); }catch(e){} state.company=null; state.seasons=[]; state.freestylers=[]; state.ui.slot=n; closeModal(); goto('welcome'); }
 /* ---- menú de inicio ---- */
 function toMenu(){ if(_saveT){ clearTimeout(_saveT); _saveT=null; } _saveDirty=false; if(state.company) saveNow(); state.company=null; state.seasons=[]; state.freestylers=[]; state.ui.slot=null; state.ui.menuMode=null; state.ui.importedPool=null; closeModal(); _skipScrollRestore=true; goto('dashboard'); }
@@ -4389,7 +4437,7 @@ function menuCarreraNueva(){ const go=()=>{ closeModal(); state.ui.menuMode=null
     <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn danger" onclick="_menuGo()">Seguir</button></div>`); }
 function menuCarreraBorrar(){ const r=resumenPartida('carrera'); if(!r) return;
   openModal(`<h3>Borrar carrera</h3><p class="step-note">Se borrará <b>${esc(r.titulo)}</b> (${esc(r.sub)}). No se puede deshacer.</p>
-    <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn danger" onclick="try{ localStorage.removeItem(CARRERA_KEY); }catch(e){} closeModal(); render()">Borrar</button></div>`); }
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn danger" onclick="clearSlot('carrera'); closeModal(); render()">Borrar</button></div>`); }
 function menuImport(n){ state.ui.importSlot=n; closeModal(); document.getElementById('gameFileInput').click(); }
 function menuDeleteSlot(n){ const m=slotMeta(n); if(!m) return;
   openModal(`<h3>Borrar slot ${n}</h3><p class="step-note">Se borrará <b>${esc(m.name)}</b>${m.year?` (temporada ${m.year})`:''}. No se puede deshacer.</p>
@@ -5224,6 +5272,7 @@ function jugarTemporadaCarrera(){
 // Crea la partida de carrera: empresa fantasma (5 estrellas, infinito, 7 ligas), pool real y el freestyler del jugador
 function nuevaCarrera(){
   const d=state.ui.cc; if(!d) return; const prob=ccProblemas(d); if(prob.length){ toast(prob[0]); return; }
+  clearSlot('carrera');   // la carrera anterior se borra con sus trozos (el menú ya avisa)
   state.company={modo:'carrera', name:'Mundo', stars:5, infinite:true, money:0, reputation:0, dbv:DBV_ACTUAL, tut:{inf:true, s2:true, intl:true}, spStart:true, spReal:true, carrera:null};
   state.freestylers=generatePool();
   customFS().forEach(c=>{ if(!state.freestylers.some(f=>f.name.toLowerCase()===c.name.toLowerCase())) state.freestylers.push(customToF(c)); });
@@ -11854,8 +11903,11 @@ function minLineupCost(s){ let best=Infinity;
 function empK(){ return (state.company && !modoCarrera() && (state.company.mode||'empresario')==='empresario') ? 0.9 : 1; }   // en carrera no hay empresa: visitas y taquilla sin el ajuste de Empresario
 function econMode(){ const k=empK(); VIEW_RATE=0.006*k; TICKET_MULT=1.8*k; }
 // fin de temporada: los 10 freestylers con más visitas piden un 5% más (sin pasar nunca de 70K)
+// En CEO la subida se va perdiendo: cada temporada fuera del top 10 baja un 5 % hasta su sueldo base. Si solo subiera, el salario medio del top 60 crecía
+// un 17 % en 20 temporadas (10 puntos de ellos por estas subidas); así crece un 12 %. En carrera sigue como la dejó el creador (las ofertas de liga del jugador cuentan con ella)
 function salaryRaise(s){ if(isSandbox()) return; try{ const top=seasonTopFreestylers(s,10); top.forEach(t=>{ const f=fby(t.id); if(f) f.salUp=Math.round((f.salUp||1)*1.05*1000)/1000; });
-  if(top.length) addLog(s, daysInYear(s.year)-1, `💸 Los 10 con más visitas de la temporada piden un 5% más de sueldo: ${top.map(t=>fname(t.id)).join(', ')}.`, ''); }catch(e){ console.error(e); } }
+  let bajan=0; if(!modoCarrera()){ const ids=new Set(top.map(t=>t.id)); state.freestylers.forEach(f=>{ if(!ids.has(f.id) && (f.salUp||1)>1){ f.salUp=Math.max(1, Math.round(f.salUp/1.05*1000)/1000); bajan++; } }); }
+  if(top.length) addLog(s, daysInYear(s.year)-1, `💸 Los 10 con más visitas de la temporada piden un 5% más de sueldo: ${top.map(t=>fname(t.id)).join(', ')}.${bajan?` Los que salen del top 10 bajan un 5% (${bajan}).`:''}`, ''); }catch(e){ console.error(e); } }
 
 /* ---------- resumen / historial: campeones de cada competición y ascenso de la temporada ---------- */
 function seasonChampList(s){ const out=[];
@@ -11897,9 +11949,11 @@ function repeatStaff(){ const s=cur(); if(s.phase!=='pre') return; const prev=st
   finally{ window.toast=T0; }
   render(); toast(n ? `Staff de la temporada pasada repetido (${n} puestos).${fails.length?' Alguno no se pudo: '+fails[0]:''}` : (fails[0]||'Ya tienes el mismo staff que la temporada pasada.')); }
 
-var TW_HATEGEN={
-  es:['{a} vs {b}… ¿en serio? Qué pereza de batalla','Ni {a} ni {b}. Me salto esta','{a} contra {b}, la batalla para ir al baño','Quién ha pedido un {a} vs {b}? Nadie','{a} vs {b} va a ser un 3-0 aburridísimo','Se viene {a} vs {b} y yo cambio de canal','{liga} cada año peor. Mira este {a} vs {b}','{a} y {b} rimando lo mismo de siempre. Paso'],
-  la:['{a} vs {b}… ¿en serio? Qué paja esa batalla','Ni {a} ni {b}. Me salteo esta','{a} contra {b}, la batalla para ir al baño','¿Quién pidió un {a} vs {b}? Nadie','{a} vs {b} va a ser un 3-0 aburridísimo','Se viene {a} vs {b} y yo cambio de stream','{liga} cada año peor. Miren este {a} vs {b}','{a} y {b} rimando lo mismo de siempre. Paso']
+var TW_HATEGEN={   // 24 frases por dialecto: con 8 era la plantilla que más se repetía dentro de la temporada
+  es:['{a} vs {b}… ¿en serio? Qué pereza de batalla','Ni {a} ni {b}. Me salto esta','{a} contra {b}, la batalla para ir al baño','Quién ha pedido un {a} vs {b}? Nadie','{a} vs {b} va a ser un 3-0 aburridísimo','Se viene {a} vs {b} y yo cambio de canal','{liga} cada año peor. Mira este {a} vs {b}','{a} y {b} rimando lo mismo de siempre. Paso',
+      '{a} vs {b}. Me voy a hacer la cena mientras','¿Otra vez {a} contra {b}? Esto ya lo he visto','Si {a} vs {b} es lo mejor que hay, apaga y vámonos','{a} y {b} en la misma batalla. Bostezo asegurado','¿Quién ha montado el {a} vs {b}? Que lo expliquen','{a} vs {b} huele a réplica eterna y nada que recordar','Con el {a} vs {b} aprovecho para ir a por algo de picar','Ni regalado me trago el {a} vs {b}','{a} contra {b}: dos tíos rimando sin ganas','Lo de {a} vs {b} es para verlo acelerado','{liga} se ha quedado sin ideas: {a} vs {b}','Me espero al resumen del {a} vs {b}. Si eso','{a} vs {b} va a ser un muermo de los gordos','Hoy toca {a} contra {b}. Hoy toca dormir pronto','Que alguien me despierte cuando acabe el {a} vs {b}','El {a} vs {b} no lo arregla ni el DJ'],
+  la:['{a} vs {b}… ¿en serio? Qué paja esa batalla','Ni {a} ni {b}. Me salteo esta','{a} contra {b}, la batalla para ir al baño','¿Quién pidió un {a} vs {b}? Nadie','{a} vs {b} va a ser un 3-0 aburridísimo','Se viene {a} vs {b} y yo cambio de stream','{liga} cada año peor. Miren este {a} vs {b}','{a} y {b} rimando lo mismo de siempre. Paso',
+      '{a} vs {b}. Aprovecho para cocinar algo','¿Otra vez {a} contra {b}? Ya la vi mil veces','Si {a} vs {b} es lo mejor que tienen, estamos fritos','{a} y {b} en la misma batalla. Bostezo seguro','¿Quién armó el {a} vs {b}? Que lo expliquen','{a} vs {b} pinta a réplica eterna y nada para recordar','Con el {a} vs {b} voy a buscar algo a la heladera','Ni regalado me veo el {a} vs {b}','{a} contra {b}: dos rimando sin ganas','El {a} vs {b} lo veo acelerado, si es que lo veo','{liga} se quedó sin ideas: {a} vs {b}','Espero el resumen del {a} vs {b}, si es que sale','{a} vs {b} va a ser un embole terrible','Hoy toca {a} contra {b}. Hoy me duermo temprano','Que alguien me despierte cuando termine el {a} vs {b}','El {a} vs {b} no lo salva ni el DJ']
 };
 
 /* nombres de los creados por ti: si coinciden con un competidor, jurado, DJ, host o streamer que ya existe, se les añade
