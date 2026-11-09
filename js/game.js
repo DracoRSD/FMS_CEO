@@ -9242,8 +9242,11 @@ function minLineupCost(s){ let best=Infinity;
 function empK(){ return (state.company && !modoCarrera() && (state.company.mode||'empresario')==='empresario') ? 0.9 : 1; }   // en carrera no hay empresa: visitas y taquilla sin el ajuste de Empresario
 function econMode(){ const k=empK(); VIEW_RATE=0.006*k; TICKET_MULT=1.8*k; }
 // fin de temporada: los 10 freestylers con más visitas piden un 5% más (sin pasar nunca de 70K)
+// En CEO la subida se va perdiendo: cada temporada fuera del top 10 baja un 5 % hasta su sueldo base. Si solo subiera, el salario medio del top 60 crecía
+// un 17 % en 20 temporadas (10 puntos de ellos por estas subidas); así crece un 12 %. En carrera sigue como la dejó el creador (las ofertas de liga del jugador cuentan con ella)
 function salaryRaise(s){ if(isSandbox()) return; try{ const top=seasonTopFreestylers(s,10); top.forEach(t=>{ const f=fby(t.id); if(f) f.salUp=Math.round((f.salUp||1)*1.05*1000)/1000; });
-  if(top.length) addLog(s, daysInYear(s.year)-1, `💸 Los 10 con más visitas de la temporada piden un 5% más de sueldo: ${top.map(t=>fname(t.id)).join(', ')}.`, ''); }catch(e){ console.error(e); } }
+  let bajan=0; if(!modoCarrera()){ const ids=new Set(top.map(t=>t.id)); state.freestylers.forEach(f=>{ if(!ids.has(f.id) && (f.salUp||1)>1){ f.salUp=Math.max(1, Math.round(f.salUp/1.05*1000)/1000); bajan++; } }); }
+  if(top.length) addLog(s, daysInYear(s.year)-1, `💸 Los 10 con más visitas de la temporada piden un 5% más de sueldo: ${top.map(t=>fname(t.id)).join(', ')}.${bajan?` Los que salen del top 10 bajan un 5% (${bajan}).`:''}`, ''); }catch(e){ console.error(e); } }
 
 /* ---------- resumen / historial: campeones de cada competición y ascenso de la temporada ---------- */
 function seasonChampList(s){ const out=[];

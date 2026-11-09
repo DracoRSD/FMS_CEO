@@ -78,6 +78,8 @@ const ALMACEN_MAX = 4.5 * 1048576, JURADO_TEMPORADAS = 200;
 // Fama y salarios del pool tras CARRERA temporadas (fase C3a): la fama media del top 100 por fama queda a ±FAMA_TOL de la inicial y el salario
 // medio del top 60 por salario a ±SALARIO_TOL %. El salario se compara sin la prima de leyenda (LEGEND_MULT): las 28 leyendas son nombres
 // fijos del preset que se retiran y ningún novato hereda la prima, así que con ella el top 60 baja un 15 % haga lo que haga la fama.
+// Con la 1.2 del creador entra salUp (+5 % de sueldo por temporada en el top 10 de visitas): solo subía y en el mundo de CEO el top 60 crecía un 17 % de media
+// (5 semillas; 10 puntos por salUp, el resto por nivel y fama), por encima del límite con la 1.2.4. En CEO salUp baja un 5 % por temporada fuera del top 10: ~12 %.
 const FAMA_TOL = 3, SALARIO_TOL = 15;
 const POCO_CONOCIDO = 20;   // nivel − fama ≥ 20: las gangas; se cuentan los que siguen sin fichar en T5 y T10 (informativo)
 // Criterios de aceptación del relevo generacional tras PROGRESION temporadas (evolución + retiros + nuevos talentos)
